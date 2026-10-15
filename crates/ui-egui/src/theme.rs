@@ -1,13 +1,17 @@
 //! Design tokens and fonts.
 //!
 //! Colours are our own, tuned to read like a modern desktop spreadsheet. Fonts come from the
-//! operating system at runtime (nothing bundled): the UI uses the platform UI font, cells use the
-//! best available match for the workbook font (Calibri/Carlito/Aptos/Arial…) with egui's built-in
-//! fonts as the last resort.
+//! operating system at runtime: the UI uses the platform UI font, cells use the best available match
+//! for the workbook font (Calibri/Carlito/Aptos/Arial…). Inter (craft-fonts, OFL-1.1) is embedded
+//! when built with `CRAFT_FONTS_DIR` and follows each primary face, ahead of egui's built-in
+//! fonts and the script fallbacks, so Latin and Vietnamese always render.
 
 use std::sync::Arc;
 
 use egui::{Color32, FontData, FontDefinitions, FontFamily, FontId, Stroke, Visuals};
+
+/// Reads a font file from candidate paths; injectable so a test can stand in for the web host.
+type Loader = dyn Fn(&[(&str, u32)]) -> Option<FontData>;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Tokens {
@@ -386,18 +390,23 @@ pub fn font_definitions_for_language(language: crate::i18n::Language) -> FontDef
 /// installed, so cells set in them render with them; the rest fall back to the roles. The bound
 /// families are recorded in [`crate::fonts`] so [`cell_family`] only names a family egui has.
 pub fn font_definitions_with(language: crate::i18n::Language, used: &[String]) -> FontDefinitions {
+    definitions_from(language, used, &try_load)
+}
+
+fn definitions_from(language: crate::i18n::Language, used: &[String], load: &Loader) -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
     let base_prop: Vec<String> = fonts.families.get(&FontFamily::Proportional).cloned().unwrap_or_default();
     let base_mono: Vec<String> = fonts.families.get(&FontFamily::Monospace).cloned().unwrap_or_default();
     let mut bound: Vec<String> = Vec::new();
     // The non-Latin fallback faces have to sit at the end of each chain: a Latin font owns Latin,
     // and epaint picks the first face that has the glyph, so they only catch their own scripts.
-    let fallback = load_fallback(&mut fonts, HanOrder::of(language));
+    let fallback = load_fallback(&mut fonts, HanOrder::of(language), load);
+    let (inter, inter_bold) = bundled_faces(&mut fonts);
     for role in [UI, UI_BOLD, CELL, CELL_BOLD, CELL_ITALIC, CELL_BOLD_ITALIC, SERIF, MONO] {
         let paths = candidates(role);
         let refs: Vec<(&str, u32)> = paths.iter().map(|(p, i)| (p.as_str(), *i)).collect();
         let mut chain: Vec<String> = Vec::new();
-        if let Some(fd) = try_load(&refs) {
+        if let Some(fd) = load(&refs) {
             let key = format!("sys-{role}");
             fonts.font_data.insert(key.clone(), Arc::new(fd));
             chain.push(key);
@@ -406,7 +415,15 @@ pub fn font_definitions_with(language: crate::i18n::Language, used: &[String]) -
         } else if role.starts_with("cell-") {
             chain.push(format!("sys-{CELL}"));
         }
-        chain.extend(if role == MONO { base_mono.clone() } else { base_prop.clone() });
+        let bundled = if matches!(role, UI_BOLD | CELL_BOLD | CELL_BOLD_ITALIC) { inter_bold.clone() } else { inter.clone() };
+        // Mono keeps its monospaced Latin first; Inter only fills the letters it lacks.
+        if role == MONO {
+            chain.extend(base_mono.clone());
+            chain.extend(bundled);
+        } else {
+            chain.extend(bundled);
+            chain.extend(base_prop.clone());
+        }
         chain.extend(fallback.iter().cloned());
         chain.retain(|k| fonts.font_data.contains_key(k));
         fonts.families.insert(FontFamily::Name(role.into()), chain);
@@ -447,7 +464,7 @@ pub fn font_definitions_with(language: crate::i18n::Language, used: &[String]) -
 /// was read correctly. With a face installed those scripts get real glyphs instead of tofu; nothing
 /// is bundled, and a machine without the face keeps the old behaviour.
 #[cfg(not(target_arch = "wasm32"))]
-fn load_fallback(fonts: &mut FontDefinitions, han: HanOrder) -> Vec<String> {
+fn load_fallback(fonts: &mut FontDefinitions, han: HanOrder, load: &Loader) -> Vec<String> {
     let mut keys = Vec::new();
     // Files already loaded as a fallback face. A file serves at most one key: the region-merged
     // Noto Sans CJK .ttc found for Han also carries Hangul (and Tahoma carries both Thai and
@@ -458,7 +475,7 @@ fn load_fallback(fonts: &mut FontDefinitions, han: HanOrder) -> Vec<String> {
             if loaded.contains(path) {
                 break; // a face loaded for an earlier script already covers this one
             }
-            if let Some(fd) = try_load(&[(path.as_str(), *index)]) {
+            if let Some(fd) = load(&[(path.as_str(), *index)]) {
                 fonts.font_data.insert(key.to_string(), Arc::new(fd));
                 keys.push(key.to_string());
                 loaded.push(path.clone());
@@ -470,8 +487,22 @@ fn load_fallback(fonts: &mut FontDefinitions, han: HanOrder) -> Vec<String> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn load_fallback(_fonts: &mut FontDefinitions, _han: HanOrder) -> Vec<String> {
+fn load_fallback(_fonts: &mut FontDefinitions, _han: HanOrder, _load: &Loader) -> Vec<String> {
     Vec::new()
+}
+
+/// Registers the bundled Inter faces and returns their keys (regular, bold). Each role carries one
+/// right after its system face, so a host with no usable font file still draws Vietnamese.
+fn bundled_faces(fonts: &mut FontDefinitions) -> (Option<String>, Option<String>) {
+    let mut register = |style: &str| {
+        crate::craft_fonts::CRAFT_FONTS.iter().find(|f| f.family == "Inter" && f.style == style).map(|f| {
+            let key = format!("craft-inter-{}", style.to_ascii_lowercase());
+            fonts.font_data.insert(key.clone(), Arc::new(FontData::from_static(f.bytes)));
+            key
+        })
+    };
+    let regular = register("Regular");
+    (regular, register("Bold"))
 }
 
 /// Every fallback face we look for, in chain order: `(key, candidate files)`. One file per script
@@ -769,6 +800,30 @@ mod font_binding_tests {
 mod tests {
     use super::*;
     use crate::i18n::Language;
+
+    #[test]
+    fn without_system_fonts_every_family_draws_vietnamese() {
+        // The web build: no font file loads (try_load is a stub on wasm), and egui's own fonts lack
+        // most Vietnamese letters, so the bundled Inter must cover every role.
+        assert!(!crate::craft_fonts::CRAFT_FONTS.is_empty(), "built without CRAFT_FONTS_DIR (.cargo/config.toml points at ../craft-fonts)");
+        let ctx = egui::Context::default();
+        ctx.set_fonts(definitions_from(Language::En, &[], &|_: &[(&str, u32)]| None));
+        let mut out = ctx.run_ui(egui::RawInput::default(), |_ui| {});
+        out.textures_delta.clear(); // nothing consumes the atlas in a headless test
+        let sample = "Tiếng Việt ăâđêôơư ạảãấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ ĂÂĐÊÔƠƯ ỆỮ";
+        let mut families = vec![FontFamily::Proportional];
+        families.extend([UI, UI_BOLD, CELL, CELL_BOLD, CELL_ITALIC, CELL_BOLD_ITALIC, SERIF, MONO].map(|r| FontFamily::Name(r.into())));
+        for family in families {
+            let font = FontId::new(14.0, family.clone());
+            let glyphs = |text: &str| {
+                let galley = ctx.fonts_mut(|f| f.layout_no_wrap(text.to_owned(), font.clone(), Color32::BLACK));
+                galley.rows.iter().flat_map(|r| r.glyphs.iter().filter(|g| g.chr != ' ').map(|g| g.uv_rect)).collect::<Vec<_>>()
+            };
+            let tofu = glyphs("\u{25FB}");
+            let drawn = glyphs(sample);
+            assert!(!drawn.is_empty() && drawn.iter().all(|g| !tofu.contains(g)), "{family:?} draws Vietnamese as tofu");
+        }
+    }
 
     #[test]
     fn fallback_faces_are_appended_to_every_family() {

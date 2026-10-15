@@ -1,2 +1,7 @@
+# Local builds and tests embed the craft-fonts checkout next to this repo (build.rs warns and
+# continues without it). erpcons-office and releases set CRAFT_FONTS_DIR explicitly.
+[env]
+CRAFT_FONTS_DIR = { value = "../craft-fonts", relative = true }
+
 [alias]
 xtask = "run --package xtask --"

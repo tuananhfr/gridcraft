@@ -642,6 +642,18 @@ fn about_renders_every_tab() {
 }
 
 #[test]
+fn about_credits_upstream_without_artcraft_links() {
+    // The ERPCons fork credits GridCraft's authors in words and links its own source.
+    let mut h = harness(blank());
+    h.state_mut().open_dialog("about", json!({"tab": "About"}));
+    h.run_steps(2);
+    h.get_by_label("ERPCons Văn phòng — dựa trên GridCraft của nhóm ArtCraft. MIT OR Apache-2.0.");
+    h.get_by_label("Source on GitHub");
+    assert!(h.query_by_label_contains("Discord").is_none());
+    assert!(h.query_by_label_contains("getartcraft").is_none());
+}
+
+#[test]
 fn column_autocomplete_completes_on_enter() {
     let mut s = blank();
     s.execute("range.setValues", json!({"range": "A1", "values": [["North"], ["East"], ["Eastern"]]})).unwrap();

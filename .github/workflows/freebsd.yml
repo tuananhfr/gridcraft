@@ -56,7 +56,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: storytold/craft-fonts
-          ref: abb83316d96aa59c1cf64784289e378fe9fa5695
+          ref: 43913056ce82a3fdad0ef69f6b88d1dc922a8104
           path: craft-fonts
       - name: Build in a FreeBSD VM
         uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9

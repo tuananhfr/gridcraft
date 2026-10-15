@@ -24,6 +24,7 @@ fn main() {
     if let Err(e) = std::fs::write(&out, generate(&json, &people)) {
         println!("cargo::warning=writing {}: {e}", out.display());
     }
+    write_craft_fonts();
 }
 
 fn read<T>(path: &std::path::Path, fallback: &str, parse: impl Fn(&str) -> Result<T, String>) -> Option<T> {
@@ -102,4 +103,43 @@ fn generate(json: &Value, people: &toml::Table) -> String {
     }
     let _ = writeln!(o, "];");
     o
+}
+
+/// Inter Regular/Bold from a craft-fonts checkout (`CRAFT_FONTS_DIR`, its `fonts/latin-manifest.txt`),
+/// embedded as `CRAFT_FONTS`: the web build loads no system font. Unset, `CRAFT_FONTS` is empty.
+fn write_craft_fonts() {
+    println!("cargo::rerun-if-env-changed=CRAFT_FONTS_DIR");
+    println!("cargo::rerun-if-env-changed=CRAFT_FONTS_REQUIRED");
+    let mut src = String::from("pub static CRAFT_FONTS: &[CraftFont] = &[\n");
+    if let Some(dir) = std::env::var_os("CRAFT_FONTS_DIR").map(std::path::PathBuf::from) {
+        match inter_faces(&dir) {
+            Ok(entries) => src.push_str(&entries),
+            Err(e) if std::env::var_os("CRAFT_FONTS_REQUIRED").is_some() => println!("cargo::error=CRAFT_FONTS_DIR={}: {e}", dir.display()),
+            Err(e) => println!("cargo::warning=building without craft-fonts: CRAFT_FONTS_DIR={}: {e}", dir.display()),
+        }
+    }
+    src.push_str("];\n");
+    let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap_or_default()).join("craft_fonts.rs");
+    if let Err(e) = std::fs::write(&out, src) {
+        println!("cargo::error=writing {}: {e}", out.display());
+    }
+}
+
+fn inter_faces(dir: &std::path::Path) -> Result<String, String> {
+    let manifest = dir.join("fonts/latin-manifest.txt");
+    println!("cargo::rerun-if-changed={}", manifest.display());
+    let text = std::fs::read_to_string(&manifest).map_err(|e| format!("{}: {e}", manifest.display()))?;
+    let mut out = String::new();
+    for style in ["Regular", "Bold"] {
+        let file = text
+            .lines()
+            .map(|l| l.split(" | ").map(str::trim).collect::<Vec<_>>())
+            .find(|f| f.len() >= 3 && f[0] == "Inter" && f[1] == style)
+            .map(|f| f[2].to_string())
+            .ok_or_else(|| format!("{} lists no Inter {style}", manifest.display()))?;
+        let path = dir.join(&file).canonicalize().map_err(|e| format!("{file}: {e}"))?;
+        println!("cargo::rerun-if-changed={}", path.display());
+        let _ = writeln!(out, "    CraftFont {{ family: \"Inter\", style: {style:?}, bytes: include_bytes!({:?}) }},", path.display().to_string());
+    }
+    Ok(out)
 }

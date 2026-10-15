@@ -24,8 +24,16 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       CARGO_INCREMENTAL: "0"
+      # Same craft-fonts commit as release.yml (Latin presentation fonts).
+      CRAFT_FONTS_REF: 43913056ce82a3fdad0ef69f6b88d1dc922a8104
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out craft-fonts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: storytold/craft-fonts
+          ref: ${{ env.CRAFT_FONTS_REF }}
+          path: craft-fonts
 
       - name: Install Linux build dependencies (winit, wgpu, rfd)
         run: |
@@ -45,4 +53,6 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Quality gate
+        env:
+          CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
         run: cargo xtask ci
