@@ -188,8 +188,10 @@ pub struct Services {
     /// gets it from egui's `Event::Paste`). `None` from the host, or no service (web), pastes
     /// GridCraft's own clipboard.
     pub paste_text: Option<Box<dyn FnMut() -> Option<String>>>,
-    /// Web: deliver a file to the user (name, bytes).
-    pub download: Option<Box<dyn Fn(&str, &[u8])>>,
+    /// Web: deliver a file to the user (name, bytes). The host settles the report once it knows
+    /// what became of the file; a workbook counts as saved only when it reports
+    /// [`Delivery::Delivered`].
+    pub download: Option<Box<dyn Fn(&str, &[u8], DeliveryReport)>>,
     /// Web: start an asynchronous file pick; the bytes arrive later in `inbox`.
     pub open_async: Option<Box<dyn Fn()>>,
     /// Files delivered asynchronously (name, bytes), opened on the next frame.
@@ -201,6 +203,50 @@ pub struct Services {
 
 /// Shared queue of files read asynchronously (browser file picker, drag and drop).
 pub type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;
+
+/// What became of a file handed to [`Services::download`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Delivery {
+    /// Written to the file the user picked, or handed to the browser's downloads (which reports
+    /// no cancel).
+    Delivered,
+    /// The user closed the save picker.
+    Cancelled,
+    Failed(String),
+}
+
+/// Where a host reports a download's [`Delivery`]. The browser's save picker answers frames after
+/// the download started, so the app polls this each frame ([`SheetApp::settle_saves`]).
+#[derive(Clone, Debug, Default)]
+pub struct DeliveryReport(std::sync::Arc<std::sync::Mutex<Option<Delivery>>>);
+
+impl DeliveryReport {
+    /// Records the outcome; only the first report counts.
+    pub fn settle(&self, delivery: Delivery) {
+        let mut slot = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if slot.is_none() {
+            *slot = Some(delivery);
+        }
+    }
+
+    fn take(&self) -> Option<Delivery> {
+        self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take()
+    }
+
+    /// The host dropped its copy without reporting: no answer will come.
+    fn abandoned(&self) -> bool {
+        std::sync::Arc::strong_count(&self.0) == 1
+    }
+}
+
+/// A workbook handed to the host as a download, waiting for its [`Delivery`].
+struct PendingSave {
+    uid: u64,
+    /// The workbook as encoded: the saved state once delivered.
+    written: std::sync::Arc<gridcraft_engine::model::Workbook>,
+    name: String,
+    report: DeliveryReport,
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct Perf {
@@ -224,6 +270,7 @@ pub struct SheetApp {
     /// Dismissible info bar under the ribbon (open-time notices).
     pub notice: Option<Notice>,
     pub services: Services,
+    pending_saves: Vec<PendingSave>,
     pub printing: printing::State,
     print_feedback_seen: Option<printing::Feedback>,
     /// Synthetic input from agents, one batch per frame (drags need several frames).
@@ -268,6 +315,7 @@ pub struct SheetApp {
 
 impl SheetApp {
     pub fn new(session: Session, services: Services) -> SheetApp {
+        craft_fonts::register_print_fonts();
         SheetApp {
             session,
             ui: UiState::default(),
@@ -280,6 +328,7 @@ impl SheetApp {
             toast: None,
             notice: None,
             services,
+            pending_saves: Vec::new(),
             printing: Default::default(),
             print_feedback_seen: None,
             synthetic: Default::default(),
@@ -481,7 +530,44 @@ impl SheetApp {
             && let Some(b) = result.get("base64").and_then(Json::as_str).and_then(gridcraft_engine::io::base64_decode)
         {
             let title = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
-            dl(&std::path::Path::new(&title).with_extension("pdf").to_string_lossy(), &b);
+            dl(&std::path::Path::new(&title).with_extension("pdf").to_string_lossy(), &b, DeliveryReport::default());
+        }
+    }
+
+    /// Hands the active workbook's encoded bytes to the host as a download. It counts as saved as
+    /// of now once the host reports it delivered ([`SheetApp::settle_saves`]).
+    fn download_workbook(&mut self, name: &str, bytes: &[u8]) {
+        let Some(dl) = &self.services.download else { return };
+        let report = DeliveryReport::default();
+        if let Some(d) = self.session.active() {
+            self.pending_saves.push(PendingSave { uid: d.uid, written: d.wb.clone(), name: name.to_string(), report: report.clone() });
+        }
+        dl(name, bytes, report);
+    }
+
+    /// Applies what the host reported about workbook downloads: a delivered one is saved as of
+    /// the bytes written, a cancelled or failed one stays unsaved (a failure says why).
+    pub fn settle_saves(&mut self) {
+        let session = &mut self.session;
+        let mut failed = Vec::new();
+        self.pending_saves.retain(|p| {
+            // Checked before `take`: a host that settles and then drops its copy is still heard.
+            let abandoned = p.report.abandoned();
+            match p.report.take() {
+                Some(Delivery::Delivered) => {
+                    session.mark_saved(p.uid, &p.written);
+                    false
+                }
+                Some(Delivery::Cancelled) => false,
+                Some(Delivery::Failed(e)) => {
+                    failed.push(format!("Couldn't save {}: {e}", p.name));
+                    false
+                }
+                None => !abandoned,
+            }
+        });
+        if let Some(m) = failed.pop() {
+            self.message = Some(("GridCraft".into(), m));
         }
     }
 
@@ -733,11 +819,10 @@ impl SheetApp {
                     }
                 } else if self.services.download.is_some()
                     && let Ok(r) = self.run("file.saveBytes", json!({"format": "xlsx"}))
-                    && let Some(dl) = &self.services.download
                     && let Some(b) = r.get("base64").and_then(Json::as_str).and_then(gridcraft_engine::io::base64_decode)
                 {
                     let name = r.get("name").and_then(Json::as_str).unwrap_or("Book.xlsx").to_string();
-                    dl(&name, &b);
+                    self.download_workbook(&name, &b);
                 }
             }
             // File › Options (`file.options`) and the File tab itself open the Backstage view.
@@ -994,6 +1079,7 @@ impl SheetApp {
         // A keytip control request lives one frame: the ribbon consumes it during `ui`, and
         // anything that never reached a control (collapsed ribbon, tab switch) is dropped.
         self.ui.keytip_invoke = None;
+        self.settle_saves();
         if self.fonts_han.is_some_and(|han| han != theme::HanOrder::of(self.ui.language)) {
             self.fonts_ready = false;
             self.fonts_set = false;

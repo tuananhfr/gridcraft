@@ -2,18 +2,24 @@
 //!
 //! - The 14 standard fonts (no embedding) with WinAnsiEncoding, plus approximate width tables
 //!   ([`text_width`]) so callers can measure, align and wrap text.
+//! - A string the standard fonts can't encode is set in embedded Unicode TrueType faces
+//!   ([`UnicodeFonts`]) when they are registered; [`text_width`] measures it in the same face.
 //! - Vector drawing: rectangles, lines (solid or dashed), polygons, circles (Bézier), clipping.
 //! - RGBA images as RGB image XObjects with a soft mask for alpha (run-length encoded).
 //! - Coordinates are points with a **top-left origin** (y grows down); text `y` is the baseline.
 //!
-//! Streams are written uncompressed (images use the trivial RunLengthDecode filter) so the crate
-//! needs no dependencies.
+//! Streams are written uncompressed (images use the trivial RunLengthDecode filter); the only
+//! dependency is the font reader for the embedded faces.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
 mod metrics;
+mod unicode;
 
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
+
+pub use unicode::{UnicodeFonts, register_unicode_fonts, unicode_fonts};
 
 /// RGB colour, 0–255 per channel.
 pub type Rgb = [u8; 3];
@@ -83,6 +89,13 @@ impl Font {
         Font::ALL.iter().position(|f| *f == self).unwrap_or(0)
     }
 
+    pub fn is_bold(self) -> bool {
+        matches!(
+            self,
+            Font::HelveticaBold | Font::HelveticaBoldOblique | Font::TimesBold | Font::TimesBoldItalic | Font::CourierBold | Font::CourierBoldOblique
+        )
+    }
+
     /// The face of `family` with the given weight and slant.
     pub fn styled(family: Family, bold: bool, italic: bool) -> Font {
         match (family, bold, italic) {
@@ -143,8 +156,17 @@ impl Font {
     }
 }
 
-/// Width of `text` in points when set in `font` at `size` points.
+/// Width of `text` in points when set in `font` at `size` points, in the face [`Page::text`] draws
+/// it with: the registered Unicode face when the standard font can't encode it.
 pub fn text_width(font: Font, size: f32, text: &str) -> f32 {
+    text_width_in(unicode_fonts(), font, size, text)
+}
+
+/// [`text_width`] for a document made with [`PdfDoc::with_unicode_fonts`]`(fonts)`.
+pub fn text_width_in(fonts: Option<UnicodeFonts>, font: Font, size: f32, text: &str) -> f32 {
+    if let Some(face) = fonts.filter(|_| unicode::needs_unicode(text)).and_then(|f| f.face(usize::from(font.is_bold()))) {
+        return face.text_width(size, text);
+    }
     // u64: a u32 sum overflows for ~8 million characters.
     let units: u64 = text.chars().map(|c| u64::from(font.char_width(c))).sum();
     units as f32 * size / 1000.0
@@ -266,6 +288,9 @@ pub struct Page {
     height: f32,
     content: String,
     fonts: [bool; 12],
+    unicode: Option<UnicodeFonts>,
+    /// Per Unicode face: glyph id → the character it was drawn for (widths and ToUnicode).
+    glyphs: [BTreeMap<u16, char>; unicode::SLOTS],
     images: Vec<ImageData>,
     depth: u32,
 }
@@ -459,16 +484,34 @@ impl Page {
         if text.is_empty() || !extent(size) || !finite(&[x, y]) {
             return;
         }
-        let fi = font.index();
-        if let Some(f) = self.fonts.get_mut(fi) {
-            *f = true;
-        }
+        let slot = usize::from(font.is_bold());
+        let (resource, shown) = match self.unicode.filter(|_| unicode::needs_unicode(text)).and_then(|f| f.face(slot)) {
+            Some(face) => {
+                let mut hex = String::with_capacity(text.len() * 4 + 2);
+                hex.push('<');
+                for (c, g) in face.glyphs(text) {
+                    if let Some(used) = self.glyphs.get_mut(slot) {
+                        used.entry(g).or_insert(c);
+                    }
+                    let _ = write!(hex, "{g:04X}");
+                }
+                hex.push('>');
+                (format!("U{}", slot + 1), hex)
+            }
+            None => {
+                let fi = font.index();
+                if let Some(f) = self.fonts.get_mut(fi) {
+                    *f = true;
+                }
+                (format!("F{}", fi + 1), pdf_string(text))
+            }
+        };
         let (sn, cs) = if angle.is_finite() { angle.sin_cos() } else { (0.0, 1.0) };
         // Clockwise in y-down = counter-clockwise negated in PDF's y-up space.
         let s = format!(
-            "BT\n{}\n/F{} {} Tf\n{} {} {} {} {} {} Tm\n{} Tj\nET",
+            "BT\n{}\n/{} {} Tf\n{} {} {} {} {} {} Tm\n{} Tj\nET",
             rgb_op(color, false),
-            fi + 1,
+            resource,
             n(size.min(10_000.0)),
             n(cs),
             n(-sn),
@@ -476,7 +519,7 @@ impl Page {
             n(cs),
             n(x),
             n(self.y(y)),
-            pdf_string(text)
+            shown
         );
         self.op(&s);
     }
@@ -516,6 +559,7 @@ pub struct Info {
 pub struct PdfDoc {
     pages: Vec<Page>,
     pub info: Info,
+    unicode: Option<UnicodeFonts>,
 }
 
 /// PackBits-style run-length encoding (PDF `RunLengthDecode`).
@@ -575,15 +619,31 @@ fn pdf_text_string(text: &str) -> String {
 }
 
 impl PdfDoc {
+    /// A document whose Unicode text uses the registered faces ([`register_unicode_fonts`]).
     pub fn new() -> PdfDoc {
-        PdfDoc::default()
+        PdfDoc::with_unicode_fonts(unicode_fonts())
+    }
+
+    /// A document whose Unicode text uses `fonts` (`None`: standard fonts only, as before any
+    /// registration).
+    pub fn with_unicode_fonts(fonts: Option<UnicodeFonts>) -> PdfDoc {
+        PdfDoc { unicode: fonts, ..PdfDoc::default() }
     }
 
     /// Adds a page of `width_pt` × `height_pt` points and returns it for drawing.
     pub fn add_page(&mut self, width_pt: f32, height_pt: f32) -> &mut Page {
         let width = if width_pt.is_finite() { width_pt.clamp(3.0, 14_400.0) } else { 612.0 };
         let height = if height_pt.is_finite() { height_pt.clamp(3.0, 14_400.0) } else { 792.0 };
-        self.pages.push(Page { width, height, content: String::new(), fonts: [false; 12], images: Vec::new(), depth: 0 });
+        self.pages.push(Page {
+            width,
+            height,
+            content: String::new(),
+            fonts: [false; 12],
+            unicode: self.unicode,
+            glyphs: Default::default(),
+            images: Vec::new(),
+            depth: 0,
+        });
         let i = self.pages.len() - 1;
         &mut self.pages[i]
     }
@@ -626,6 +686,23 @@ impl PdfDoc {
                 let name = Font::ALL.get(i).copied().unwrap_or_default().base_name();
                 let enc = if name.starts_with("Symbol") { "" } else { " /Encoding /WinAnsiEncoding" };
                 objects.push((*id, format!("<< /Type /Font /Subtype /Type1 /BaseFont /{name}{enc} >>").into_bytes()));
+            }
+        }
+        if let Some(fonts) = &self.unicode {
+            let mut used: [BTreeMap<u16, char>; unicode::SLOTS] = Default::default();
+            for p in &self.pages {
+                for (all, page) in used.iter_mut().zip(p.glyphs.iter()) {
+                    for (g, c) in page {
+                        all.entry(*g).or_insert(*c);
+                    }
+                }
+            }
+            for (slot, glyphs) in used.iter().enumerate() {
+                if !glyphs.is_empty()
+                    && let Some(id) = unicode::write_font(fonts, slot, glyphs, &mut next, &mut objects)
+                {
+                    let _ = write!(font_dict, "/U{} {} 0 R ", slot + 1, id);
+                }
             }
         }
         for page in &mut self.pages {

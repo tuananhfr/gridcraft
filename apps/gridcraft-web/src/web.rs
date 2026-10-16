@@ -1,7 +1,10 @@
 //! The browser shell: web `Services`, drag-and-drop, and the eframe web runner.
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gridcraft_engine::Session;
-use gridcraft_ui_egui::{Inbox, Services, SheetApp};
+use gridcraft_ui_egui::{Delivery, DeliveryReport, Inbox, Services, SheetApp};
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::JsValue;
 
@@ -29,6 +32,13 @@ pub fn start() {
         // workbooks in it and stores what it saves (`host`).
         let bridge = if query_param("host").as_deref() == Some("parent") { crate::host::Bridge::new() } else { None };
         let app_bridge = bridge.clone();
+        let dirty = Rc::new(Cell::new(false));
+        // In host mode the parent hears `gridcraft:dirty` and guards leaving the page itself.
+        if bridge.is_none()
+            && let Err(e) = guard_unload(dirty.clone())
+        {
+            log::error!("no unsaved-changes guard: {e}");
+        }
         let result = eframe::WebRunner::new()
             .start(
                 canvas,
@@ -65,7 +75,7 @@ pub fn start() {
                         }
                         bridge.post_ready();
                     }
-                    Ok(Box::new(WebShell { app, inbox, bridge: app_bridge }))
+                    Ok(Box::new(WebShell { app, inbox, bridge: app_bridge, dirty }))
                 }),
             )
             .await;
@@ -93,6 +103,8 @@ struct WebShell {
     app: SheetApp,
     inbox: Inbox,
     bridge: Option<crate::host::Bridge>,
+    /// Whether any open workbook has unsaved changes, for the `beforeunload` guard.
+    dirty: Rc<Cell<bool>>,
 }
 
 impl eframe::App for WebShell {
@@ -124,12 +136,31 @@ impl eframe::App for WebShell {
         if let Some(bridge) = &self.bridge {
             bridge.sync(&mut self.app);
         }
+        self.dirty.set(self.app.session.documents().iter().any(|d| d.is_dirty()));
     }
+}
+
+/// Closing, reloading or leaving the tab with unsaved changes asks first. Browsers show their own
+/// confirmation (a page can only ask for it), so there is no Save button: Cancel, then File › Save.
+fn guard_unload(dirty: Rc<Cell<bool>>) -> Result<(), String> {
+    let window = web_sys::window().ok_or("no window")?;
+    let on_unload = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::BeforeUnloadEvent)>::new(move |e: web_sys::BeforeUnloadEvent| {
+        if dirty.get() {
+            e.prevent_default();
+            // Older browsers ask only when `returnValue` is set.
+            e.set_return_value("unsaved changes");
+        }
+    });
+    window.add_event_listener_with_callback("beforeunload", on_unload.as_ref().unchecked_ref()).map_err(|e| format!("{e:?}"))?;
+    // The listener lives as long as the page.
+    on_unload.forget();
+    Ok(())
 }
 
 fn services(inbox: Inbox, ctx: egui::Context) -> Services {
     let open_inbox = inbox.clone();
     let picture_ctx = ctx.clone();
+    let save_ctx = ctx.clone();
     Services {
         copy_html: Some(Box::new(copy_html)),
         open_async: Some(Box::new(move || {
@@ -159,9 +190,10 @@ fn services(inbox: Inbox, ctx: egui::Context) -> Services {
                 ctx.request_repaint();
             });
         })),
-        download: Some(Box::new(|name: &str, bytes: &[u8]| {
-            if let Err(e) = download(name, bytes) {
+        download: Some(Box::new(move |name: &str, bytes: &[u8], report: DeliveryReport| {
+            if let Err(e) = download(name, bytes, report.clone(), save_ctx.clone()) {
                 log::error!("download of {name} failed: {e}");
+                report.settle(Delivery::Failed(e));
             }
         })),
         print: Some(Box::new(|bytes: &[u8]| {
@@ -273,9 +305,10 @@ fn mime_for(name: &str) -> &'static str {
     }
 }
 
-/// Trigger a browser save dialog or download of `bytes` named after `name`.
-
-fn download(name: &str, bytes: &[u8]) -> Result<(), String> {
+/// Trigger a browser save dialog or download of `bytes` named after `name`, and settle `report`
+/// when the outcome is known (the picker answers asynchronously; `ctx` repaints to apply it).
+/// An `Err` means nothing was started and `report` is left to the caller.
+fn download(name: &str, bytes: &[u8], report: DeliveryReport, ctx: egui::Context) -> Result<(), String> {
     let js = |e: wasm_bindgen::JsValue| format!("{e:?}");
     let window = web_sys::window().ok_or("no window")?;
 
@@ -326,39 +359,51 @@ fn download(name: &str, bytes: &[u8]) -> Result<(), String> {
         let name_owned = name.to_string();
         // Anything but the user cancelling (no user gesture, a denied permission, a failed write)
         // falls back to an ordinary download, so a save never fails silently.
-        let fallback = move |bytes: &[u8]| {
-            if let Some(w) = web_sys::window()
-                && let Err(e) = trigger_anchor_download(&w, &name_owned, bytes)
-            {
-                log::error!("download fallback failed: {e}");
+        // The browser reports nothing back from an anchor download, so starting one counts as
+        // delivered.
+        let fallback = move |bytes: &[u8], why: String| -> Delivery {
+            let started = web_sys::window().ok_or_else(|| "no window".to_string()).and_then(|w| trigger_anchor_download(&w, &name_owned, bytes));
+            match started {
+                Ok(()) => Delivery::Delivered,
+                Err(e) => {
+                    log::error!("download fallback failed: {e}");
+                    Delivery::Failed(format!("{why}; download fallback: {e}"))
+                }
             }
         };
         wasm_bindgen_futures::spawn_local(async move {
-            match wasm_bindgen_futures::JsFuture::from(prom).await {
-                Ok(handle_val) => {
-                    if let Err(e) = write_file_handle(&handle_val, &bytes_vec).await {
-                        log::error!("failed writing to file handle: {e}");
-                        fallback(&bytes_vec);
-                    } else {
+            let delivery = match wasm_bindgen_futures::JsFuture::from(prom).await {
+                Ok(handle_val) => match write_file_handle(&handle_val, &bytes_vec).await {
+                    Ok(()) => {
                         log::info!("Successfully saved file through save file picker");
+                        Delivery::Delivered
                     }
-                }
+                    Err(e) => {
+                        log::error!("failed writing to file handle: {e}");
+                        fallback(&bytes_vec, e)
+                    }
+                },
                 Err(e) => {
                     let err_name = js_sys::Reflect::get(&e, &JsValue::from_str("name")).ok().and_then(|v| v.as_string()).unwrap_or_default();
                     if err_name == "AbortError" {
                         log::info!("Save file dialog cancelled by user");
+                        Delivery::Cancelled
                     } else {
                         log::warn!("showSaveFilePicker refused ({err_name}); downloading instead");
-                        fallback(&bytes_vec);
+                        fallback(&bytes_vec, format!("{e:?}"))
                     }
                 }
-            }
+            };
+            report.settle(delivery);
+            ctx.request_repaint();
         });
         return Ok(());
     }
 
     // Fallback for browsers without showSaveFilePicker (e.g. Firefox, Safari):
-    trigger_anchor_download(&window, name, bytes)
+    trigger_anchor_download(&window, name, bytes)?;
+    report.settle(Delivery::Delivered);
+    Ok(())
 }
 
 async fn write_file_handle(handle: &JsValue, bytes: &[u8]) -> Result<(), String> {

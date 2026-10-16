@@ -914,7 +914,8 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
             let name = r.get("name").and_then(Json::as_str).map_or_else(|| format!("{stem}.{fmt}"), str::to_string);
             match (bytes, &app.services.download) {
                 (Some(b), Some(dl)) => {
-                    dl(&name, &b);
+                    // A CSV or web page is a copy: its delivery never makes the workbook saved.
+                    dl(&name, &b, crate::DeliveryReport::default());
                     true
                 }
                 _ => false,

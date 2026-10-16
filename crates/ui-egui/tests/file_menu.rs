@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use egui_kittest::kittest::Queryable as _;
 use gridcraft_engine::{Session, core::CellRef, core::Value};
-use gridcraft_ui_egui::{Services, SheetApp};
+use gridcraft_ui_egui::{Delivery, DeliveryReport, Services, SheetApp};
 
 fn harness(services: Services) -> egui_kittest::Harness<'static, SheetApp> {
     let mut session = Session::new();
@@ -77,7 +77,7 @@ fn save_actions_include_the_cell_draft_and_close_keeps_the_unsaved_prompt() {
     let downloads = Arc::new(Mutex::new(Vec::<(String, Vec<u8>)>::new()));
     let capture = downloads.clone();
     let mut h = harness(Services {
-        download: Some(Box::new(move |name, bytes| capture.lock().unwrap().push((name.to_string(), bytes.to_vec())))),
+        download: Some(Box::new(move |name, bytes, _| capture.lock().unwrap().push((name.to_string(), bytes.to_vec())))),
         ..Default::default()
     });
     h.input_mut().events.push(egui::Event::Text("123".into()));
@@ -137,7 +137,7 @@ fn export_as_pdf_is_delivered_as_a_download() {
     let files = Arc::new(Mutex::new(Vec::<(String, Vec<u8>)>::new()));
     let capture = files.clone();
     let mut h = harness(Services {
-        download: Some(Box::new(move |name, bytes| capture.lock().unwrap().push((name.to_string(), bytes.to_vec())))),
+        download: Some(Box::new(move |name, bytes, _| capture.lock().unwrap().push((name.to_string(), bytes.to_vec())))),
         ..Default::default()
     });
     h.state_mut().run("file.exportPdf", serde_json::json!({})).unwrap();
@@ -216,4 +216,71 @@ fn a_cancelled_export_pdf_picker_writes_nothing() {
     h.state_mut().run_or_alert("file.exportPdf", serde_json::json!({}));
     assert!(h.state().message.is_none());
     assert!(h.state_mut().session.take_ui_requests().is_empty());
+}
+
+/// A web shell whose downloads settle when the test says so, like the browser's save picker.
+fn picker_harness() -> (Arc<Mutex<Vec<(String, DeliveryReport)>>>, egui_kittest::Harness<'static, SheetApp>) {
+    let reports = Arc::new(Mutex::new(Vec::new()));
+    let capture = reports.clone();
+    let h = harness(Services {
+        download: Some(Box::new(move |name, _, report| capture.lock().unwrap().push((name.to_string(), report)))),
+        ..Default::default()
+    });
+    (reports, h)
+}
+
+fn dirty(h: &egui_kittest::Harness<'static, SheetApp>) -> bool {
+    h.state().session.active().unwrap().is_dirty()
+}
+
+/// Save on the web: the workbook goes through Save As and the browser.
+fn web_save(h: &mut egui_kittest::Harness<'static, SheetApp>, reports: &Mutex<Vec<(String, DeliveryReport)>>) -> DeliveryReport {
+    h.state_mut().run_or_alert("file.save", serde_json::json!({}));
+    h.run_steps(2);
+    let (name, report) = reports.lock().unwrap().pop().expect("Save hands the workbook to the browser");
+    assert!(name.ends_with(".xlsx"));
+    report
+}
+
+#[test]
+fn a_web_save_counts_once_the_browser_has_written_the_file() {
+    let (reports, mut h) = picker_harness();
+    h.state_mut().run("cell.set", serde_json::json!({"cell": "A1", "input": "1"})).unwrap();
+    let report = web_save(&mut h, &reports);
+    assert!(dirty(&h), "still unsaved while the save picker is open");
+    report.settle(Delivery::Delivered);
+    h.run_steps(2);
+    assert!(!dirty(&h));
+    assert!(h.state().message.is_none());
+}
+
+#[test]
+fn edits_made_while_the_save_picker_is_open_stay_unsaved() {
+    let (reports, mut h) = picker_harness();
+    h.state_mut().run("cell.set", serde_json::json!({"cell": "A1", "input": "1"})).unwrap();
+    let report = web_save(&mut h, &reports);
+    h.state_mut().run("cell.set", serde_json::json!({"cell": "A1", "input": "2"})).unwrap();
+    report.settle(Delivery::Delivered);
+    h.run_steps(2);
+    assert!(dirty(&h), "the file holds the workbook as it was when saved");
+    h.state_mut().run("edit.undo", serde_json::json!({})).unwrap();
+    assert!(!dirty(&h), "back to what was written");
+}
+
+#[test]
+fn a_cancelled_or_failed_web_save_keeps_the_workbook_unsaved() {
+    let (reports, mut h) = picker_harness();
+    h.state_mut().run("cell.set", serde_json::json!({"cell": "A1", "input": "1"})).unwrap();
+    web_save(&mut h, &reports).settle(Delivery::Cancelled);
+    h.run_steps(2);
+    assert!(dirty(&h));
+    assert!(h.state().message.is_none(), "cancelling the picker is not an error");
+    web_save(&mut h, &reports).settle(Delivery::Failed("disk full".into()));
+    h.run_steps(2);
+    assert!(dirty(&h));
+    assert!(h.state().message.as_ref().is_some_and(|(_, m)| m.contains("disk full")), "{:?}", h.state().message);
+    // A host that drops the report without a word leaves the workbook unsaved too.
+    drop(web_save(&mut h, &reports));
+    h.run_steps(2);
+    assert!(dirty(&h));
 }

@@ -3282,3 +3282,23 @@ fn paste_special_validation_moves_relative_references() {
     assert!(!ok(&mut s, "C3", "5"), "the pasted rule checks C3, not A1");
     assert!(ok(&mut s, "C3", "20"));
 }
+
+#[test]
+fn mark_saved_takes_the_written_snapshot_as_the_saved_state() {
+    // A browser save settles frames after the bytes were encoded: the workbook is saved as of
+    // what was written, so edits made in between stay unsaved.
+    let mut s = s();
+    s.execute("cell.set", json!({"cell": "A1", "input": "1"})).unwrap();
+    let (uid, written) = s.doc().map(|d| (d.uid, d.wb.clone())).unwrap();
+    assert!(s.mark_saved(uid, &written));
+    assert!(!s.doc().unwrap().is_dirty());
+    s.execute("cell.set", json!({"cell": "A1", "input": "2"})).unwrap();
+    let written = s.doc().unwrap().wb.clone();
+    s.execute("cell.set", json!({"cell": "A1", "input": "3"})).unwrap();
+    assert!(s.mark_saved(uid, &written));
+    assert!(s.doc().unwrap().is_dirty(), "an edit after the snapshot stays unsaved");
+    s.execute("edit.undo", json!({})).unwrap();
+    assert!(!s.doc().unwrap().is_dirty(), "undoing back to what was written is clean");
+    // The document may have been closed meanwhile.
+    assert!(!s.mark_saved(uid + 1000, &written));
+}

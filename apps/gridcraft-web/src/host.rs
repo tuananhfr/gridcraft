@@ -16,7 +16,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use gridcraft_ui_egui::{Inbox, Services, SheetApp};
+use gridcraft_ui_egui::{DeliveryReport, Inbox, Services, SheetApp};
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
@@ -56,7 +56,8 @@ impl Bridge {
     pub fn connect(&self, services: &mut Services, inbox: Inbox, ctx: egui::Context) {
         self.listen(inbox, ctx);
         let bridge = self.clone();
-        services.download = Some(Box::new(move |name: &str, bytes: &[u8]| {
+        // The report is dropped unanswered: `sync` marks a workbook saved once the parent has it.
+        services.download = Some(Box::new(move |name: &str, bytes: &[u8], _report: DeliveryReport| {
             if let Err(e) = bridge.post_save(name, bytes) {
                 log::error!("couldn't hand {name} to the page: {e}");
             }

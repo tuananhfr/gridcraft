@@ -2144,4 +2144,34 @@ mod tests {
         assert_eq!(up + down, blocks.len(), "a header line printed flat: {blocks:?}");
         assert!((1..=3).contains(&up) && (1..=3).contains(&down), "up {up}, down {down}: {blocks:?}");
     }
+
+    /// Inter from the craft-fonts checkout (`CRAFT_FONTS_DIR`: `.cargo/config.toml` and CI set it).
+    fn inter(style: &str) -> &'static [u8] {
+        let path = std::path::Path::new(env!("CRAFT_FONTS_DIR")).join(format!("fonts/inter/Inter-{style}.ttf"));
+        let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e} (craft-fonts checkout missing?)", path.display()));
+        Box::leak(bytes.into_boxed_slice())
+    }
+
+    #[test]
+    fn vietnamese_prints_in_the_registered_unicode_font() {
+        // Process-wide, like the app's startup registration; other tests here print only text
+        // WinAnsiEncoding carries, which keeps the standard fonts either way.
+        let fonts = gridcraft_pdf::UnicodeFonts::new(inter("Regular"), inter("Bold")).unwrap();
+        gridcraft_pdf::register_unicode_fonts(fonts);
+        let mut s = s();
+        s.execute("range.setValues", json!({"range": "A1", "values": [["Tổng cộng đơn giá ữ"], ["Plain"]]})).unwrap();
+        s.execute("home.bold", json!({"range": "A1"})).unwrap();
+        s.execute("pageLayout.pageSetup", json!({"header": "&CBảng giá"})).unwrap();
+        let (pdf, _) = pdf_of(&mut s, json!({}));
+        for key in ["/Subtype /Type0", "/Encoding /Identity-H", "/FontFile2", "/ToUnicode"] {
+            assert!(contains(&pdf, key), "missing {key}");
+        }
+        // The bold cell uses the bold face, the header the regular one; ASCII keeps Helvetica.
+        assert!(contains(&pdf, "/U2 ") && contains(&pdf, "/U1 "));
+        assert!(contains(&pdf, "(Plain) Tj"));
+        assert!(!contains(&pdf, "(T?ng"));
+        // Layout measures a string in the face that draws it.
+        let w = wrap_lines("Tổng cộng đơn giá ữ Tổng cộng", Font::Helvetica, 10.0, 60.0);
+        assert!(w.len() > 1 && w.iter().all(|l| gridcraft_pdf::text_width_in(Some(fonts), Font::Helvetica, 10.0, l) <= 60.0));
+    }
 }

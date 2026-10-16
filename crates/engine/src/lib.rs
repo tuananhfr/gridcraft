@@ -298,6 +298,14 @@ impl Session {
             }
         }
     }
+    /// Marks document `uid` saved as of `written`, the workbook a save encoded: a save that
+    /// completes later (a browser's save picker) leaves edits made since then unsaved. `false`
+    /// when no open document has that uid.
+    pub fn mark_saved(&mut self, uid: u64, written: &Arc<Workbook>) -> bool {
+        let Some(d) = self.docs.iter_mut().find(|d| d.uid == uid) else { return false };
+        d.saved = written.clone();
+        true
+    }
     /// A new blank workbook titled `BookN`.
     pub fn new_workbook(&mut self) -> usize {
         let n = (1..).find(|n| !self.docs.iter().any(|d| d.title == format!("Book{n}") && d.path.is_none())).unwrap_or(1);

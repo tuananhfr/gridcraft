@@ -277,3 +277,121 @@ fn info_strings_are_capped() {
     let pdf = doc.finish();
     assert_eq!(utf16_entry(&pdf, "/Title").chars().count(), MAX_INFO_CHARS);
 }
+
+const VIETNAMESE: &str = "Tổng cộng đơn giá ữ";
+
+/// Inter from the craft-fonts checkout (`CRAFT_FONTS_DIR`: `.cargo/config.toml` and CI set it);
+/// font files are never committed here.
+fn inter(style: &str) -> &'static [u8] {
+    let path = std::path::Path::new(env!("CRAFT_FONTS_DIR")).join(format!("fonts/inter/Inter-{style}.ttf"));
+    let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e} (craft-fonts checkout missing?)", path.display()));
+    Box::leak(bytes.into_boxed_slice())
+}
+
+fn test_fonts() -> UnicodeFonts {
+    UnicodeFonts::new(inter("Regular"), inter("Bold")).unwrap()
+}
+
+/// `text` as the Identity-H hex string of `font`'s glyph ids.
+fn glyph_hex(font: &[u8], text: &str) -> String {
+    use skrifa::MetadataProvider as _;
+    let f = skrifa::FontRef::new(font).unwrap();
+    let cmap = f.charmap();
+    let hex: String = text.chars().map(|c| format!("{:04X}", cmap.map(c).unwrap_or_else(|| panic!("no glyph for {c:?}")).to_u32())).collect();
+    format!("<{hex}>")
+}
+
+#[test]
+fn vietnamese_text_embeds_a_unicode_truetype_font() {
+    let mut d = PdfDoc::with_unicode_fonts(Some(test_fonts()));
+    let p = d.add_page(612.0, 792.0);
+    p.text(72.0, 72.0, 12.0, Font::Helvetica, [0, 0, 0], VIETNAMESE);
+    let pdf = d.finish();
+    check_xref(&pdf);
+    for key in ["/Subtype /Type0", "/Encoding /Identity-H", "/Subtype /CIDFontType2", "/CIDToGIDMap /Identity", "/FontFile2", "/ToUnicode", "/W ["] {
+        assert!(find(&pdf, key.as_bytes()).is_some(), "missing {key}");
+    }
+    let shown = format!("{} Tj", glyph_hex(inter("Regular"), VIETNAMESE));
+    assert!(find(&pdf, shown.as_bytes()).is_some(), "content shows the string's glyphs");
+    assert!(find(&pdf, b"/U1 12 Tf").is_some());
+    // The whole font file is embedded, and the ToUnicode map gives the text back (ữ = U+1EEF).
+    assert!(find(&pdf, &inter("Regular")[..64]).is_some());
+    let ufo = glyph_hex(inter("Regular"), "ữ");
+    assert!(find(&pdf, format!("{ufo} <1EEF>").as_bytes()).is_some(), "ToUnicode maps ữ");
+    // No standard font was needed.
+    assert!(find(&pdf, b"/Subtype /Type1").is_none());
+}
+
+#[test]
+fn ascii_output_is_unchanged_by_unicode_fonts() {
+    let draw = |d: &mut PdfDoc| {
+        let p = d.add_page(612.0, 792.0);
+        p.text(72.0, 72.0, 12.0, Font::Helvetica, [0, 0, 0], "Total café €5 – “Q1”");
+        p.text(72.0, 90.0, 12.0, Font::TimesBold, [0, 0, 0], "Plain");
+    };
+    let mut with = PdfDoc::with_unicode_fonts(Some(test_fonts()));
+    draw(&mut with);
+    let mut without = PdfDoc::with_unicode_fonts(None);
+    draw(&mut without);
+    let with = with.finish();
+    assert_eq!(with, without.finish());
+    assert!(find(&with, b"/Type0").is_none() && find(&with, b"/FontFile2").is_none());
+    assert!(find(&with, b"/Encoding /WinAnsiEncoding").is_some());
+}
+
+#[test]
+fn without_unicode_fonts_vietnamese_stays_win_ansi() {
+    let mut d = PdfDoc::with_unicode_fonts(None);
+    let p = d.add_page(612.0, 792.0);
+    p.text(72.0, 72.0, 12.0, Font::Helvetica, [0, 0, 0], "đơn");
+    let pdf = d.finish();
+    assert!(find(&pdf, b"(??n) Tj").is_some());
+    assert!(find(&pdf, b"/Type0").is_none());
+    assert_eq!(text_width_in(None, Font::Helvetica, 10.0, "đơn"), text_width(Font::Helvetica, 10.0, "đơn"));
+}
+
+#[test]
+fn bold_text_uses_the_bold_face_and_only_used_faces_are_embedded() {
+    let mut d = PdfDoc::with_unicode_fonts(Some(test_fonts()));
+    let p = d.add_page(612.0, 792.0);
+    p.text(72.0, 72.0, 10.0, Font::HelveticaBold, [0, 0, 0], "ơ");
+    p.text(72.0, 90.0, 10.0, Font::TimesBoldItalic, [0, 0, 0], "ư");
+    let pdf = d.finish();
+    check_xref(&pdf);
+    assert!(find(&pdf, b"/U2 10 Tf").is_some());
+    assert!(find(&pdf, b"/U1 10 Tf").is_none());
+    assert_eq!(pdf.windows(10).filter(|w| *w == b"/FontFile2").count(), 1);
+    assert!(find(&pdf, &inter("Bold")[..64]).is_some());
+}
+
+#[test]
+fn unicode_strings_measure_with_the_embedded_face() {
+    use skrifa::MetadataProvider as _;
+    let fonts = Some(test_fonts());
+    let f = skrifa::FontRef::new(inter("Regular")).unwrap();
+    let upem = f.metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default()).units_per_em as f32;
+    let adv = f.glyph_metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default());
+    let want: f32 = VIETNAMESE.chars().map(|c| adv.advance_width(f.charmap().map(c).unwrap()).unwrap()).sum::<f32>() * 10.0 / upem;
+    assert!((text_width_in(fonts, Font::Helvetica, 10.0, VIETNAMESE) - want).abs() < 0.01);
+    // A string the standard font can encode keeps the standard metrics.
+    assert_eq!(text_width_in(fonts, Font::Helvetica, 10.0, "Hello é"), text_width_in(None, Font::Helvetica, 10.0, "Hello é"));
+    assert_eq!(text_width_in(fonts, Font::Helvetica, 10.0, ""), 0.0);
+}
+
+#[test]
+fn unusable_font_bytes_are_rejected() {
+    assert!(UnicodeFonts::new(b"not a font", inter("Regular")).is_none());
+    assert!(UnicodeFonts::new(inter("Regular"), &[]).is_none());
+}
+
+#[test]
+fn hostile_unicode_text_never_panics() {
+    let mut d = PdfDoc::with_unicode_fonts(Some(test_fonts()));
+    let p = d.add_page(100.0, 100.0);
+    p.text(f32::NAN, 0.0, 10.0, Font::Helvetica, [0, 0, 0], "ơ");
+    p.text_rotated(1.0, 1.0, 10.0, Font::Courier, [0, 0, 0], "日本 😀 \u{0}\u{FFFF} ơ", f32::NAN);
+    let _ = text_width_in(Some(test_fonts()), Font::Helvetica, 1e30, "😀ơ\u{10FFFF}");
+    let pdf = d.finish();
+    check_xref(&pdf);
+    assert!(find(&pdf, b"/ToUnicode").is_some());
+}
