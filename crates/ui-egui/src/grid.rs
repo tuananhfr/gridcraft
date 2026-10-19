@@ -517,6 +517,7 @@ fn look(wb: &Workbook, si: usize, sh: &Sheet, c: CellRef, cf: &mut CfCache) -> (
 }
 
 /// Text for a value with General narrowing to the available width.
+#[allow(clippy::too_many_arguments)]
 fn display_text(
     wb: &Workbook,
     sh: &Sheet,
@@ -525,6 +526,7 @@ fn display_text(
     st: &Style,
     width_px: f32,
     char_w: f32,
+    region: crate::region::Region,
 ) -> (String, Option<Color32>, bool, Option<(char, usize)>) {
     if sh.show_formulas
         && let Some(f) = sh.cell(c).and_then(|x| x.formula.as_ref())
@@ -543,12 +545,12 @@ fn display_text(
         && let Value::Number(n) = v
     {
         let max_chars = ((width_px - 4.0) / char_w).floor().max(1.0) as usize;
-        return match gridcraft_engine::numfmt::format_general_fit(*n, max_chars.min(11)) {
+        return match gridcraft_engine::numfmt::format_general_fit_in(*n, max_chars.min(11), region) {
             Some(t) => (t, None, true, None),
             None => ("#".repeat(max_chars.max(1)), None, true, None),
         };
     }
-    let f = gridcraft_engine::display::format(v, code, wb);
+    let f = gridcraft_engine::display::format_in(v, code, wb, region);
     (f.text, f.color.map(numfmt_color), f.numeric, f.fill)
 }
 
@@ -1159,9 +1161,10 @@ pub(crate) fn paint_quadrant(
         // Digits fit by the cell's own font and size, not the default 11pt (9pt marks in narrow columns).
         let char_w = p.layout_no_wrap("0".to_string(), font.clone(), Color32::PLACEHOLDER).size().x.max(1.0);
         let avail_w = rect.right() - text_left;
-        let (mut text, ncolor, numeric, fill_char) = display_text(wb, sh, c, &v, st, avail_w / z.max(0.1) * z, char_w);
+        let region = crate::region::current(p.ctx());
+        let (mut text, ncolor, numeric, fill_char) = display_text(wb, sh, c, &v, st, avail_w / z.max(0.1) * z, char_w, region);
         if sh.show_formulas && sh.cell(c).is_some_and(|cell| cell.formula.is_some()) {
-            text = crate::formula_locale::display(&text, crate::region::formula_locale(crate::region::current(p.ctx())), wb, si);
+            text = crate::formula_locale::display(&text, crate::region::formula_locale(region), wb, si);
         }
         if text.is_empty() {
             continue;
@@ -2782,7 +2785,10 @@ fn filter_menu(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, was_open: bool)
         }
     }
     let wb = app.session.active().map(|d| d.wb.clone()).unwrap_or(wb);
-    let values = gridcraft_engine::cmd::data::filter_values(&wb, si, col);
+    let labeled = gridcraft_engine::cmd::data::filter_values_in(&wb, si, col, app.ui.region());
+    let values: Vec<(String, bool)> = labeled.iter().map(|(v, _, on)| (v.clone(), *on)).collect();
+    let labels: std::collections::HashMap<&str, &str> = labeled.iter().map(|(v, label, _)| (v.as_str(), label.as_str())).collect();
+    let label_of = |v: &str| labels.get(v).copied().unwrap_or(v).to_string();
     let key = egui::Id::new(("filter_sel", col));
     let search_key = egui::Id::new(("filter_search", col));
     let mut close = false;
@@ -2808,7 +2814,7 @@ fn filter_menu(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, was_open: bool)
                 field.request_focus();
             }
             let needle = search.trim().to_lowercase();
-            let matches = |v: &str| needle.is_empty() || v.to_lowercase().contains(&needle);
+            let matches = |v: &str| needle.is_empty() || label_of(v).to_lowercase().contains(&needle);
             let all = checks.iter().filter(|(v, _)| matches(v)).all(|(_, b)| *b);
             let mut all_new = all;
             let label = if needle.is_empty() { "(Select All)" } else { "(Select All Search Results)" };
@@ -2821,7 +2827,8 @@ fn filter_menu(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, was_open: bool)
             // worked over the values themselves (#432).
             egui::ScrollArea::vertical().max_height(220.0).auto_shrink([false, true]).show(ui, |ui| {
                 for (v, on) in checks.iter_mut().filter(|(v, _)| matches(v)) {
-                    ui.checkbox(on, if v == "(Blanks)" { crate::widgets::tr(ui, v) } else { v.as_str() });
+                    let shown = if v == "(Blanks)" { crate::widgets::tr(ui, v).to_string() } else { label_of(v) };
+                    ui.checkbox(on, shown);
                 }
             });
             ui.ctx().data_mut(|d| {

@@ -1,6 +1,6 @@
 //! Formatting: Home › Font, Alignment, Number, Styles, Cells › Format.
 
-use gridcraft_core::{CellRef, RangeRef};
+use gridcraft_core::{CellRef, RangeRef, Region};
 use gridcraft_model::*;
 use serde_json::{Value as Json, json};
 
@@ -642,6 +642,16 @@ pub fn format_code_for(name: &str) -> &str {
         "Text" => "@",
         "Comma" => COMMA,
         other => other,
+    }
+}
+
+/// [`format_code_for`] as offered in `region`: Currency and Accounting take its currency, so
+/// vi-VN gets the ₫ codes typed amounts get.
+pub fn format_code_in(name: &str, region: Region) -> &str {
+    match (name, region) {
+        ("Currency", Region::ViVn) => region.currency_format(false),
+        ("Accounting", Region::ViVn) => gridcraft_core::region::VND_ACCOUNTING,
+        _ => format_code_for(name),
     }
 }
 

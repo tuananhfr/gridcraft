@@ -213,7 +213,7 @@ pub(crate) fn paint_headers_footers(app: &SheetApp, ui: &egui::Ui, p: &Painter, 
         pg.hf_zone_at(x, y)
     });
     let needs_text = sh.print.has_header_footer();
-    let (date, time) = if needs_text { print::hf_date_time(wb) } else { Default::default() };
+    let (date, time) = if needs_text { print::hf_date_time_in(wb, app.ui.region()) } else { Default::default() };
     for (i, j) in pages_iter(geo, &pg) {
         let page = screen_rect(geo, pg.page_rect(i, j));
         if !page.intersects(geo.cells) {

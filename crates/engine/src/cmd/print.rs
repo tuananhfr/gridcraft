@@ -9,7 +9,7 @@
 //! sparklines. Headers and footers support `&L`/`&C`/`&R` sections and the `&P &N &D &T &A &F &Z`
 //! codes.
 
-use gridcraft_core::{CellRef, MAX_COLS, MAX_ROWS, RangeRef, Value};
+use gridcraft_core::{CellRef, MAX_COLS, MAX_ROWS, RangeRef, Region, Value};
 use gridcraft_model::*;
 use gridcraft_pdf::{Font, Page, PdfDoc, Rgb};
 use serde_json::{Value as Json, json};
@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export as PDF",
             ["File", "Export"],
             None,
-            "{path?, sheets?: active|all, range?: \"A1:F40\" (active sheet), fitToPage?: bool} → {pages, bytes, path} or {pages, bytes, base64} when no path. Honours each sheet's Page Setup.",
+            "{path?, sheets?: active|all, range?: \"A1:F40\" (active sheet), fitToPage?: bool, region?: \"en-US\"|\"vi-VN\"|\"es-ES\" (how numbers and dates show, default the session's)} → {pages, bytes, path} or {pages, bytes, base64} when no path. Honours each sheet's Page Setup.",
             has_doc,
             export_pdf
         ),
@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print…",
             ["File"],
             Some("Cmd+P"),
-            "{path?, sheets?: active|all, range?, fitToPage?: bool} → {pages, bytes, base64} — the PDF the UI hands to the system print dialog",
+            "{path?, sheets?: active|all, range?, fitToPage?: bool, region?: \"en-US\"|\"vi-VN\"|\"es-ES\"} → {pages, bytes, base64} — the PDF the UI hands to the system print dialog",
             has_doc,
             print
         ),
@@ -389,11 +389,16 @@ pub struct HfContext {
     pub time: String,
 }
 
-/// Today's date and the current time as headers and footers show them (`&D`, `&T`).
+/// Today's date and the current time as headers and footers show them (`&D`, `&T`), en-US.
 pub fn hf_date_time(wb: &Workbook) -> (String, String) {
+    hf_date_time_in(wb, Region::EnUs)
+}
+
+/// [`hf_date_time`] in `region`: the date is its short date.
+pub fn hf_date_time_in(wb: &Workbook, region: Region) -> (String, String) {
     let now = gridcraft_core::date::serial_in_system(wb.date_system, gridcraft_calc::now_serial());
-    let date = crate::display::format(&Value::Number(now.floor()), "m/d/yyyy", wb).text;
-    let time = crate::display::format(&Value::Number(now), "h:mm AM/PM", wb).text;
+    let date = crate::display::format_in(&Value::Number(now.floor()), "m/d/yyyy", wb, region).text;
+    let time = crate::display::format_in(&Value::Number(now), "h:mm AM/PM", wb, region).text;
     (date, time)
 }
 
@@ -806,6 +811,7 @@ fn wrap_lines(text: &str, font: Font, size: f32, width: f32) -> Vec<String> {
 /// Everything needed to draw one page block (a run of rows × a run of columns).
 struct Block<'a> {
     wb: &'a Workbook,
+    region: Region,
     si: usize,
     sh: &'a Sheet,
     rows: (u32, u32),
@@ -1060,7 +1066,7 @@ fn draw_text(pg: &mut Page, b: &Block, c: CellRef, l: &Look, rect: (f32, f32, f3
     let indent = st.align.indent as f32 * 9.0 * b.k;
     let avail = (w - 2.0 * pad - indent).max(0.0);
     let code = st.num_fmt.as_str();
-    let formatted = crate::display::format(&v, code, wb);
+    let formatted = crate::display::format_in(&v, code, wb, b.region);
     let mut color = formatted.color.map(numfmt_rgb).or_else(|| rgb_of(st.font.color, wb)).unwrap_or([0, 0, 0]);
     if l.cf.as_ref().and_then(|x| x.style.as_ref()).is_some_and(|s| s.font.color != Color::Auto) {
         color = rgb_of(st.font.color, wb).unwrap_or(color);
@@ -1068,15 +1074,15 @@ fn draw_text(pg: &mut Page, b: &Block, c: CellRef, l: &Look, rect: (f32, f32, f3
     let is_num = matches!(v, Value::Number(_));
     let wrap = st.align.wrap;
     let mut text = if sh.show_formulas {
-        crate::display::cell_text(wb, sh, c)
+        crate::display::cell_text_in(wb, sh, c, b.region)
     } else if code == "General"
         && let Value::Number(n) = v
     {
         let digit = gridcraft_pdf::text_width(font, size, "0").max(0.1);
         let max_chars = (avail / digit).floor().max(1.0) as usize;
-        gridcraft_numfmt::format_general_fit(n, max_chars.min(11)).unwrap_or_else(|| "#".repeat(max_chars.min(255)))
+        gridcraft_numfmt::format_general_fit_in(n, max_chars.min(11), b.region).unwrap_or_else(|| "#".repeat(max_chars.min(255)))
     } else {
-        crate::display::cell_text(wb, sh, c)
+        crate::display::cell_text_in(wb, sh, c, b.region)
     };
     if !wrap {
         text = text.replace(['\n', '\r'], " ");
@@ -1345,7 +1351,7 @@ fn draw_objects(pg: &mut Page, wb: &Workbook, si: usize, sh: &Sheet, b: &Block) 
             continue;
         }
         let (x, y, _, _) = place(r);
-        let data = gridcraft_chart::resolve(wb, si, ch);
+        let data = gridcraft_chart::resolve_in(wb, si, ch, b.region);
         let prims = gridcraft_chart::render(ch, &data, r.2 as f32, r.3 as f32, &PdfMeasure);
         draw_prims(pg, &prims, Xf { ox: x, oy: y, k: b.k });
     }
@@ -1419,7 +1425,18 @@ fn draw_header_footer(pg: &mut Page, lay: &SheetLayout, which: gridcraft_model::
 }
 
 /// Builds a block for rows × cols positioned at (x, y) on the page.
-fn make_block<'a>(wb: &'a Workbook, si: usize, sh: &'a Sheet, rows: (u32, u32), cols: (u32, u32), x: f32, y: f32, lay: &SheetLayout) -> Block<'a> {
+#[allow(clippy::too_many_arguments)]
+fn make_block<'a>(
+    wb: &'a Workbook,
+    region: Region,
+    si: usize,
+    sh: &'a Sheet,
+    rows: (u32, u32),
+    cols: (u32, u32),
+    x: f32,
+    y: f32,
+    lay: &SheetLayout,
+) -> Block<'a> {
     let k = lay.k();
     let mut xs = Vec::with_capacity((cols.1 - cols.0 + 2) as usize);
     let mut acc = x;
@@ -1435,7 +1452,7 @@ fn make_block<'a>(wb: &'a Workbook, si: usize, sh: &'a Sheet, rows: (u32, u32), 
         acc += sh.row_height(r) * k;
         ys.push(acc);
     }
-    Block { wb, si, sh, rows, cols, xs, ys, k, scale: lay.scale }
+    Block { wb, region, si, sh, rows, cols, xs, ys, k, scale: lay.scale }
 }
 
 /// Segments of a page along one axis: repeated titles (before the band) then the band.
@@ -1454,13 +1471,18 @@ fn seg_size(sh: &Sheet, seg: (u32, u32), rows: bool) -> f32 {
     if rows { (seg.0..=seg.1).map(|r| sh.row_height(r)).sum() } else { (seg.0..=seg.1).map(|c| sh.col_width(c)).sum() }
 }
 
-/// Renders laid-out sheets to a PDF.
+/// Renders laid-out sheets to a PDF, en-US.
 pub fn render_pdf(wb: &Workbook, layouts: &[SheetLayout], file: &str, path: &str) -> (Vec<u8>, usize) {
+    render_pdf_in(wb, layouts, file, path, Region::EnUs)
+}
+
+/// Renders laid-out sheets to a PDF with values shown in `region`.
+pub fn render_pdf_in(wb: &Workbook, layouts: &[SheetLayout], file: &str, path: &str, region: Region) -> (Vec<u8>, usize) {
     let mut doc = PdfDoc::new();
     doc.info.title = if wb.props.title.is_empty() { file.to_string() } else { wb.props.title.clone() };
     doc.info.author = wb.props.author.clone();
     let total: usize = layouts.iter().map(|l| l.pages.len()).sum();
-    let (date, time) = hf_date_time(wb);
+    let (date, time) = hf_date_time_in(wb, region);
     let mut page_no = 0usize;
     for lay in layouts {
         let Some(sh) = wb.sheet(lay.sheet) else { continue };
@@ -1482,7 +1504,7 @@ pub fn render_pdf(wb: &Workbook, layouts: &[SheetLayout], file: &str, path: &str
             for (rsi, rs) in rsegs.iter().enumerate() {
                 let mut x = ox + lay.heading_w * k;
                 for (csi, cs) in csegs.iter().enumerate() {
-                    let b = make_block(wb, lay.sheet, sh, *rs, *cs, x, y, lay);
+                    let b = make_block(wb, region, lay.sheet, sh, *rs, *cs, x, y, lay);
                     draw_block(pg, &b, lay.settings.gridlines, &mut cf);
                     if lay.settings.headings {
                         draw_headings(pg, &b, rsi == 0, csi == 0, (ox, oy), (lay.heading_w * k, lay.heading_h * k));
@@ -1522,10 +1544,11 @@ pub fn render_pdf(wb: &Workbook, layouts: &[SheetLayout], file: &str, path: &str
 
 fn build_pdf(s: &Session, p: &Json, cmd: &str) -> Result<(Vec<u8>, usize)> {
     let opts = PrintOptions::from_params(p, cmd)?;
+    let region = super::edit::display_region(s, p, cmd)?;
     let d = s.doc()?;
     let lays = layouts(&d.wb, &opts);
     let path = d.path.clone().unwrap_or_default();
-    Ok(render_pdf(&d.wb, &lays, &d.display_title(), &path))
+    Ok(render_pdf_in(&d.wb, &lays, &d.display_title(), &path, region))
 }
 
 pub(crate) fn export_pdf(s: &mut Session, p: &Json) -> Result<Json> {
@@ -1930,6 +1953,34 @@ mod tests {
         assert_eq!(r.text, "P4/9 9:00 AM");
         assert_eq!(expand_header_footer("plain", &cx)[1].text, "plain");
         assert_eq!(expand_header_footer("&", &cx)[1].text, "");
+    }
+
+    #[test]
+    fn pdf_shows_values_in_the_session_region() {
+        let mut s = s();
+        s.execute("range.setValues", json!({"range": "A1", "values": [[1234.5, 46314.0, 0.125]]})).unwrap();
+        s.execute("home.numberFormat", json!({"range": "B1", "format": "Short Date"})).unwrap();
+        s.execute("home.numberFormat", json!({"range": "C1", "code": "0.0%"})).unwrap();
+        s.execute("cell.set", json!({"cell": "D1", "input": "1.234,5", "region": "vi-VN"})).unwrap();
+        s.execute("home.columnWidth", json!({"cols": "A:D", "chars": 14})).unwrap();
+        let shown = |pdf: &[u8]| ["(1234.5) Tj", "(10/19/2026) Tj", "(12.5%) Tj", "(1,234.50) Tj"].map(|t| contains(pdf, t));
+        let (en, _) = pdf_of(&mut s, json!({}));
+        assert_eq!(shown(&en), [true; 4]);
+        s.region = Region::ViVn;
+        let (vi, _) = pdf_of(&mut s, json!({}));
+        assert_eq!(shown(&vi), [false; 4]);
+        for t in ["(1234,5) Tj", "(19/10/2026) Tj", "(12,5%) Tj", "(1.234,50) Tj"] {
+            assert!(contains(&vi, t), "{t}");
+        }
+        let (param, _) = pdf_of(&mut s, json!({"region": "en-US"}));
+        assert_eq!(shown(&param), [true; 4]);
+        assert!(s.execute("file.exportPdf", json!({"region": "xx"})).is_err());
+        let wb = &s.active().unwrap().wb;
+        let (date, _) = hf_date_time_in(wb, Region::ViVn);
+        let (en_date, _) = hf_date_time(wb);
+        let today = gridcraft_core::date::serial_in_system(wb.date_system, gridcraft_calc::now_serial()).floor();
+        assert_eq!(date, crate::display::format_in(&Value::Number(today), "dd/mm/yyyy", wb, Region::EnUs).text);
+        assert_eq!(en_date, crate::display::format(&Value::Number(today), "m/d/yyyy", wb).text);
     }
 
     #[test]

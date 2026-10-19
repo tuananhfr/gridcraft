@@ -195,7 +195,7 @@ pub(crate) fn perform(app: &mut SheetApp, shortcut: Shortcut, m: Modifiers, geo:
                 .map(|d| {
                     let now = gridcraft_engine::core::date::serial_in_system(d.wb.date_system, gridcraft_engine::calc::now_serial());
                     let (value, format) = if shortcut == Shortcut::Date { (now.floor(), "m/d/yyyy") } else { (now.fract(), "h:mm AM/PM") };
-                    gridcraft_engine::display::format(&gridcraft_engine::core::Value::Number(value), format, &d.wb).text
+                    gridcraft_engine::display::format_in(&gridcraft_engine::core::Value::Number(value), format, &d.wb, app.ui.region()).text
                 })
                 .unwrap_or_default();
             edit_with(app, text);
@@ -207,7 +207,7 @@ pub(crate) fn perform(app: &mut SheetApp, shortcut: Shortcut, m: Modifiers, geo:
             } else {
                 app.session
                     .active()
-                    .and_then(|d| sh.value_ref(above).map(|v| gridcraft_engine::display::format(v, "General", &d.wb).text))
+                    .and_then(|d| sh.value_ref(above).map(|v| gridcraft_engine::display::format_in(v, "General", &d.wb, app.ui.region()).text))
                     .unwrap_or_default()
             };
             edit_with(app, text);

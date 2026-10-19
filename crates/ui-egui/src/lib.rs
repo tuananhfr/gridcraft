@@ -463,6 +463,8 @@ impl SheetApp {
         if let Some(r) = self.run_ui_command(id, &params) {
             return r;
         }
+        // Commands run between frames (tests, the control channel) see a region change at once.
+        self.session.region = self.ui.region();
         let r = self.session.run(id, params);
         self.after_engine();
         // The new chart is selected, as after inserting any object, so Delete removes it, not its data.
@@ -1291,6 +1293,7 @@ impl SheetApp {
         // The language the widgets translate with this frame (see `i18n::current`).
         i18n::set_current(&ctx, self.ui.language);
         region::set_current(&ctx, self.ui.region());
+        self.session.region = self.ui.region();
         let t = theme::Tokens::get(&ctx);
         if self.backstage.is_none() {
             self.ribbon_keys(&ctx);

@@ -316,12 +316,14 @@ pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
                         && !d.selection.is_single_cell()
                     {
                         let st = gridcraft_engine::display::stats(sh, &d.selection.ranges);
+                        let region = app.ui.region();
                         let fmt = |v: f64| {
                             let code = d.wb.styles.get(sh.style_id(d.selection.active)).num_fmt.as_str().to_string();
                             let code = if code == "General" { "#,##0.##########".to_string() } else { code };
-                            gridcraft_engine::display::format(&gridcraft_engine::core::Value::Number(v), &code, &d.wb)
+                            gridcraft_engine::display::format_in(&gridcraft_engine::core::Value::Number(v), &code, &d.wb, region)
                                 .text
-                                .trim_end_matches('.')
+                                // A whole number leaves the decimal point of `#,##0.###…`: `.` in en-US, `,` in vi-VN.
+                                .trim_end_matches(['.', ','])
                                 .to_string()
                         };
                         let mut parts = Vec::new();

@@ -1,11 +1,12 @@
-//! How cells look as text: number formats applied, for the grid, clipboard, CSV and agents.
+//! How cells look as text: number formats applied, for the grid, clipboard, CSV and agents. The
+//! plain functions are en-US (files, CSV and the engine API); the `_in` ones display in a region.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 use gridcraft_core::{CellRef, RangeRef, Region, Value};
 use gridcraft_model::{Sheet, Workbook};
-use gridcraft_numfmt::{Formatted, NumberFormat, format_value};
+use gridcraft_numfmt::{Formatted, NumberFormat, format_value_in};
 
 /// Parsed number formats are cached by code.
 fn parsed(code: &str) -> NumberFormat {
@@ -30,7 +31,12 @@ pub fn number_format(code: &str) -> NumberFormat {
 
 /// Formats a value with a format code.
 pub fn format(v: &Value, code: &str, wb: &Workbook) -> Formatted {
-    format_value(v, &parsed(code), wb.date_system)
+    format_in(v, code, wb, Region::EnUs)
+}
+
+/// [`format`] as `region` displays it.
+pub fn format_in(v: &Value, code: &str, wb: &Workbook, region: Region) -> Formatted {
+    format_value_in(v, &parsed(code), wb.date_system, region)
 }
 
 /// What the cell editor and the formula bar start from. Same as `Cell::input_text`, except that a
@@ -58,11 +64,11 @@ pub fn edit_text_in(wb: &Workbook, sheet: &Sheet, c: CellRef, region: Region) ->
     let raw = region.number_text(&raw);
     let reads_back =
         |s: &str| matches!(gridcraft_core::parse::parse_input_in(s, wb.date_system, region).value, Value::Number(m) if (m - n).abs() < 1e-9);
-    let shown = format(&cell.value, code, wb).text;
+    let shown = format_in(&cell.value, code, wb, region).text;
     if reads_back(&shown) {
         return shown;
     }
-    if let Some(native) = region.edit_date_format(*n >= 1.0, n.fract() != 0.0).map(|code| format(&cell.value, code, wb).text)
+    if let Some(native) = region.edit_date_format(*n >= 1.0, n.fract() != 0.0).map(|code| format_in(&cell.value, code, wb, region).text)
         && reads_back(&native)
     {
         return native;
@@ -98,20 +104,30 @@ pub fn formula_hidden(wb: &Workbook, sheet: &Sheet, c: CellRef) -> bool {
 
 /// The text a cell shows (full precision General; the grid narrows General to fit the column).
 pub fn cell_text(wb: &Workbook, sheet: &Sheet, c: CellRef) -> String {
+    cell_text_in(wb, sheet, c, Region::EnUs)
+}
+
+/// [`cell_text`] as `region` displays it. A shown formula keeps the invariant notation.
+pub fn cell_text_in(wb: &Workbook, sheet: &Sheet, c: CellRef, region: Region) -> String {
     if sheet.show_formulas
         && let Some(f) = sheet.cell(c).and_then(|x| x.formula.as_ref())
         && !formula_hidden(wb, sheet, c)
     {
         return format!("={}", f.text);
     }
-    value_text(wb, sheet, c)
+    value_text_in(wb, sheet, c, region)
 }
 
 /// A cell's value with its number format applied, independent of column width: no `#####`
 /// and no General narrowing (Save As CSV/Text writes this). Formulas give their result.
 pub fn value_text(wb: &Workbook, sheet: &Sheet, c: CellRef) -> String {
+    value_text_in(wb, sheet, c, Region::EnUs)
+}
+
+/// [`value_text`] as `region` displays it.
+pub fn value_text_in(wb: &Workbook, sheet: &Sheet, c: CellRef, region: Region) -> String {
     let style = wb.styles.get(sheet.style_id(c));
-    let f = format(&sheet.value(c), style.num_fmt.as_str(), wb);
+    let f = format_in(&sheet.value(c), style.num_fmt.as_str(), wb, region);
     match f.fill {
         Some((_, pos)) => {
             let mut t = f.text;
@@ -124,8 +140,13 @@ pub fn value_text(wb: &Workbook, sheet: &Sheet, c: CellRef) -> String {
     }
 }
 
-/// Tab-separated text of a range, as the system clipboard gets it.
+/// Tab-separated text of a range, en-US.
 pub fn range_text(wb: &Workbook, sheet: usize, r: RangeRef) -> String {
+    range_text_in(wb, sheet, r, Region::EnUs)
+}
+
+/// Tab-separated text of a range as `region` displays it, as the system clipboard gets it.
+pub fn range_text_in(wb: &Workbook, sheet: usize, r: RangeRef, region: Region) -> String {
     let Some(sh) = wb.sheet(sheet) else { return String::new() };
     let mut out = String::new();
     let r = clipboard_range(r);
@@ -139,7 +160,7 @@ pub fn range_text(wb: &Workbook, sheet: usize, r: RangeRef) -> String {
                 out.push('\t');
             }
             first = false;
-            let t = cell_text(wb, sh, CellRef::new(row, col));
+            let t = cell_text_in(wb, sh, CellRef::new(row, col), region);
             if t.contains(['\t', '\n', '"']) {
                 out.push('"');
                 out.push_str(&t.replace('"', "\"\""));

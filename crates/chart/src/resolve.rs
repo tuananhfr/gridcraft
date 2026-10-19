@@ -1,9 +1,9 @@
 //! Pulls chart data (names, categories, values, formats, colours) out of a workbook.
 
 use gridcraft_calc::evaluate;
-use gridcraft_core::{CellRef, RangeRef, Value, number_to_text};
+use gridcraft_core::{CellRef, RangeRef, Region, Value, number_to_text};
 use gridcraft_model::{Chart, ChartKind, Theme, Workbook, style::apply_tint};
-use gridcraft_numfmt::{NumberFormat, format_value};
+use gridcraft_numfmt::{NumberFormat, format_value_in};
 
 use crate::{ChartData, Rgba, SeriesData, TrendlineData};
 
@@ -134,7 +134,7 @@ fn value_text(v: &Value) -> String {
 }
 
 /// Category labels, formatted with each source cell's number format (dates, currency…).
-fn category_texts(wb: &Workbook, sheet: usize, formula: &str) -> Vec<String> {
+fn category_texts(wb: &Workbook, sheet: usize, formula: &str, region: Region) -> Vec<String> {
     let vals = eval_list(wb, sheet, formula);
     let cells: Option<(usize, RangeRef)> = parse_ref(wb, sheet, formula);
     let src = cells.and_then(|(sh, r)| wb.sheet(sh).map(|s| (s, r)));
@@ -147,11 +147,11 @@ fn category_texts(wb: &Workbook, sheet: usize, formula: &str) -> Vec<String> {
                 if let Some(c) = at {
                     let code = &wb.styles.get(s.style_id(c)).num_fmt.0;
                     if !code.eq_ignore_ascii_case("general") {
-                        return format_value(v, &NumberFormat::parse_cached(code), wb.date_system).text;
+                        return format_value_in(v, &NumberFormat::parse_cached(code), wb.date_system, region).text;
                     }
                 }
             }
-            value_text(v)
+            if v.is_number() { region.number_text(&value_text(v)) } else { value_text(v) }
         })
         .collect()
 }
@@ -194,6 +194,11 @@ pub fn series_plot_kind(chart: &Chart, i: usize) -> ChartKind {
 /// values (scatter/bubble), bubble sizes, number formats and colours (explicit, else the
 /// default palette derived from the workbook theme accents).
 pub fn resolve(wb: &Workbook, sheet: usize, chart: &Chart) -> ChartData {
+    resolve_in(wb, sheet, chart, Region::EnUs)
+}
+
+/// [`resolve`] with categories, value labels and axes shown in `region`.
+pub fn resolve_in(wb: &Workbook, sheet: usize, chart: &Chart, region: Region) -> ChartData {
     let numeric_x = matches!(chart.kind, ChartKind::Scatter | ChartKind::ScatterLines | ChartKind::Bubble);
     let mut series = Vec::new();
     let mut categories: Option<Vec<String>> = None;
@@ -211,7 +216,7 @@ pub fn resolve(wb: &Workbook, sheet: usize, chart: &Chart) -> ChartData {
         if categories.is_none()
             && let Some(f) = &s.categories
         {
-            let c = category_texts(wb, sheet, f);
+            let c = category_texts(wb, sheet, f, region);
             if !c.is_empty() {
                 categories = Some(c);
             }
@@ -242,5 +247,5 @@ pub fn resolve(wb: &Workbook, sheet: usize, chart: &Chart) -> ChartData {
     let n = series.iter().map(|s| s.values.len()).max().unwrap_or(0);
     let categories = categories.unwrap_or_else(|| (1..=n).map(|i| i.to_string()).collect());
     let palette = default_palette(&wb.theme, n.min(PALETTE_CYCLE));
-    ChartData { categories, series, palette }
+    ChartData { categories, series, palette, region }
 }

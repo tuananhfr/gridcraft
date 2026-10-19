@@ -20,13 +20,14 @@ mod trend;
 #[cfg(test)]
 mod tests;
 
+use gridcraft_core::Region;
 pub use gridcraft_model::{Chart, ChartKind, LegendPos, SparklineKind, Trendline, TrendlineKind};
 use serde::{Deserialize, Serialize};
 
 pub use axis::{Scale, format_number, nice_scale};
 pub use raster::rasterize;
 pub use render::{Swatch, legend_entries, render, supports_trendline};
-pub use resolve::{default_palette, resolve, series_color, series_plot_kind};
+pub use resolve::{default_palette, resolve, resolve_in, series_color, series_plot_kind};
 pub use sparkline::render_sparkline;
 
 /// Straight (non-premultiplied) RGBA colour.
@@ -127,6 +128,9 @@ pub struct ChartData {
     /// Workbook-theme colours for the points of pie-like charts, repeating (point `j` uses entry `j % len`); empty uses the default theme.
     #[serde(default)]
     pub palette: Vec<Rgba>,
+    /// The regional format the categories were formatted in, and that value labels and axes use.
+    #[serde(skip)]
+    pub region: Region,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

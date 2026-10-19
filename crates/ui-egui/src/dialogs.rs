@@ -1562,18 +1562,20 @@ fn format_cells(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confirm: 
     match d.tab.as_str() {
         "Number" => {
             let mut code = st.num_fmt.as_str().to_string();
+            let region = app.ui.region();
             ui.columns(2, |cols| {
                 cols[0].label(egui::RichText::new(lang.tr("Category:")).strong());
                 for name in
                     ["General", "Number", "Currency", "Accounting", "Short Date", "Long Date", "Time", "Percentage", "Fraction", "Scientific", "Text"]
                 {
-                    let c = gridcraft_engine::cmd::format::format_code_for(name).to_string();
+                    let c = gridcraft_engine::cmd::format::format_code_in(name, region).to_string();
                     if cols[0].selectable_label(code == c, lang.tr(name)).clicked() {
                         code = c;
                     }
                 }
                 cols[1].label(egui::RichText::new(lang.tr("Sample")).strong());
-                let preview = app.session.active().map(|doc| gridcraft_engine::display::format(&sample, &code, &doc.wb).text).unwrap_or_default();
+                let preview =
+                    app.session.active().map(|doc| gridcraft_engine::display::format_in(&sample, &code, &doc.wb, region).text).unwrap_or_default();
                 cols[1].label(egui::RichText::new(preview).font(theme::ui_font(15.0)));
                 cols[1].add_space(8.0);
                 cols[1].label(lang.tr("Type (custom format code):"));

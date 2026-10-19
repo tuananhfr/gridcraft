@@ -5,7 +5,7 @@
 //! [`super::data::apply_filter`] hides the rows. Creating a slicer (`insert.slicer` /
 //! `table.insertSlicer`) selects everything, i.e. applies no filter.
 
-use gridcraft_core::CellRef;
+use gridcraft_core::{CellRef, Region};
 use gridcraft_model::*;
 use serde_json::{Value as Json, json};
 
@@ -41,6 +41,12 @@ pub fn specs() -> Vec<CommandSpec> {
 /// Distinct, non-blank display values of a table column, in first-seen order. Used to populate a
 /// slicer's tiles and to detect "everything selected".
 pub fn column_values(wb: &Workbook, sheet: usize, table: &str, column: &str) -> Vec<String> {
+    column_values_in(wb, sheet, table, column, Region::EnUs).into_iter().map(|(value, _)| value).collect()
+}
+
+/// [`column_values`] as `(value, label)`: the en-US value a slicer selects and the file keeps, and
+/// how `region` shows it.
+fn column_values_in(wb: &Workbook, sheet: usize, table: &str, column: &str, region: Region) -> Vec<(String, String)> {
     let Some(sh) = wb.sheet(sheet) else { return vec![] };
     let Some(t) = sh.tables.iter().find(|t| t.name.eq_ignore_ascii_case(table)) else { return vec![] };
     let Some(ci) = t.column_index(column) else { return vec![] };
@@ -49,12 +55,14 @@ pub fn column_values(wb: &Workbook, sheet: usize, table: &str, column: &str) -> 
     let mut seen = std::collections::BTreeSet::new();
     let mut out = Vec::new();
     for row in dr.start.row..=dr.end.row {
-        let text = crate::display::cell_text(wb, sh, CellRef::new(row, col));
+        let c = CellRef::new(row, col);
+        let text = crate::display::cell_text(wb, sh, c);
         if text.is_empty() {
             continue;
         }
         if seen.insert(text.to_lowercase()) {
-            out.push(text);
+            let label = if region == Region::EnUs { text.clone() } else { crate::display::cell_text_in(wb, sh, c, region) };
+            out.push((text, label));
         }
     }
     out
@@ -63,14 +71,19 @@ pub fn column_values(wb: &Workbook, sheet: usize, table: &str, column: &str) -> 
 /// A slicer's tiles as `(value, selected)`, for the UI. `selected` is true for every tile when the
 /// slicer has no filter (`selected == None`).
 pub fn slicer_items(wb: &Workbook, sheet: usize, sl: &Slicer) -> Vec<(String, bool)> {
-    column_values(wb, sheet, &sl.table, &sl.column)
+    slicer_items_in(wb, sheet, sl, Region::EnUs).into_iter().map(|(value, _, on)| (value, on)).collect()
+}
+
+/// [`slicer_items`] as `(value, label, selected)`, the label shown in `region`.
+pub fn slicer_items_in(wb: &Workbook, sheet: usize, sl: &Slicer, region: Region) -> Vec<(String, String, bool)> {
+    column_values_in(wb, sheet, &sl.table, &sl.column, region)
         .into_iter()
-        .map(|v| {
+        .map(|(v, label)| {
             let on = match &sl.selected {
                 None => true,
                 Some(set) => set.iter().any(|x| x.eq_ignore_ascii_case(&v)),
             };
-            (v, on)
+            (v, label, on)
         })
         .collect()
 }

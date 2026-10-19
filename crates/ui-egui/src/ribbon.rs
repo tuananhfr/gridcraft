@@ -1122,6 +1122,7 @@ fn number_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
     let kind = gridcraft_engine::display::number_format(&code).kind();
     let current = format!("{kind:?}");
     let lang = app.ui.language;
+    let region = app.ui.region();
     let sample = app.session.active().and_then(|d| d.wb.active().map(|sh| sh.value(d.selection.active))).unwrap_or_default();
     let resp = ui.add_sized([150.0, 24.0], egui::Button::new(egui::RichText::new(lang.tr(&current)).font(theme::ui_font(12.5))));
     control_keytip(app, ui, &resp, "home.numberFormat");
@@ -1130,8 +1131,8 @@ fn number_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
     let items: Vec<(&str, String)> = names
         .iter()
         .map(|n| {
-            let code = gridcraft_engine::cmd::format::format_code_for(n);
-            let preview = app.session.active().map(|d| gridcraft_engine::display::format(&sample, code, &d.wb).text).unwrap_or_default();
+            let code = gridcraft_engine::cmd::format::format_code_in(n, region);
+            let preview = app.session.active().map(|d| gridcraft_engine::display::format_in(&sample, code, &d.wb, region).text).unwrap_or_default();
             (*n, format!("{:<12}   {preview}", lang.tr(n)))
         })
         .chain(std::iter::once(("__more", format!("{:>12}", lang.tr("More Number Formats…")))))
@@ -1139,7 +1140,11 @@ fn number_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
     if let ComboResult::Picked(value) = editable_combo(ui, &resp, "number", &current, &items, forced) {
         match value.as_str() {
             "__more" => app.open_dialog("formatCells", json!({"tab": "Number"})),
-            n => act(app, "home.numberFormat", json!({"format": n})),
+            n => {
+                let code = gridcraft_engine::cmd::format::format_code_in(n, region);
+                let params = if code == gridcraft_engine::cmd::format::format_code_for(n) { json!({"format": n}) } else { json!({"code": code}) };
+                act(app, "home.numberFormat", params)
+            }
         }
     }
 }

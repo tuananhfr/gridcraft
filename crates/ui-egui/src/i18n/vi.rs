@@ -320,6 +320,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Web Page (.html)" => "Trang Web (.html)",
         "Save the workbook as a web page." => "Lưu sổ làm việc thành trang web.",
         "Options|General" => "Chung",
+        "Options|Editing" => "Chỉnh sửa",
         "Options|Save" => "Lưu",
         "Show formula bar" => "Hiện thanh công thức",
         "Enable AutoComplete for cell values" => "Bật tự động hoàn tất giá trị ô",

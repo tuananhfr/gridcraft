@@ -285,7 +285,7 @@ const CLIPBOARD_HTML_MAX_CELLS: u64 = 10_000;
 
 /// An HTML fragment for the same range as `plain_text`, previously produced by
 /// `display::range_text`. Large copies keep plain text only; never return a partial table.
-pub(crate) fn range_html(wb: &Workbook, sheet: usize, r: RangeRef, plain_text: &str) -> Option<String> {
+pub(crate) fn range_html(wb: &Workbook, sheet: usize, r: RangeRef, plain_text: &str, region: gridcraft_core::Region) -> Option<String> {
     let r = crate::display::clipboard_range(r);
     if r.count() > CLIPBOARD_HTML_MAX_CELLS || plain_text.len() > CLIPBOARD_HTML_MAX_BYTES {
         return None;
@@ -314,7 +314,7 @@ pub(crate) fn range_html(wb: &Workbook, sheet: usize, r: RangeRef, plain_text: &
             write!(out, "<td style=\"border:1px solid #d4d4d4;padding:2px 4px;white-space:pre-wrap;{css}\"{span}>").ok()?;
             // Use the visible selected cell, even when the merge's original anchor
             // is outside the range or hidden. This matches the plain-text copy.
-            let text = crate::display::cell_text(wb, sh, c);
+            let text = crate::display::cell_text_in(wb, sh, c, region);
             let mut chars = text.chars().peekable();
             while let Some(ch) = chars.next() {
                 match ch {

@@ -38,7 +38,7 @@ pub fn paint_chart(p: &Painter, rect: Rect, wb: &Workbook, sheet: usize, chart: 
         return;
     }
     let origin = rect.center() - vec2(w * z, h * z) / 2.0;
-    let data = gridcraft_chart::resolve(wb, sheet, chart);
+    let data = gridcraft_chart::resolve_in(wb, sheet, chart, crate::region::current(p.ctx()));
     let m = EguiMeasure { painter: p, z };
     let prims = gridcraft_chart::render(chart, &data, w, h, &m);
     paint_prims(&p.with_clip_rect(rect.intersect(p.clip_rect())), origin, &prims, z);
@@ -362,7 +362,7 @@ pub(crate) fn paint_objects(app: &SheetApp, p: &Painter, geo: &Geo, wb: &Workboo
         // Soft shadow + white card.
         p.rect_filled(r.translate(vec2(0.0, 1.5)), 2.0, Color32::from_black_alpha(18));
         p.rect_filled(r, 0.0, Color32::WHITE);
-        let data = gridcraft_chart::resolve(wb, si, ch);
+        let data = gridcraft_chart::resolve_in(wb, si, ch, crate::region::current(p.ctx()));
         let m = EguiMeasure { painter: p, z: geo.z };
         let prims = gridcraft_chart::render(ch, &data, ch.anchor.width, ch.anchor.height, &m);
         paint_prims(&p.with_clip_rect(r.intersect(p.clip_rect())), r.min, &prims, geo.z);
@@ -430,7 +430,7 @@ fn paint_slicers(app: &SheetApp, p: &Painter, geo: &Geo, wb: &Workbook, si: usiz
         if !r.intersects(p.clip_rect()) {
             continue;
         }
-        let items = gridcraft_engine::cmd::slicer::slicer_items(wb, si, sl);
+        let items = gridcraft_engine::cmd::slicer::slicer_items_in(wb, si, sl, crate::region::current(p.ctx()));
         let lay = slicer_layout(r, geo.z, items.len(), sl.columns);
         let radius = 4.0 * geo.z;
         // Card + soft shadow.
@@ -448,14 +448,14 @@ fn paint_slicers(app: &SheetApp, p: &Painter, geo: &Geo, wb: &Workbook, si: usiz
             crate::icons::paint(p, lay.clear, icon, if filtered { tk.accent } else { tk.text_dim });
         }
         // Value tiles.
-        for ((val, on), tr) in items.iter().zip(&lay.tiles) {
+        for ((_, label, on), tr) in items.iter().zip(&lay.tiles) {
             if !r.contains(tr.left_top()) {
                 continue; // overflowed the card; skip (no scroll yet)
             }
             let (fill, fg) = if *on { (tk.accent, Color32::WHITE) } else { (tk.hover, tk.text_dim) };
             p.rect_filled(*tr, 3.0 * geo.z, fill);
             let cp = p.with_clip_rect(tr.intersect(p.clip_rect()));
-            cp.text(tr.left_center() + vec2(6.0 * geo.z, 0.0), Align2::LEFT_CENTER, val, theme::ui_font(12.0 * geo.z), fg);
+            cp.text(tr.left_center() + vec2(6.0 * geo.z, 0.0), Align2::LEFT_CENTER, label, theme::ui_font(12.0 * geo.z), fg);
         }
         if app.selected_chart == Some(sl.id) {
             selection_frame(p, r);

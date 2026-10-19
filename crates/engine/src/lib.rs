@@ -251,6 +251,10 @@ pub struct Session {
     pub last_find: Option<Json>,
     /// View › Show › Ruler is off (rulers in Page Layout view; an application option).
     pub hide_ruler: bool,
+    /// The regional format that what the user sees is shown in: printed and PDF pages, the
+    /// clipboard text, Find's matches, filter and slicer captions. The UI keeps it in step with its
+    /// preference; data returned to agents stays en-US.
+    pub region: gridcraft_core::Region,
     /// Journal position where action recording started.
     pub recording: Option<usize>,
     /// Uids of the documents hidden with View › Hide (indexes shift when a document closes).

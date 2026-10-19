@@ -58,14 +58,14 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             repeat
         ),
-        cmd!(noundo "edit.copy", "Copy", ["Home", "Clipboard"], Some("Cmd+C"), "{range?, html?: bool} → {range, text, html?} (html: a styled HTML table, only when requested and small enough)", has_doc, copy),
-        cmd!(noundo "edit.cut", "Cut", ["Home", "Clipboard"], Some("Cmd+X"), "{range?, html?: bool} → {range, text, html?} (html: a styled HTML table, only when requested and small enough)", has_doc, cut),
+        cmd!(noundo "edit.copy", "Copy", ["Home", "Clipboard"], Some("Cmd+C"), "{range?, html?: bool, region?: \"en-US\"|\"vi-VN\"|\"es-ES\"} → {range, text, html?} (html: a styled HTML table, only when requested and small enough; region: how the text shows numbers and dates, default the session's)", has_doc, copy),
+        cmd!(noundo "edit.cut", "Cut", ["Home", "Clipboard"], Some("Cmd+X"), "{range?, html?: bool, region?: \"en-US\"|\"vi-VN\"|\"es-ES\"} → {range, text, html?} (html: a styled HTML table, only when requested and small enough; region: as edit.copy)", has_doc, cut),
         cmd!(
             "edit.paste",
             "Paste",
             ["Home", "Clipboard"],
             Some("Cmd+V"),
-            "{at?: \"C3\", text?: \"tab-separated text from the system clipboard\", html?: \"the clipboard's HTML flavour; cells the source recorded as numbers (x:num, sdval) stay numbers\"}",
+            "{at?: \"C3\", text?: \"tab-separated text from the system clipboard\", html?: \"the clipboard's HTML flavour; cells the source recorded as numbers (x:num, sdval) stay numbers\", region?: \"en-US\"|\"vi-VN\"|\"es-ES\" (notation the text's numbers and dates are read in, default the session's)}",
             has_doc,
             paste
         ),
@@ -111,7 +111,7 @@ pub fn specs() -> Vec<CommandSpec> {
             fill_series
         ),
         cmd!("edit.flashFill", "Flash Fill", ["Home", "Editing", "Fill"], Some("Ctrl+E"), "{range?}", has_doc, flash_fill),
-        cmd!(noundo "edit.find", "Find…", ["Home", "Editing", "Find & Select"], Some("Cmd+F"), "{what, matchCase?, wholeCell?, lookIn?: formulas|values, byColumns?, all?: bool, within?: sheet|workbook}", has_doc, find),
+        cmd!(noundo "edit.find", "Find…", ["Home", "Editing", "Find & Select"], Some("Cmd+F"), "{what, matchCase?, wholeCell?, lookIn?: formulas|values, byColumns?, all?: bool, within?: sheet|workbook, region?: \"en-US\"|\"vi-VN\"|\"es-ES\" (values are matched as shown in it, default the session's)}", has_doc, find),
         cmd!(
             "edit.replace",
             "Replace…",
@@ -294,6 +294,11 @@ fn cell_set(s: &mut Session, p: &Json) -> Result<Json> {
     })?;
     let v = s.doc()?.wb.sheet(sheet).map(|sh| sh.value(at)).unwrap_or_default();
     Ok(json!({"cell": at.a1(), "value": v.display()}))
+}
+
+/// The region a command shows values in: its `region` param, else the session's.
+pub(crate) fn display_region(s: &Session, p: &Json, cmd: &str) -> Result<Region> {
+    if p.get("region").is_some() { region_param(p, cmd) } else { Ok(s.region) }
 }
 
 /// The optional `region` of an entry command; en-US without it.
@@ -766,6 +771,7 @@ fn copy_impl(s: &mut Session, p: &Json, cut: bool) -> Result<Json> {
     }
     // The selection as made (untrimmed), for Insert Copied Cells.
     let selected = ranges.first().copied().unwrap_or_default();
+    let region = display_region(s, p, if cut { "edit.cut" } else { "edit.copy" })?;
     let d = s.doc()?;
     let Some(sh) = d.wb.sheet(sheet) else { return Err(EngineError::NoDocument) };
     let trim = |range: RangeRef| {
@@ -783,10 +789,10 @@ fn copy_impl(s: &mut Session, p: &Json, cut: bool) -> Result<Json> {
     } else {
         (d.wb.clone(), trim(ranges.first().copied().unwrap_or_default()), Vec::new())
     };
-    let text = crate::display::range_text(&wb, sheet, range);
+    let text = crate::display::range_text_in(&wb, sheet, range, region);
     // The HTML rendering is for the host clipboard (UI); it can reach 4 MB, so agents and
     // scripts get it only when they ask for it.
-    let html = if p.get("html").and_then(Json::as_bool) == Some(true) { crate::io::range_html(&wb, sheet, range, &text) } else { None };
+    let html = if p.get("html").and_then(Json::as_bool) == Some(true) { crate::io::range_html(&wb, sheet, range, &text, region) } else { None };
     let clip = Clipboard { wb, sheet, range, cut, doc_uid: d.uid, text: text.clone(), areas, selected };
     s.clipboard = Some(clip);
     let mut result = json!({"range": range.a1(), "text": text});
@@ -914,6 +920,7 @@ fn paste(s: &mut Session, p: &Json) -> Result<Json> {
 
 fn paste_text(s: &mut Session, p: &Json, text: &str) -> Result<Json> {
     let sheet = target_sheet(s, p)?;
+    let region = display_region(s, p, "edit.paste")?;
     let at = cell_param_on(s, p, "at", sheet)?.unwrap_or(s.doc()?.selection.current().start);
     let rows: Vec<Vec<String>> = parse_tsv(text);
     // The HTML flavour, when the host passed it: the number behind each cell's shown text.
@@ -924,7 +931,7 @@ fn paste_text(s: &mut Session, p: &Json, text: &str) -> Result<Json> {
         for (ri, row) in rows.iter().enumerate() {
             for (ci, v) in row.iter().enumerate() {
                 let Some(c) = at.offset(ri as i64, ci as i64) else { continue };
-                let mut cell = input_to_cell(v, sheet, c, &mut cx.wb).unwrap_or_else(|_| Some(Cell::value(Value::text(v.as_str()))));
+                let mut cell = input_to_cell_in(v, sheet, c, &mut cx.wb, region).unwrap_or_else(|_| Some(Cell::value(Value::text(v.as_str()))));
                 if let Some(cl) = cell.as_mut() {
                     numeric_from_html(cl, v, html.get(ri).and_then(|r| r.get(ci)), &mut cx.wb);
                 }
@@ -1562,6 +1569,7 @@ fn find(s: &mut Session, p: &Json) -> Result<Json> {
     let by_cols = bool_param(p, "byColumns").unwrap_or(false);
     let all = bool_param(p, "all").unwrap_or(false);
     let workbook = str_param(p, "within") == Some("workbook");
+    let region = display_region(s, p, "edit.find")?;
     s.last_find = Some(p.clone());
     let d = s.doc()?;
     let sheets: Vec<usize> = if workbook { (0..d.wb.sheets.len()).collect() } else { vec![d.wb.active_sheet] };
@@ -1573,7 +1581,7 @@ fn find(s: &mut Session, p: &Json) -> Result<Json> {
             .iter()
             .filter_map(|(c, cell)| {
                 let text = if values || cell.formula.is_none() || crate::display::formula_hidden(&d.wb, sh, c) {
-                    crate::display::cell_text(&d.wb, sh, c)
+                    crate::display::cell_text_in(&d.wb, sh, c, region)
                 } else {
                     cell.input_text()
                 };

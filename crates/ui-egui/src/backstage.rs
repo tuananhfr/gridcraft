@@ -825,7 +825,7 @@ fn paint_page(p: &egui::Painter, rect: Rect, paper_w: f32, page: &Json, wb: &gri
                 break;
             }
             let cell = gridcraft_engine::core::CellRef::new(row, col);
-            let text = gridcraft_engine::display::cell_text(wb, sh, cell);
+            let text = gridcraft_engine::display::cell_text_in(wb, sh, cell, crate::region::current(p.ctx()));
             if !text.is_empty() {
                 let numeric = sh.value(cell).as_f64().is_some();
                 // Text runs on over empty neighbours, as on the sheet; numbers stay in their cell.

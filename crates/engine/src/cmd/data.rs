@@ -3,7 +3,7 @@
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-use gridcraft_core::{CellRef, RangeRef, Value, sort_compare};
+use gridcraft_core::{CellRef, RangeRef, Region, Value, sort_compare};
 use gridcraft_model::*;
 use serde_json::{Value as Json, json};
 
@@ -693,6 +693,12 @@ fn reapply(s: &mut Session, _: &Json) -> Result<Json> {
 
 /// Distinct display values of a filter column (for the dropdown list).
 pub fn filter_values(wb: &Workbook, sheet: usize, col: u32) -> Vec<(String, bool)> {
+    filter_values_in(wb, sheet, col, Region::EnUs).into_iter().map(|(value, _, on)| (value, on)).collect()
+}
+
+/// [`filter_values`] as `(value, label, on)`: the value is what `data.filterBy` takes and the file
+/// keeps (en-US), the label how `region` shows it.
+pub fn filter_values_in(wb: &Workbook, sheet: usize, col: u32, region: Region) -> Vec<(String, String, bool)> {
     let Some(sh) = wb.sheet(sheet) else { return vec![] };
     let Some(af) = &sh.autofilter else { return vec![] };
     let off = col.saturating_sub(af.range.start.col);
@@ -712,9 +718,17 @@ pub fn filter_values(wb: &Workbook, sheet: usize, col: u32) -> Vec<(String, bool
             }
             _ => true,
         };
-        seen.entry((sort_key(&v), t)).or_insert(on);
+        seen.entry((sort_key(&v), t)).or_insert_with(|| {
+            let label = if v.is_empty() || region == Region::EnUs { None } else { Some(crate::display::cell_text_in(wb, sh, c, region)) };
+            (label, on)
+        });
     }
-    seen.into_iter().map(|((_, t), on)| (t, on)).collect()
+    seen.into_iter()
+        .map(|((_, t), (label, on))| {
+            let label = label.unwrap_or_else(|| t.clone());
+            (t, label, on)
+        })
+        .collect()
 }
 
 /// Case-sensitive tie-break for text that is equal ignoring case: as in Excel, lowercase sorts

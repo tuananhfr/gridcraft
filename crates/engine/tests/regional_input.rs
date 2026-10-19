@@ -94,7 +94,8 @@ fn edit_text_reads_back_in_the_region() {
     let vi = |a1| display::edit_text_in(&d.wb, sh, CellRef::parse(a1).unwrap(), Region::ViVn);
     assert_eq!(vi("A1"), "1234,5");
     assert_eq!(vi("A2"), "19/10/2026");
-    assert_eq!(vi("A3"), "19/10/2026 18:30:00");
+    // Built-in 22 now shows as dd/mm/yyyy h:mm in vi-VN, which reads back, so it is kept as shown.
+    assert_eq!(vi("A3"), "19/10/2026 18:30");
     assert_eq!(vi("A4"), "03/04/2026", "3 April, never 4 March");
     assert_eq!(display::edit_text(&d.wb, sh, CellRef::parse("A1").unwrap()), "1234.5");
     assert_eq!(display::edit_text(&d.wb, sh, CellRef::parse("A4").unwrap()), "4/3/2026");
