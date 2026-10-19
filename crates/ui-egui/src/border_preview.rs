@@ -45,7 +45,13 @@ pub(crate) fn preset_button(ui: &mut Ui, label: &str, preset: &str) -> Response 
             paint_border(ui.painter(), points, style, t.text);
         }
     }
-    ui.painter().text(pos2(response.rect.left() + 36.0, response.rect.center().y), Align2::LEFT_CENTER, label, theme::ui_font(12.5), t.text);
+    ui.painter().text(
+        pos2(response.rect.left() + 36.0, response.rect.center().y),
+        Align2::LEFT_CENTER,
+        crate::widgets::tr(ui, label),
+        theme::ui_font(12.5),
+        t.text,
+    );
     response
 }
 
@@ -53,7 +59,7 @@ pub(crate) fn preset_button(ui: &mut Ui, label: &str, preset: &str) -> Response 
 /// and explicit border colors faithful in both light and dark application themes.
 pub(crate) fn sample(ui: &mut Ui, borders: &Borders, theme: &Theme) {
     ui.add_space(8.0);
-    ui.label("Preview");
+    ui.label(crate::widgets::tr(ui, "Preview"));
     let (area, response) = ui.allocate_exact_size(vec2(248.0, 104.0), Sense::hover());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, "Border preview"));
     let t = Tokens::get(ui.ctx());

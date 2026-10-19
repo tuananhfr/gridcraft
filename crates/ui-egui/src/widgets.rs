@@ -10,7 +10,7 @@ use crate::theme::{self, Tokens};
 
 /// Translates a label or tooltip for the language of the frame being drawn (English if untranslated).
 /// Ribbon chrome all flows through these widgets, so translating here localises it in one place.
-fn tr<'a>(ui: &Ui, text: &'a str) -> &'a str {
+pub(crate) fn tr<'a>(ui: &Ui, text: &'a str) -> &'a str {
     i18n::current(ui.ctx()).tr(text)
 }
 
@@ -280,13 +280,15 @@ pub fn message_box(app: &mut SheetApp, ctx: &egui::Context) {
             ui.painter().circle_filled(r.center(), 16.0, Color32::from_rgb(0xF2, 0xC3, 0x2E));
             ui.painter().text(r.center(), Align2::CENTER_CENTER, "!", theme::ui_bold(20.0), Color32::WHITE);
             ui.vertical(|ui| {
-                ui.label(egui::RichText::new(title).strong());
-                ui.add(egui::Label::new(msg).wrap());
+                ui.label(egui::RichText::new(tr(ui, &title)).strong());
+                ui.add(egui::Label::new(tr(ui, &msg)).wrap());
             });
         });
         ui.add_space(8.0);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("  OK  ").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter) || i.key_pressed(egui::Key::Escape)) {
+            if ui.button(format!("  {}  ", tr(ui, "OK"))).clicked()
+                || ui.input(|i| i.key_pressed(egui::Key::Enter) || i.key_pressed(egui::Key::Escape))
+            {
                 close = true;
             }
         });
@@ -308,7 +310,7 @@ pub fn toast(app: &mut SheetApp, ctx: &egui::Context) {
         |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_max_width(320.0);
-                ui.label(msg);
+                ui.label(tr(ui, &msg));
             });
         },
     );
@@ -342,13 +344,13 @@ pub fn notice_bar(app: &mut SheetApp, ui: &mut Ui) {
                 border,
             );
             ui.add_space(6.0);
-            ui.label(egui::RichText::new(&notice.text).font(theme::ui_font(12.5)).color(t.text));
+            ui.label(egui::RichText::new(tr(ui, &notice.text)).font(theme::ui_font(12.5)).color(t.text));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if icon_button(ui, Icon::Close, t.text_dim, "Dismiss", vec2(20.0, 20.0)).clicked() {
                     dismiss = true;
                 }
                 if let Some((label, dialog)) = &notice.action
-                    && ui.button(egui::RichText::new(label).font(theme::ui_font(12.5))).clicked()
+                    && ui.button(egui::RichText::new(tr(ui, label)).font(theme::ui_font(12.5))).clicked()
                 {
                     action = Some((label.clone(), dialog.clone()));
                 }

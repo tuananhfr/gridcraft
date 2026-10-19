@@ -1028,6 +1028,175 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Width" => "Chiều rộng",
         "Height" => "Chiều cao",
         "All sheets" => "Tất cả trang tính",
+        "Protect workbook for: Structure (sheets can't be added, moved, renamed, hidden or deleted)." => {
+            "Bảo vệ sổ làm việc cho: Cấu trúc (không thể thêm, di chuyển, đổi tên, ẩn hay xóa trang tính)."
+        }
+        "Open Hyperlink" => "Mở Nối kết",
+        "This workbook asks to open the address below. Links can lead to harmful sites or start other programs: open it only if you trust the workbook." => {
+            "Sổ làm việc này yêu cầu mở địa chỉ bên dưới. Nối kết có thể dẫn tới trang web độc hại hoặc khởi chạy chương trình khác: chỉ mở khi bạn tin tưởng sổ làm việc này."
+        }
+        "Header (&L left, &C center, &R right; &P page, &N pages, &D date, &A sheet):" => {
+            "Đầu trang (&L trái, &C giữa, &R phải; &P số trang, &N tổng số trang, &D ngày, &A trang tính):"
+        }
+        "Forecast start (a date or number in the history; blank: after the last point):" => {
+            "Bắt đầu dự báo (một ngày hoặc số trong dữ liệu lịch sử; để trống: sau điểm cuối cùng):"
+        }
+        "Source:" => "Nguồn:",
+        "Start date:" => "Ngày bắt đầu:",
+        "End date:" => "Ngày kết thúc:",
+        "Date:" => "Ngày:",
+        "Start time:" => "Giờ bắt đầu:",
+        "End time:" => "Giờ kết thúc:",
+        "Time:" => "Giờ:",
+        "Minimum:" => "Tối thiểu:",
+        "Value:" => "Giá trị:",
+        "GridCraft is fully drivable by agents. Every menu item, button and gesture is a command:" => {
+            "GridCraft có thể được tác tử điều khiển hoàn toàn. Mọi mục menu, nút bấm và thao tác đều là một lệnh:"
+        }
+        "{count} engine commands are available. See docs/mcp.md and docs/control-protocol.md." => {
+            "Có sẵn {count} lệnh của bộ máy. Xem docs/mcp.md và docs/control-protocol.md."
+        }
+        "Return to the original worksheet to insert this picture, or cancel and choose another cell." => {
+            "Hãy quay lại trang tính ban đầu để chèn ảnh này, hoặc hủy và chọn ô khác."
+        }
+        "Select data for the chart first." => "Hãy chọn dữ liệu cho biểu đồ trước.",
+        "A clean-room, open-source, Rust-native spreadsheet." => "Bảng tính mã nguồn mở, viết thuần bằng Rust, phát triển độc lập (clean-room).",
+        "Source on GitHub" => "Mã nguồn trên GitHub",
+        "Automation in this workbook. GridCraft runs its own scripts; a file's VBA project is preserved but not executed." => {
+            "Tự động hóa trong sổ làm việc này. GridCraft chạy tập lệnh của riêng nó; dự án VBA trong tệp được giữ nguyên nhưng không chạy."
+        }
+        "VBA project (preserved, not run)" => "Dự án VBA (được giữ nguyên, không chạy)",
+        "{count} step" => "{count} bước",
+        "{count} steps" => "{count} bước",
+        "Locking cells or hiding formulas has no effect until you protect the worksheet (Review › Protect Sheet)." => {
+            "Khóa ô hoặc ẩn công thức chỉ có tác dụng sau khi bạn bảo vệ trang tính (Xem lại › Bảo vệ Trang tính)."
+        }
+        "Add Level" => "Thêm Mức",
+        "applies to {ranges}" => "áp dụng cho {ranges}",
+        "Simplex LP" => "Simplex LP",
+        "Evolutionary" => "Tiến hóa",
+        "Simplex LP: for linear models; integer and binary constraints by branch and bound." => {
+            "Simplex LP: cho mô hình tuyến tính; ràng buộc số nguyên và nhị phân bằng phương pháp nhánh cận."
+        }
+        "Evolutionary: a genetic search for models that aren't smooth; every variable cell needs bounds." => {
+            "Tiến hóa: tìm kiếm di truyền cho mô hình không trơn; mọi ô biến đều cần có cận."
+        }
+        "GRG Nonlinear: a local optimum of a smooth model, from the current values." => {
+            "GRG Nonlinear: tối ưu cục bộ của mô hình trơn, xuất phát từ các giá trị hiện tại."
+        }
+        "Reports:" => "Báo cáo:",
+        "Answer" => "Kết quả",
+        "Limits" => "Giới hạn",
+        "Bubble" => "Bong bóng",
+        "Box & Whisker" => "Hộp & Râu",
+        "Treemap" => "Bản đồ dạng cây",
+        "Sunburst" => "Hình tia nắng",
+        "Stock" => "Chứng khoán",
+        "AutoSave: save after every change (workbooks saved to a file)" => "Tự động Lưu: lưu sau mỗi thay đổi (với sổ làm việc đã lưu thành tệp)",
+        "Can't Undo" => "Không thể Hoàn tác",
+        "Undo {action}" => "Hoàn tác {action}",
+        "New Workbook" => "Sổ làm việc Mới",
+        "Save As…" => "Lưu Như…",
+        "Print…" => "In…",
+        "Export as PDF…" => "Xuất thành PDF…",
+        "Save a Copy as Excel Workbook (.xlsx)…" => "Lưu Bản sao thành Sổ làm việc Excel (.xlsx)…",
+        "Export as CSV…" => "Xuất thành CSV…",
+        "Export as Web Page (.html)…" => "Xuất thành Trang Web (.html)…",
+        "Type to filter…" => "Nhập để lọc…",
+        "Bottom Border" => "Viền Dưới",
+        "Top Border" => "Viền Trên",
+        "Left Border" => "Viền Trái",
+        "Right Border" => "Viền Phải",
+        "No Border" => "Không Viền",
+        "All Borders" => "Tất cả Viền",
+        "Outside Borders" => "Viền Ngoài",
+        "Thick Outside Borders" => "Viền Ngoài Dày",
+        "Bottom Double Border" => "Viền Dưới Kép",
+        "Thick Bottom Border" => "Viền Dưới Dày",
+        "Top and Bottom Border" => "Viền Trên và Dưới",
+        "Top and Thick Bottom Border" => "Viền Trên và Viền Dưới Dày",
+        "Top and Double Bottom Border" => "Viền Trên và Viền Dưới Kép",
+        "Inside Borders" => "Viền Trong",
+        "More Borders…" => "Viền Khác…",
+        "More Functions…" => "Hàm Khác…",
+        "Highlight Cells Rules" => "Quy tắc Tô sáng Ô",
+        "Greater Than…" => "Lớn hơn…",
+        "Less Than…" => "Nhỏ hơn…",
+        "Between…" => "Nằm giữa…",
+        "Equal To…" => "Bằng…",
+        "Text that Contains…" => "Văn bản Có chứa…",
+        "A Date Occurring…" => "Ngày Xảy ra…",
+        "Duplicate Values…" => "Giá trị Trùng lặp…",
+        "Top/Bottom Rules" => "Quy tắc Trên/Dưới",
+        "Blue" => "Lam",
+        "Green" => "Lục",
+        "Red" => "Đỏ",
+        "Orange" => "Cam",
+        "Light Blue" => "Lam Nhạt",
+        "Purple" => "Tím",
+        "Green - Yellow - Red" => "Lục - Vàng - Đỏ",
+        "Red - Yellow - Green" => "Đỏ - Vàng - Lục",
+        "Green - White - Red" => "Lục - Trắng - Đỏ",
+        "Blue - White - Red" => "Lam - Trắng - Đỏ",
+        "White - Green" => "Trắng - Lục",
+        "White - Red" => "Trắng - Đỏ",
+        "3 Arrows" => "3 Mũi tên",
+        "3 Traffic Lights" => "3 Đèn Giao thông",
+        "3 Symbols" => "3 Ký hiệu",
+        "4 Ratings" => "4 Mức Xếp hạng",
+        "5 Arrows" => "5 Mũi tên",
+        "5 Quarters" => "5 Phần tư",
+        "New Rule…" => "Quy tắc Mới…",
+        "Clear Rules" => "Xóa Quy tắc",
+        "Manage Rules…" => "Quản lý Quy tắc…",
+        "Place in Cell" => "Đặt trong Ô",
+        "Place over Cells" => "Đặt trên Ô",
+        "Rectangle" => "Hình chữ nhật",
+        "Rounded Rectangle" => "Hình chữ nhật Bo góc",
+        "Oval" => "Hình bầu dục",
+        "Triangle" => "Hình tam giác",
+        "Arrow" => "Mũi tên",
+        "Win/Loss" => "Thắng/Thua",
+        "Table Name:" => "Tên Bảng:",
+        "Header Row" => "Hàng Tiêu đề",
+        "Total Row" => "Hàng Tổng",
+        "Banded Rows" => "Hàng Xen kẽ",
+        "First Column" => "Cột Đầu tiên",
+        "Last Column" => "Cột Cuối cùng",
+        "Banded Columns" => "Cột Xen kẽ",
+        "Sort Ascending" => "Sắp xếp Tăng dần",
+        "Sort Descending" => "Sắp xếp Giảm dần",
+        "Search" => "Tìm kiếm",
+        "(Select All)" => "(Chọn Tất cả)",
+        "(Select All Search Results)" => "(Chọn Tất cả Kết quả Tìm kiếm)",
+        "(Blanks)" => "(Trống)",
+        "Apply" => "Áp dụng",
+        "Width: {width} ({pixels} pixels)" => "Độ rộng: {width} ({pixels} điểm ảnh)",
+        "Height: {height} ({pixels} pixels)" => "Chiều cao: {height} ({pixels} điểm ảnh)",
+        "Click once to follow. Click and hold to select this cell." => "Bấm một lần để mở nối kết. Bấm và giữ để chọn ô này.",
+        "Hyperlink" => "Nối kết",
+        "Show" => "Hiện",
+        "Reverse the order" => "Đảo thứ tự",
+        "Grab bag" => "Ngẫu nhiên",
+        "{contributors} contributors · {commits} commits" => "{contributors} người đóng góp · {commits} commit",
+        "No contributor data was built into this copy." => "Bản này không kèm dữ liệu người đóng góp.",
+        "No model credits were built into this copy." => "Bản này không kèm thông tin ghi công mô hình.",
+        "Preview" => "Xem trước",
+        "Exporting needs a file picker, which this window doesn't have." => "Xuất tệp cần hộp chọn tệp, nhưng cửa sổ này không có.",
+        "Nothing to paste." => "Không có gì để dán.",
+        "Select an available printer in File > Print before submitting." => "Hãy chọn một máy in khả dụng trong Tệp > In trước khi gửi.",
+        "The print command did not produce a PDF." => "Lệnh in không tạo ra tệp PDF.",
+        "Couldn't decode the generated PDF." => "Không thể giải mã tệp PDF vừa tạo.",
+        "A print job is already being submitted." => "Đang có một lệnh in được gửi đi.",
+        "Printing is unavailable here; export a PDF instead." => "Không thể in ở đây; hãy xuất thành PDF.",
+        "This workbook contains VBA macros. GridCraft keeps them intact when you save, but does not run them." => {
+            "Sổ làm việc này chứa macro VBA. GridCraft giữ nguyên chúng khi bạn lưu nhưng không chạy chúng."
+        }
+        "What this means" => "Điều này có nghĩa là gì",
+        "The cell or chart you're trying to change is on a protected sheet." => {
+            "Ô hoặc biểu đồ bạn đang muốn thay đổi nằm trên trang tính được bảo vệ."
+        }
+        "The text box's worksheet is no longer active." => "Trang tính chứa hộp văn bản không còn là trang hiện hoạt.",
         _ => return None,
     })
 }
