@@ -675,6 +675,7 @@ impl Dialog {
             "nameManager" => Dialog::custom("nameManager", "Name Manager", json!({})),
             "manageRules" => Dialog::custom("manageRules", "Conditional Formatting Rules Manager", json!({})),
             "commandSearch" => Dialog::custom("commandSearch", "Search Commands", json!({})),
+            "shortcuts" => Dialog::custom("shortcuts", "Keyboard Shortcuts", json!({})),
             "agents" => Dialog::custom("agents", "Agent Control", json!({})),
             "about" => {
                 let mut d = Dialog::custom("about", "About GridCraft", json!({}));
@@ -1032,7 +1033,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
     let width = match d.name.as_str() {
         "formatCells" => 560.0,
         "about" => 660.0,
-        "insertFunction" | "commandSearch" | "nameManager" | "manageRules" | "journal" | "agents" | "macros" => 520.0,
+        "insertFunction" | "commandSearch" | "shortcuts" | "nameManager" | "manageRules" | "journal" | "agents" | "macros" => 520.0,
         "recommendedCharts" => 600.0,
         "analysisToolPak" => 420.0,
         "solver" => 460.0,
@@ -1060,6 +1061,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                 "recommendedCharts" => recommended_charts(app, ui, &mut d, &mut confirm, &mut open),
                 "selectData" => select_data(app, ui, &mut d, &mut confirm, &mut open),
                 "commandSearch" => command_search(app, ui, &mut d, &mut confirm),
+                "shortcuts" => shortcuts(ui, &mut d, &mut open),
                 "goalSeek" => goal_seek(app, ui, &mut d, &mut confirm),
                 "analysisToolPak" => analysis_toolpak(app, ui, &mut d, &mut confirm, &mut open),
                 "solver" => solver(ui, &mut d, &mut confirm, &mut open),
@@ -2282,6 +2284,29 @@ fn command_search(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confirm
         let id = id.clone();
         app.dialog = None;
         app.run_or_alert(&id, json!({}));
+    }
+}
+
+/// F1: the grid's keyboard shortcuts, filtered by label (translated or English) or keys.
+fn shortcuts(ui: &mut egui::Ui, d: &mut Dialog, open: &mut bool) {
+    let language = crate::i18n::current(ui.ctx());
+    ui.add(egui::TextEdit::singleline(&mut d.search).desired_width(480.0).hint_text(tr(ui, "Search shortcuts"))).request_focus();
+    let entries: Vec<&crate::keymap::Entry> = crate::keymap::reference().iter().filter(|e| e.matches(&d.search, language)).collect();
+    egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+        if entries.is_empty() {
+            ui.label(tr(ui, "No shortcuts match your search."));
+        }
+        egui::Grid::new("shortcuts").num_columns(2).striped(true).spacing(vec2(24.0, 4.0)).show(ui, |ui| {
+            for e in entries {
+                ui.label(egui::RichText::new(e.keys()).monospace());
+                ui.label(language.tr(e.label));
+                ui.end_row();
+            }
+        });
+    });
+    ui.add_space(6.0);
+    if ui.button(tr(ui, "Close")).clicked() {
+        *open = false;
     }
 }
 

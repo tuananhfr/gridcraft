@@ -3302,3 +3302,61 @@ fn mark_saved_takes_the_written_snapshot_as_the_saved_state() {
     // The document may have been closed meanwhile.
     assert!(!s.mark_saved(uid + 1000, &written));
 }
+
+fn style_of(s: &Session, a: &str) -> gridcraft_model::Style {
+    let wb = &s.doc().unwrap().wb;
+    wb.styles.get(wb.active().unwrap().style_id(CellRef::parse(a).unwrap())).clone()
+}
+
+#[test]
+fn repeat_runs_the_last_formatting_again_on_the_current_selection() {
+    let mut s = s();
+    s.execute("home.bold", json!({"range": "A1"})).unwrap();
+    s.execute("selection.set", json!({"range": "B2:C3"})).unwrap();
+    assert_eq!(s.execute("edit.repeat", json!({})).unwrap(), json!({"repeated": "home.bold"}));
+    assert!(style_of(&s, "B2").font.bold && style_of(&s, "C3").font.bold);
+    assert!(!style_of(&s, "D4").font.bold);
+    // The repeated command is the undo step and the journal entry; Repeat itself is neither.
+    assert_eq!(s.journal.last().map(|(id, _)| id.as_str()), Some("home.bold"));
+    assert_eq!(s.doc().unwrap().undo.len(), 2);
+    s.execute("edit.undo", json!({})).unwrap();
+    assert!(!style_of(&s, "B2").font.bold && style_of(&s, "A1").font.bold);
+    // Undo and selection changes keep the action to repeat; params other than the target stay.
+    s.execute("home.fillColor", json!({"range": "A1", "color": "#FFFF00"})).unwrap();
+    s.execute("home.numberFormat", json!({"range": "A1", "code": "0.00"})).unwrap();
+    s.execute("selection.set", json!({"range": "E5"})).unwrap();
+    s.execute("edit.repeat", json!({})).unwrap();
+    assert_eq!(fmt_of(&s, "E5"), "0.00");
+    assert_eq!(style_of(&s, "E5").fill, gridcraft_model::Fill::default());
+}
+
+#[test]
+fn repeat_inserts_and_deletes_lines_at_the_new_selection() {
+    let mut s = s();
+    s.execute("range.setValues", json!({"range": "A1", "values": [[1], [2], [3], [4], [5]]})).unwrap();
+    s.execute("home.insertRows", json!({"rows": "2:2"})).unwrap();
+    assert!(v(&s, "A2").is_empty());
+    s.execute("selection.set", json!({"range": "A5:A6"})).unwrap();
+    s.execute("edit.repeat", json!({})).unwrap();
+    // Two rows, at the selection: the 4 that was on row 5 moves to row 7.
+    assert!(v(&s, "A5").is_empty() && v(&s, "A6").is_empty());
+    assert_eq!(v(&s, "A7"), Value::Number(4.0));
+    s.execute("edit.clearContents", json!({"range": "A1"})).unwrap();
+    s.execute("selection.set", json!({"range": "A7"})).unwrap();
+    s.execute("edit.repeat", json!({})).unwrap();
+    assert!(v(&s, "A7").is_empty());
+}
+
+#[test]
+fn repeat_with_nothing_repeatable_does_nothing() {
+    let mut s = s();
+    let before = s.doc().unwrap().wb.clone();
+    assert_eq!(s.execute("edit.repeat", json!({})).unwrap(), json!({"repeated": null}));
+    assert_eq!(s.doc().unwrap().wb, before);
+    // An edit that isn't repeatable (typing) replaces the action to repeat, as in Excel.
+    s.execute("home.bold", json!({})).unwrap();
+    s.execute("cell.set", json!({"cell": "A1", "input": "x"})).unwrap();
+    s.execute("selection.set", json!({"range": "B2"})).unwrap();
+    assert_eq!(s.execute("edit.repeat", json!({})).unwrap(), json!({"repeated": null}));
+    assert!(!style_of(&s, "B2").font.bold);
+}

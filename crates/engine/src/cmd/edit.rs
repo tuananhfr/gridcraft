@@ -1,4 +1,4 @@
-//! Cell entry, selection, undo/redo, clipboard, clear, fill, find & replace.
+//! Cell entry, selection, undo/redo/repeat, clipboard, clear, fill, find & replace.
 
 use gridcraft_core::{CellRef, MAX_ROWS, RangeRef, Value};
 use gridcraft_model::{Cell, Formula, StyleId};
@@ -40,6 +40,16 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!(noundo "edit.goToSpecial", "Go To Special…", ["Home", "Editing", "Find & Select"], None, "{kind: blanks|constants|formulas|comments|lastCell|currentRegion|visible|conditionalFormats|dataValidation|errors|numbers|text}", has_doc, go_to_special),
         cmd!(noundo "edit.undo", "Undo", ["Edit"], Some("Cmd+Z"), "{steps?: 1}", can_undo, undo),
         cmd!(noundo "edit.redo", "Redo", ["Edit"], Some("Cmd+Y"), "{steps?: 1}", can_redo, redo),
+        // Not journaled or undoable itself: the command it repeats records both.
+        cmd!(
+            query "edit.repeat",
+            "Repeat",
+            ["Edit"],
+            Some("F4"),
+            "{} → {repeated: id | null}: runs the last formatting, border, fill, number format, row/column/cell insert or delete, or clear command again on the current selection; with nothing to repeat it does nothing",
+            has_doc,
+            repeat
+        ),
         cmd!(noundo "edit.copy", "Copy", ["Home", "Clipboard"], Some("Cmd+C"), "{range?, html?: bool} → {range, text, html?} (html: a styled HTML table, only when requested and small enough)", has_doc, copy),
         cmd!(noundo "edit.cut", "Cut", ["Home", "Clipboard"], Some("Cmd+X"), "{range?, html?: bool} → {range, text, html?} (html: a styled HTML table, only when requested and small enough)", has_doc, cut),
         cmd!(
@@ -630,6 +640,96 @@ fn redo(s: &mut Session, p: &Json) -> Result<Json> {
     d.calc.rebuild(&d.wb);
     d.revision += 1;
     Ok(json!({"redone": label}))
+}
+
+/// Commands F4 (Repeat) can run again. Each takes its target from the selection when its
+/// range params are left out, so [`retargeted`] params apply to whatever is selected next.
+pub(crate) const REPEATABLE: &[&str] = &[
+    "home.bold",
+    "home.italic",
+    "home.underline",
+    "home.doubleUnderline",
+    "home.strikethrough",
+    "home.superscript",
+    "home.subscript",
+    "home.fontName",
+    "home.fontSize",
+    "home.increaseFontSize",
+    "home.decreaseFontSize",
+    "home.fontColor",
+    "home.fillColor",
+    "home.borders",
+    "home.formatCells",
+    "home.alignLeft",
+    "home.alignCenter",
+    "home.alignRight",
+    "home.justify",
+    "home.alignTop",
+    "home.alignMiddle",
+    "home.alignBottom",
+    "home.wrapText",
+    "home.shrinkToFit",
+    "home.increaseIndent",
+    "home.decreaseIndent",
+    "home.orientation",
+    "home.mergeCenter",
+    "home.mergeAcross",
+    "home.mergeCells",
+    "home.unmergeCells",
+    "home.numberFormat",
+    "home.accounting",
+    "home.percent",
+    "home.comma",
+    "home.increaseDecimal",
+    "home.decreaseDecimal",
+    "home.cellStyle",
+    "home.lockCell",
+    "home.rowHeight",
+    "home.columnWidth",
+    "home.autofitRowHeight",
+    "home.autofitColumnWidth",
+    "home.hideRows",
+    "home.hideColumns",
+    "home.unhideRows",
+    "home.unhideColumns",
+    "home.insertRows",
+    "home.insertColumns",
+    "home.deleteRows",
+    "home.deleteColumns",
+    "home.insertCells",
+    "home.deleteCells",
+    "edit.clearAll",
+    "edit.clearFormats",
+    "edit.clearContents",
+    "edit.clearComments",
+    "edit.clearHyperlinks",
+    "edit.fillDown",
+    "edit.fillRight",
+    "edit.fillUp",
+    "edit.fillLeft",
+];
+
+/// Params that pin a repeatable command to a place; without them it works on the selection.
+const TARGET_PARAMS: &[&str] = &["range", "cell", "rows", "cols", "count", "sheet"];
+
+pub(crate) fn is_repeatable(id: &str) -> bool {
+    REPEATABLE.contains(&id)
+}
+
+/// `params` without the ones that pin a range or sheet.
+pub(crate) fn retargeted(params: &Json) -> Json {
+    match params {
+        Json::Object(o) => {
+            Json::Object(o.iter().filter(|(k, _)| !TARGET_PARAMS.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect())
+        }
+        _ => json!({}),
+    }
+}
+
+fn repeat(s: &mut Session, _: &Json) -> Result<Json> {
+    let Some((id, params)) = s.last_repeatable.clone() else { return Ok(json!({"repeated": null})) };
+    s.execute(&id, params)?;
+    Ok(json!({"repeated": id}))
 }
 
 // ---------------------------------------------------------------- clipboard

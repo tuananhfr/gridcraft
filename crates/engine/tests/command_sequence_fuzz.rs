@@ -262,8 +262,9 @@ impl Harness {
         }
         let after = self.wb();
         let spec = find_command(id).expect("generated ids are registered");
+        // `edit.repeat` runs another command, which records the undo step.
         if !spec.undoable
-            && !matches!(id, "edit.undo" | "edit.redo")
+            && !matches!(id, "edit.undo" | "edit.redo" | "edit.repeat")
             && let Some(diff) = content_diff(&before, &after)
         {
             return Err(fail(i, "not undoable", format!("non-undoable `{id}` changed cell content: {diff}")));
@@ -739,6 +740,7 @@ const CURATED: &[(&str, usize)] = &[
     ("selection.set", 8),
     ("edit.undo", 6),
     ("edit.redo", 3),
+    ("edit.repeat", 2),
     ("edit.copy", 3),
     ("edit.cut", 2),
     ("edit.paste", 4),

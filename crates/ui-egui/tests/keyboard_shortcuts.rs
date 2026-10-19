@@ -1,11 +1,12 @@
 //! Excel keyboard shortcuts (crate::keymap) dispatched through real egui key events.
 
 use egui::{Event, Key, Modifiers};
+use egui_kittest::kittest::Queryable;
 use gridcraft_engine::Session;
 use gridcraft_engine::core::CellRef;
 use gridcraft_engine::model::BorderStyle;
 use gridcraft_ui_egui::SheetApp;
-use gridcraft_ui_egui::keymap::{Shortcut, lookup};
+use gridcraft_ui_egui::keymap::{Shortcut, lookup, reference, resolve};
 use serde_json::json;
 
 type Harness = egui_kittest::Harness<'static, SheetApp>;
@@ -213,4 +214,80 @@ fn alt_down_only_opens_enabled_table_filter_buttons() {
         assert_eq!(h.state().grid.filter_menu.map(|(column, _, _)| column), enabled.then_some(1));
         assert_eq!(h.state().session.active().unwrap().selection.active.a1(), "B1");
     }
+}
+
+#[test]
+fn f1_opens_the_keyboard_shortcuts_dialog_with_a_search_box() {
+    let mut h = harness(book("A1"));
+    h.state_mut().ui.language = gridcraft_ui_egui::i18n::Language::Vi;
+    h.run_steps(2);
+    key(&mut h, Key::F1, Modifiers::NONE);
+    assert_eq!(h.state().dialog.as_ref().map(|d| d.name().to_string()).as_deref(), Some("shortcuts"));
+    assert!(h.query_by_label("F12").is_some() && h.query_by_label("Ctrl+Shift+S").is_some());
+    // The search box has focus: typing filters by the Vietnamese label.
+    h.input_mut().events.push(Event::Text("phím tắt".into()));
+    h.run_steps(2);
+    assert_eq!(h.state().dialog.as_ref().map(|d| d.search.clone()).as_deref(), Some("phím tắt"));
+    assert!(h.query_by_label("F1").is_some() && h.query_by_label("F12").is_none());
+    assert!(h.state().editor.is_none(), "typing in the search box must not edit a cell");
+    key(&mut h, Key::Escape, Modifiers::NONE);
+    assert!(h.state().dialog.is_none());
+}
+
+#[test]
+fn reference_rows_the_grid_handles_itself_do_what_they_say() {
+    // Rows `resolve` can't answer for are keys `grid::keyboard` matches itself: press them.
+    let rows: Vec<_> = reference().iter().filter(|e| resolve(e.key, e.modifiers).is_none()).collect();
+    assert!(rows.len() >= 4);
+    for e in rows {
+        let mut session = book("A1");
+        session.execute("home.insertSheet", json!({})).unwrap();
+        session.execute("home.insertSheet", json!({})).unwrap();
+        session.execute("sheet.activate", json!({"sheet": 1})).unwrap();
+        let mut h = harness(session);
+        let journaled = h.state().session.journal.len();
+        key(&mut h, e.key, e.modifiers);
+        let app = h.state();
+        match &e.shortcut {
+            Shortcut::Run(id, _) => assert!(app.session.journal[journaled..].iter().any(|(c, _)| c == id), "{} didn't run {id}", e.keys()),
+            Shortcut::Dialog(name, _) => assert_eq!(app.dialog.as_ref().map(|d| d.name()), Some(*name), "{}", e.keys()),
+            Shortcut::Edit => assert!(app.editor.is_some(), "{} didn't start editing", e.keys()),
+            other => panic!("{} is listed as {other:?}, which only `resolve` dispatches", e.keys()),
+        }
+    }
+}
+
+#[test]
+fn f4_repeats_the_last_action_on_the_selection_and_cycles_anchors_while_editing() {
+    let mut h = harness(book("A1"));
+    key(&mut h, Key::B, CTRL);
+    assert!(style(&h, "A1").font.bold);
+    key(&mut h, Key::ArrowDown, Modifiers::NONE);
+    key(&mut h, Key::F4, Modifiers::NONE);
+    assert!(style(&h, "A2").font.bold);
+    // With nothing to redo, Ctrl+Y repeats too.
+    key(&mut h, Key::ArrowDown, Modifiers::NONE);
+    key(&mut h, Key::Y, CTRL);
+    assert!(style(&h, "A3").font.bold);
+    // After an undo it redoes instead.
+    key(&mut h, Key::Z, CTRL);
+    assert!(!style(&h, "A3").font.bold);
+    key(&mut h, Key::Y, CTRL);
+    assert!(style(&h, "A3").font.bold && !style(&h, "A4").font.bold);
+    // In the cell editor F4 cycles the reference's $ anchors and repeats nothing.
+    key(&mut h, Key::ArrowDown, Modifiers::NONE);
+    h.input_mut().events.push(Event::Text("=B1".into()));
+    h.run_steps(2);
+    key(&mut h, Key::F4, Modifiers::NONE);
+    assert_eq!(h.state().editor.as_ref().map(|e| e.text.clone()).as_deref(), Some("=$B$1"));
+    assert!(!style(&h, "A4").font.bold);
+}
+
+#[test]
+fn f4_with_nothing_to_repeat_does_nothing() {
+    let mut h = harness(book("B2"));
+    let before = h.state().session.active().unwrap().wb.clone();
+    key(&mut h, Key::F4, Modifiers::NONE);
+    assert_eq!(h.state().session.active().unwrap().wb, before);
+    assert!(h.state().message.is_none() && h.state().toast.is_none());
 }

@@ -236,6 +236,9 @@ pub struct Session {
     pub mode: Mode,
     /// Commands run so far, without their passwords ([`cmd::journal_params`]).
     pub journal: Vec<(String, Json)>,
+    /// What `edit.repeat` (F4) runs: the last repeatable command, with params that work on the
+    /// selection. Any other edit of the workbook clears it, as typing does in Excel.
+    pub last_repeatable: Option<(String, Json)>,
     pub ui_requests: Vec<UiRequest>,
     /// Format painter source style (sticky when double-clicked).
     pub format_painter: Option<(Arc<Workbook>, usize, RangeRef, bool)>,
@@ -351,6 +354,14 @@ impl Session {
             self.journal.push((id.to_string(), cmd::journal_params(&params)));
             if self.journal.len() > 10_000 {
                 self.journal.drain(..5_000);
+            }
+        }
+        if spec.undoable && result.is_ok() {
+            let changed = before.as_ref().is_some_and(|(uid, wb, _)| self.docs.iter().any(|d| d.uid == *uid && !Arc::ptr_eq(&d.wb, wb)));
+            if cmd::edit::is_repeatable(id) {
+                self.last_repeatable = Some((id.to_string(), cmd::edit::retargeted(&params)));
+            } else if changed {
+                self.last_repeatable = None;
             }
         }
         if spec.undoable

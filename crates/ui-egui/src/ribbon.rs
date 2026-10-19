@@ -6,6 +6,7 @@ use serde_json::json;
 
 use crate::SheetApp;
 use crate::icons::{self, Icon};
+use crate::keymap::Shortcut;
 use crate::keytips::keytip_table;
 use crate::theme::{self, Tokens};
 use crate::widgets::{big_button, color_palette, icon_button, small_button, split_button, toggle_button, tr};
@@ -2402,83 +2403,45 @@ fn chart_design(app: &mut SheetApp, ui: &mut Ui) {
     }
 }
 
-/// Command-key shortcuts when the grid has focus.
-pub fn shortcut(app: &mut SheetApp, key: Key, m: Modifiers) {
+/// The Ctrl/Cmd+letter shortcut for a key the grid's [`crate::keymap::lookup`] left alone.
+pub fn shortcut(key: Key, m: Modifiers) -> Option<Shortcut> {
+    let run = |id: &'static str| Some(Shortcut::Run(id, json!({})));
+    let dialog = |name: &'static str| Some(Shortcut::Dialog(name, json!({})));
     let shift = m.shift;
-    let id: Option<(&str, serde_json::Value)> = match key {
-        Key::B => Some(("home.bold", json!({}))),
-        Key::I => Some(("home.italic", json!({}))),
-        Key::U => Some(("home.underline", json!({}))),
-        Key::Z if shift => Some(("edit.redo", json!({}))),
-        Key::Z => Some(("edit.undo", json!({}))),
-        Key::Y => Some(("edit.redo", json!({}))),
-        Key::A => Some(("edit.selectAll", json!({}))),
-        Key::D => Some(("edit.fillDown", json!({}))),
-        Key::R => Some(("edit.fillRight", json!({}))),
-        Key::S if shift => Some(("file.saveAs", json!({}))),
-        Key::S => Some(("file.save", json!({}))),
-        Key::O => Some(("file.open", json!({}))),
-        Key::N => Some(("file.new", json!({}))),
-        Key::W => Some(("file.close", json!({}))),
-        Key::P => {
-            app.print_now(json!({}));
-            None
-        }
-        Key::K => {
-            app.open_dialog("insertLink", json!({}));
-            None
-        }
-        Key::F if shift => Some(("data.filter", json!({}))),
-        Key::F => {
-            app.open_dialog("find", json!({}));
-            None
-        }
-        Key::H => {
-            app.open_dialog("find", json!({"replace": true}));
-            None
-        }
-        Key::G => {
-            app.open_dialog("goTo", json!({}));
-            None
-        }
-        Key::T if shift => Some(("formulas.autoSum", json!({}))),
-        Key::T => Some(("insert.table", json!({}))),
-        Key::E => Some(("edit.flashFill", json!({}))),
-        Key::Num1 => {
-            app.open_dialog("formatCells", json!({}));
-            None
-        }
-        Key::Num9 if shift => Some(("home.unhideRows", json!({}))),
-        Key::Num9 => Some(("home.hideRows", json!({}))),
-        Key::Num0 if shift => Some(("home.unhideColumns", json!({}))),
-        Key::Num0 => Some(("home.hideColumns", json!({}))),
-        Key::Minus => {
-            app.open_dialog("deleteCells", json!({}));
-            None
-        }
-        Key::Plus | Key::Equals if shift => {
-            app.open_dialog("insertCells", json!({}));
-            None
-        }
-        Key::Semicolon => {
-            // Insert today's date.
-            let text = app
-                .session
-                .active()
-                .map(|d| {
-                    let today = gridcraft_engine::core::date::serial_in_system(d.wb.date_system, gridcraft_engine::calc::now_serial()).floor();
-                    gridcraft_engine::display::format(&gridcraft_engine::core::Value::Number(today), "m/d/yyyy", &d.wb).text
-                })
-                .unwrap_or_default();
-            app.begin_edit(Some(text), false);
-            None
-        }
-        Key::Backtick => Some(("formulas.showFormulas", json!({}))),
+    match key {
+        Key::B => run("home.bold"),
+        Key::I => run("home.italic"),
+        Key::U => run("home.underline"),
+        Key::Z if shift => run("edit.redo"),
+        Key::Z => run("edit.undo"),
+        Key::Y => Some(Shortcut::RedoOrRepeat),
+        Key::A => run("edit.selectAll"),
+        Key::D => run("edit.fillDown"),
+        Key::R => run("edit.fillRight"),
+        Key::S if shift => run("file.saveAs"),
+        Key::S => run("file.save"),
+        Key::O => run("file.open"),
+        Key::N => run("file.new"),
+        Key::W => run("file.close"),
+        Key::P => run("file.print"),
+        Key::K => dialog("insertLink"),
+        Key::F if shift => run("data.filter"),
+        Key::F => dialog("find"),
+        Key::H => Some(Shortcut::Dialog("find", json!({"replace": true}))),
+        Key::G => dialog("goTo"),
+        Key::T if shift => run("formulas.autoSum"),
+        Key::T => run("insert.table"),
+        Key::E => run("edit.flashFill"),
+        Key::Num1 => dialog("formatCells"),
+        Key::Num9 if shift => run("home.unhideRows"),
+        Key::Num9 => run("home.hideRows"),
+        Key::Num0 if shift => run("home.unhideColumns"),
+        Key::Num0 => run("home.hideColumns"),
+        Key::Minus => dialog("deleteCells"),
+        Key::Plus | Key::Equals if shift => dialog("insertCells"),
+        Key::Semicolon => Some(Shortcut::Date),
+        Key::Backtick => run("formulas.showFormulas"),
         _ => None,
-    };
-    if let Some((id, p)) = id {
-        app.run_or_alert(id, p);
-        app.grid.ensure_visible = true;
     }
 }
 
