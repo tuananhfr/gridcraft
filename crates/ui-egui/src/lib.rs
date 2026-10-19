@@ -14,6 +14,7 @@ pub mod control;
 mod craft_fonts;
 pub mod credits;
 pub mod dialogs;
+pub mod doc_tabs;
 pub mod drafts;
 pub mod editor;
 pub mod fonts;
@@ -314,6 +315,8 @@ pub struct SheetApp {
     /// text noted for an unpublished cut); `None` after a copy, or once the clipboard is seen
     /// holding other text. Once the cut has been pasted, Paste leaves this text alone.
     cut_text: Option<String>,
+    /// The document whose per-window state the interface holds ([`SheetApp::note_active_document`]).
+    shown_doc: Option<u64>,
     pub started: f64,
 }
 
@@ -360,6 +363,7 @@ impl SheetApp {
             selected_chart: None,
             clipboard_text_at_copy: None,
             cut_text: None,
+            shown_doc: None,
             started: now_ms(),
         }
     }
@@ -1247,6 +1251,7 @@ impl SheetApp {
             return;
         }
         let t0 = now_ms();
+        self.note_active_document();
         text_box::before_ui(self, &ctx);
         // The language the widgets translate with this frame (see `i18n::current`).
         i18n::set_current(&ctx, self.ui.language);
@@ -1259,6 +1264,7 @@ impl SheetApp {
             // File tab: the Backstage view replaces everything below the title bar.
             backstage::show(self, ui);
         } else {
+            doc_tabs::show(self, ui);
             ribbon::show(self, ui);
             widgets::notice_bar(self, ui);
             if self.session.prefs.formula_bar {

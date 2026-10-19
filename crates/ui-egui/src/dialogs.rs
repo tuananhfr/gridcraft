@@ -779,7 +779,10 @@ impl Dialog {
             }
             "pickList" => Dialog::custom("pickList", "Pick From List", json!({})),
             "saveCopy" => Dialog::custom("saveCopy", "Save a Copy", json!({"format": p("format")})),
-            "saveChanges" => Dialog::custom("saveChanges", "Save Changes?", json!({"title": p("title")})),
+            "saveChanges" => {
+                let uid = params.get("index").and_then(Json::as_u64).and_then(|i| app.session.documents().get(i as usize)).map(|d| d.uid);
+                Dialog::custom("saveChanges", "Save Changes?", json!({"title": p("title"), "uid": uid}))
+            }
             "start" => Dialog::custom("start", "GridCraft", json!({})),
             "comments" => {
                 app.grid.pane = None;
@@ -1188,10 +1191,14 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                 }
                 "saveChanges" => {
                     let title = d.values.get("title").and_then(Json::as_str).unwrap_or(tr(ui, "this workbook")).to_string();
+                    // The window being closed, which a document tab's × may leave inactive.
+                    let target = d.values.get("uid").and_then(Json::as_u64);
                     ui.label(tr(ui, "Do you want to save the changes you made to {title}?").replace("{title}", &title));
                     ui.horizontal(|ui| {
                         if ui.button(tr(ui, "Don't Save")).clicked() {
-                            app.run_or_alert("file.close", json!({"force": true}));
+                            if let Some(i) = app.document_index(target) {
+                                app.run_or_alert("file.close", json!({"force": true, "index": i}));
+                            }
                             open = false;
                         }
                         if ui.button(tr(ui, "Cancel")).clicked() {
@@ -1199,10 +1206,12 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                         }
                         // File operations must include the cell the user is still editing (as the File > Save menu item already does).
                         if ui.button(tr(ui, "Save")).clicked() && app.commit_edit(0, 0, false, false) {
-                            app.run_or_alert("file.save", json!({}));
-                            if app.session.active().is_some_and(|x| !x.is_dirty()) {
-                                app.run_or_alert("file.close", json!({"force": true}));
-                            }
+                            app.in_document(target, |app| {
+                                app.run_or_alert("file.save", json!({}));
+                                if app.session.active().is_some_and(|x| !x.is_dirty()) {
+                                    app.run_or_alert("file.close", json!({"force": true}));
+                                }
+                            });
                             open = false;
                         }
                     });

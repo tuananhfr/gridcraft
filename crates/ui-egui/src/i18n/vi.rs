@@ -1232,6 +1232,11 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "One Screen Left" => "Sang trái Một Màn hình",
         "Next Sheet" => "Trang tính Tiếp theo",
         "Previous Sheet" => "Trang tính Trước",
+        "Close {title}" => "Đóng {title}",
+        "Unsaved changes" => "Có thay đổi chưa lưu",
+        "You can have up to 10 documents open. Close one to open another." => {
+            "Chỉ mở được tối đa 10 tài liệu. Hãy đóng bớt một tài liệu để mở tài liệu khác."
+        }
         _ => return None,
     })
 }

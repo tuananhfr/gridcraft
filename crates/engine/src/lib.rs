@@ -117,6 +117,11 @@ pub struct DocState {
 static NEXT_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 const UNDO_LIMIT: usize = 100;
 
+/// Most documents open at once: each keeps its workbook, calc state and undo history in memory.
+pub const MAX_DOCUMENTS: usize = 10;
+/// Why opening another document was refused (the interface translates it by this exact text).
+pub const TOO_MANY_DOCUMENTS: &str = "You can have up to 10 documents open. Close one to open another.";
+
 impl DocState {
     pub fn new(mut wb: Workbook, path: Option<String>, title: String) -> DocState {
         let mut calc = Calc::new();
@@ -248,8 +253,8 @@ pub struct Session {
     pub hide_ruler: bool,
     /// Journal position where action recording started.
     pub recording: Option<usize>,
-    /// Windows hidden with View › Hide.
-    pub hidden_windows: Vec<usize>,
+    /// Uids of the documents hidden with View › Hide (indexes shift when a document closes).
+    pub hidden_windows: Vec<u64>,
     /// Draw tab tool: "" (select), "pen" or "eraser"; pen colour and width.
     pub draw_tool: String,
     pub draw_color: String,
@@ -288,18 +293,37 @@ impl Session {
     pub fn doc_mut(&mut self) -> Result<&mut DocState> {
         self.active_mut().ok_or(EngineError::NoDocument)
     }
-    pub fn add_document(&mut self, d: DocState) -> usize {
+    /// `Err` once [`MAX_DOCUMENTS`] are open. Every way of opening a document ends in
+    /// [`Session::add_document`], which enforces it; this lets a caller refuse before reading a file.
+    pub fn ensure_room(&self) -> Result<()> {
+        if self.docs.len() >= MAX_DOCUMENTS { Err(EngineError::Other(TOO_MANY_DOCUMENTS.into())) } else { Ok(()) }
+    }
+    /// Adds `d` as the active document, unless [`MAX_DOCUMENTS`] are already open.
+    pub fn add_document(&mut self, d: DocState) -> Result<usize> {
+        self.ensure_room()?;
         self.docs.push(d);
         self.active = self.docs.len() - 1;
-        self.active
+        Ok(self.active)
     }
+    /// Closes document `i`. The active document stays active; closing it activates the next one
+    /// that isn't hidden (else the previous), like closing a tab.
     pub fn close_document(&mut self, i: usize) {
-        if i < self.docs.len() {
-            self.docs.remove(i);
-            if self.active >= self.docs.len() {
-                self.active = self.docs.len().saturating_sub(1);
-            }
+        if i >= self.docs.len() {
+            return;
         }
+        let closed = self.docs.remove(i);
+        self.hidden_windows.retain(|uid| *uid != closed.uid);
+        if i < self.active {
+            self.active -= 1;
+        } else if i == self.active {
+            let n = self.docs.len();
+            let shown = (i..n).chain((0..i).rev()).find(|&j| self.docs.get(j).is_some_and(|d| !self.hidden_windows.contains(&d.uid)));
+            self.active = shown.unwrap_or(i.min(n.saturating_sub(1)));
+        }
+    }
+    /// Whether document `i` is hidden with View › Hide.
+    pub fn is_hidden(&self, i: usize) -> bool {
+        self.docs.get(i).is_some_and(|d| self.hidden_windows.contains(&d.uid))
     }
     /// Marks document `uid` saved as of `written`, the workbook a save encoded: a save that
     /// completes later (a browser's save picker) leaves edits made since then unsaved. `false`
@@ -309,15 +333,20 @@ impl Session {
         d.saved = written.clone();
         true
     }
-    /// A new blank workbook titled `BookN`.
-    pub fn new_workbook(&mut self) -> usize {
+    /// A new blank workbook titled `BookN`, not yet open.
+    pub fn blank_workbook(&self) -> DocState {
         let n = (1..).find(|n| !self.docs.iter().any(|d| d.title == format!("Book{n}") && d.path.is_none())).unwrap_or(1);
         let mut wb = Workbook::new();
         for _ in 1..self.prefs.sheets_in_new_workbook.clamp(1, 255) {
             let name = wb.next_sheet_name();
             wb.sheets.push(Arc::new(gridcraft_model::Sheet::new(name)));
         }
-        self.add_document(DocState::new(wb, None, format!("Book{n}")))
+        DocState::new(wb, None, format!("Book{n}"))
+    }
+    /// Opens a new blank workbook; `None` when [`MAX_DOCUMENTS`] are already open.
+    pub fn new_workbook(&mut self) -> Option<usize> {
+        let d = self.blank_workbook();
+        self.add_document(d).ok()
     }
 
     pub fn commands(&self) -> Vec<CommandInfo> {

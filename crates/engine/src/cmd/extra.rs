@@ -782,25 +782,33 @@ fn new_window(s: &mut Session, _: &Json) -> Result<Json> {
     let d = s.doc()?.clone();
     let mut copy = crate::DocState::new((*d.wb).clone(), d.path.clone(), format!("{}:2", d.display_title()));
     copy.selection = d.selection.clone();
-    let i = s.add_document(copy);
+    let i = s.add_document(copy)?;
     Ok(json!({"index": i}))
 }
 
 fn hide_window(s: &mut Session, _: &Json) -> Result<Json> {
-    s.hidden_windows.push(s.active_index());
+    let uid = s.doc()?.uid;
+    if !s.hidden_windows.contains(&uid) {
+        s.hidden_windows.push(uid);
+    }
     let n = s.documents().len();
     if n > 1 {
-        let next = (0..n).find(|i| !s.hidden_windows.contains(i)).unwrap_or(0);
+        let next = (0..n).find(|&i| !s.is_hidden(i)).unwrap_or(0);
         s.set_active(next);
     }
     ok()
 }
 
 fn unhide_window(s: &mut Session, p: &Json) -> Result<Json> {
-    let i = u32_param(p, "index").map(|v| v as usize).or_else(|| s.hidden_windows.last().copied());
-    if let Some(i) = i {
-        s.hidden_windows.retain(|x| *x != i);
-        s.set_active(i);
+    let uid = match u32_param(p, "index") {
+        Some(i) => s.documents().get(i as usize).map(|d| d.uid),
+        None => s.hidden_windows.last().copied(),
+    };
+    if let Some(uid) = uid {
+        s.hidden_windows.retain(|x| *x != uid);
+        if let Some(i) = s.documents().iter().position(|d| d.uid == uid) {
+            s.set_active(i);
+        }
     }
     ok()
 }
@@ -810,7 +818,7 @@ fn switch_windows(s: &mut Session, _: &Json) -> Result<Json> {
         s.documents()
             .iter()
             .enumerate()
-            .map(|(i, d)| json!({"index": i, "title": d.display_title(), "active": i == s.active_index(), "hidden": s.hidden_windows.contains(&i)}))
+            .map(|(i, d)| json!({"index": i, "title": d.display_title(), "active": i == s.active_index(), "hidden": s.is_hidden(i)}))
             .collect(),
     ))
 }

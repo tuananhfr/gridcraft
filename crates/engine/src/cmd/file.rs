@@ -12,7 +12,7 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!(noundo "file.save", "Save", ["File"], Some("Cmd+S"), "{path?} (xlsx by default; .csv/.tsv/.json/.html/.pdf by extension)", has_doc, save),
         cmd!(noundo "file.saveAs", "Save As…", ["File"], Some("Cmd+Shift+S"), "{path} (.xlsx, .csv, .tsv, .json, .html, or .pdf: a PDF of the active sheet)", has_doc, save_as),
         cmd!(query "file.saveBytes", "Encode Workbook", [], None, "{format?: xlsx|csv|tsv|json|html} → {base64}", has_doc, save_bytes),
-        cmd!(noundo "file.close", "Close", ["File"], Some("Cmd+W"), "{force?: bool}", has_doc, close),
+        cmd!(noundo "file.close", "Close", ["File"], Some("Cmd+W"), "{force?: bool, index?} (the active window by default)", has_doc, close),
         cmd!(noundo "file.exportCsv", "Export as CSV", ["File", "Export"], None, "{path, sheet?}", has_doc, |s, p| export(s, p, "csv")),
         cmd!(noundo "file.exportHtml", "Save as Web Page", ["File", "Export"], None, "{path}", has_doc, |s, p| export(s, p, "html")),
         cmd!("file.properties", "Properties", ["File"], None, "{title?, subject?, author?, company?, keywords?, description?}", has_doc, properties),
@@ -34,9 +34,12 @@ fn new_workbook(s: &mut Session, p: &Json) -> Result<Json> {
         Some(name) => {
             let wb = crate::sample::build(name).ok_or_else(|| bad("file.new", format!("unknown sample `{name}`")))?;
             let title = crate::sample::title(name);
-            s.add_document(DocState::new(wb, None, title))
+            s.add_document(DocState::new(wb, None, title))?
         }
-        None => s.new_workbook(),
+        None => {
+            let d = s.blank_workbook();
+            s.add_document(d)?
+        }
     };
     Ok(json!({"index": i, "title": s.doc()?.display_title()}))
 }
@@ -55,6 +58,8 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
         s.ui_requests.push(crate::UiRequest::Dialog("open".into(), json!({})));
         return ok();
     };
+    // Refused before decoding, so a full session never asks for a password it can't use.
+    s.ensure_room()?;
     let encrypted = gridcraft_xlsx::sniff(&bytes) == gridcraft_xlsx::Format::Encrypted;
     let (mut wb, warnings) = crate::io::open_bytes_with_password(&name, &bytes, str_param(p, "password"))?;
     wb.source_dir = str_param(p, "path").and_then(crate::io::source_dir);
@@ -80,7 +85,7 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
     if crate::io::FileKind::from_path(&name).is_none() && gridcraft_xlsx::sniff(&bytes) == gridcraft_xlsx::Format::Xlsx {
         doc.content_kind = Some(crate::io::FileKind::Xlsx);
     }
-    let i = s.add_document(doc);
+    let i = s.add_document(doc)?;
     // The decrypted-workbook notice is for the info bar, not a message box.
     let shown: Vec<&str> = warnings.iter().map(String::as_str).filter(|w| *w != crate::io::DECRYPTED_NOTICE).collect();
     if !shown.is_empty() {
@@ -146,12 +151,12 @@ fn save_bytes(s: &mut Session, p: &Json) -> Result<Json> {
 
 fn close(s: &mut Session, p: &Json) -> Result<Json> {
     let force = bool_param(p, "force").unwrap_or(false);
-    let d = s.doc()?;
+    let i = u32_param(p, "index").map_or(s.active_index(), |i| i as usize);
+    let d = s.documents().get(i).ok_or_else(|| bad("file.close", "no such window"))?;
     if d.is_dirty() && !force {
-        s.ui_requests.push(crate::UiRequest::Dialog("saveChanges".into(), json!({"title": d.display_title()})));
+        s.ui_requests.push(crate::UiRequest::Dialog("saveChanges".into(), json!({"title": d.display_title(), "index": i})));
         return Ok(json!({"closed": false, "dirty": true}));
     }
-    let i = s.active_index();
     s.close_document(i);
     Ok(json!({"closed": true}))
 }
