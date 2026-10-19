@@ -75,7 +75,9 @@ pub fn start() {
                         }
                         bridge.post_ready();
                     }
-                    Ok(Box::new(WebShell { app, inbox, bridge: app_bridge, dirty }))
+                    // Drafts are the office shell's; an embedding parent stores what it opened itself.
+                    let drafts = app_bridge.is_none().then(|| crate::drafts::Drafts::install(&cc.egui_ctx));
+                    Ok(Box::new(WebShell { app, inbox, bridge: app_bridge, dirty, drafts }))
                 }),
             )
             .await;
@@ -105,6 +107,8 @@ struct WebShell {
     bridge: Option<crate::host::Bridge>,
     /// Whether any open workbook has unsaved changes, for the `beforeunload` guard.
     dirty: Rc<Cell<bool>>,
+    /// Draft autosave to the office shell's `window.erpDrafts`; `None` in host mode.
+    drafts: Option<crate::drafts::Drafts>,
 }
 
 impl eframe::App for WebShell {
@@ -124,6 +128,9 @@ impl eframe::App for WebShell {
                 }
             });
         }
+        if let Some(drafts) = &mut self.drafts {
+            drafts.open_restored(&mut self.app);
+        }
         self.app.logic(ctx);
     }
 
@@ -135,6 +142,9 @@ impl eframe::App for WebShell {
         self.app.ui(ui);
         if let Some(bridge) = &self.bridge {
             bridge.sync(&mut self.app);
+        }
+        if let Some(drafts) = &mut self.drafts {
+            drafts.after_frame(&self.app, ui.ctx());
         }
         self.dirty.set(self.app.session.documents().iter().any(|d| d.is_dirty()));
     }

@@ -14,6 +14,7 @@ pub mod control;
 mod craft_fonts;
 pub mod credits;
 pub mod dialogs;
+pub mod drafts;
 pub mod editor;
 pub mod fonts;
 pub mod formula_bar;
@@ -271,6 +272,9 @@ pub struct SheetApp {
     pub notice: Option<Notice>,
     pub services: Services,
     pending_saves: Vec<PendingSave>,
+    /// Workbooks opened by decrypting them with their password. GridCraft can't encrypt, so
+    /// they get no web drafts: those would hold the content unprotected.
+    decrypted: std::collections::HashSet<u64>,
     pub printing: printing::State,
     print_feedback_seen: Option<printing::Feedback>,
     /// Synthetic input from agents, one batch per frame (drags need several frames).
@@ -329,6 +333,7 @@ impl SheetApp {
             notice: None,
             services,
             pending_saves: Vec::new(),
+            decrypted: Default::default(),
             printing: Default::default(),
             print_feedback_seen: None,
             synthetic: Default::default(),
@@ -391,6 +396,15 @@ impl SheetApp {
     /// Runs an engine command (or a UI command) and handles UI requests it makes.
     pub fn run(&mut self, id: &str, params: Json) -> Result<Json, String> {
         let r = self.run_command(id, params);
+        if id == "file.open"
+            && let Ok(r) = &r
+            && r.get("warnings")
+                .and_then(Json::as_array)
+                .is_some_and(|w| w.iter().any(|w| w.as_str() == Some(gridcraft_engine::io::DECRYPTED_NOTICE)))
+            && let Some(d) = self.session.active()
+        {
+            self.decrypted.insert(d.uid);
+        }
         // This copy leaves the system clipboard alone: note what it holds, so Paste can tell
         // that GridCraft's copy is newer while that text is still there.
         if matches!(id, "edit.copy" | "edit.cut") && r.is_ok() {
@@ -1151,24 +1165,71 @@ impl SheetApp {
             .map(|i| std::mem::take(&mut *i.lock().unwrap_or_else(std::sync::PoisonError::into_inner)))
             .unwrap_or_default();
         for (name, bytes) in arrived {
-            let b64 = gridcraft_engine::io::base64_encode(&bytes);
-            match self.run("file.open", json!({"name": &name, "base64": &b64})) {
-                // A file picked from File › Open (web) arrives here: show it, not the Backstage.
-                Ok(r) => {
-                    self.backstage = None;
-                    self.show_open_warnings(&r);
-                }
-                Err(e) if e.contains(gridcraft_engine::io::PASSWORD_REQUIRED) => {
-                    self.backstage = None;
-                    self.open_dialog("openPassword", json!({"name": name, "base64": b64}));
-                }
-                Err(e) => self.message = Some(("GridCraft".into(), clean_error(&e))),
-            }
-            self.after_engine();
+            self.open_arrived(&name, &bytes);
         }
         if self.session.active().is_none() {
             self.session.new_workbook();
         }
+    }
+
+    /// Opens a file read asynchronously; `true` when it is now the active workbook (a
+    /// password-protected one asks for its password first).
+    fn open_arrived(&mut self, name: &str, bytes: &[u8]) -> bool {
+        let b64 = gridcraft_engine::io::base64_encode(bytes);
+        let opened = match self.run("file.open", json!({"name": name, "base64": &b64})) {
+            // A file picked from File › Open (web) arrives here: show it, not the Backstage.
+            Ok(r) => {
+                self.backstage = None;
+                self.show_open_warnings(&r);
+                true
+            }
+            Err(e) if e.contains(gridcraft_engine::io::PASSWORD_REQUIRED) => {
+                self.backstage = None;
+                self.open_dialog("openPassword", json!({"name": name, "base64": b64}));
+                false
+            }
+            Err(e) => {
+                self.message = Some(("GridCraft".into(), clean_error(&e)));
+                false
+            }
+        };
+        self.after_engine();
+        opened
+    }
+
+    /// Web: opens a recovered draft named `name` as an unsaved workbook titled `name`, like a
+    /// dropped file (an untouched blank Book1 is replaced). Its uid, or `None` when it didn't open.
+    pub fn open_draft(&mut self, name: &str, bytes: &[u8]) -> Option<u64> {
+        if !self.open_arrived(name, bytes) {
+            return None;
+        }
+        let d = self.session.active_mut()?;
+        d.title = name.to_string();
+        // A different `Arc` from the one shown makes it dirty: Save and the leave-page guard
+        // treat the recovered work as edited.
+        d.saved = std::sync::Arc::new((*d.wb).clone());
+        Some(d.uid)
+    }
+
+    /// Web drafts: the open workbooks that may be drafted, as [`drafts::Planner`] sees them.
+    pub fn draft_docs(&self) -> Vec<drafts::DraftDoc> {
+        self.session
+            .documents()
+            .iter()
+            .filter(|d| !self.decrypted.contains(&d.uid))
+            .map(|d| drafts::DraftDoc {
+                uid: d.uid,
+                wb: d.wb.clone(),
+                saved: d.saved.clone(),
+                unsaved: d.is_dirty() || self.pending_saves.iter().any(|p| p.uid == d.uid),
+                name: drafts::draft_name(&d.display_title()),
+            })
+            .collect()
+    }
+
+    /// A cell or text box editor is open: its text isn't in the workbook yet.
+    pub fn editing_in_place(&self) -> bool {
+        self.editor.is_some() || self.text_box_editor.is_some()
     }
 
     pub fn raw_input_hook(&mut self, raw: &mut egui::RawInput) {
