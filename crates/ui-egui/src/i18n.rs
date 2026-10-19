@@ -17,6 +17,7 @@ mod ko;
 mod pt;
 mod ru;
 mod sr;
+mod vi;
 mod zh;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,10 +36,12 @@ pub enum Language {
     Cs,
     Fr,
     Sr,
+    Vi,
 }
 
 impl Language {
-    pub const ALL: [Self; 11] = [Self::En, Self::Es, Self::Zh, Self::Ja, Self::Ko, Self::Ru, Self::PtBr, Self::De, Self::Cs, Self::Fr, Self::Sr];
+    pub const ALL: [Self; 12] =
+        [Self::En, Self::Es, Self::Zh, Self::Ja, Self::Ko, Self::Ru, Self::PtBr, Self::De, Self::Cs, Self::Fr, Self::Sr, Self::Vi];
 
     /// The language's own name, shown in the switcher.
     pub fn name(self) -> &'static str {
@@ -54,6 +57,7 @@ impl Language {
             Self::Cs => "Čeština",
             Self::Fr => "Français",
             Self::Sr => "Srpski",
+            Self::Vi => "Tiếng Việt",
         }
     }
 
@@ -71,6 +75,7 @@ impl Language {
             Self::Cs => "cs",
             Self::Fr => "fr",
             Self::Sr => "sr",
+            Self::Vi => "vi",
         }
     }
 
@@ -91,6 +96,7 @@ impl Language {
             "cs" => Some(Self::Cs),
             "fr" => Some(Self::Fr),
             "sr" => Some(Self::Sr),
+            "vi" => Some(Self::Vi),
             _ => None,
         }
     }
@@ -129,6 +135,7 @@ impl Language {
             Self::Cs => cs::translate(text),
             Self::Fr => fr::translate(text),
             Self::Sr => sr::translate(text),
+            Self::Vi => vi::translate(text),
         };
         translated.unwrap_or_else(|| text.rsplit_once('|').map_or(text, |(_, label)| label))
     }
@@ -611,6 +618,7 @@ mod tests {
             assert!(cs::translate(english).is_some_and(|text| !text.is_empty()), "missing Czech: {english}");
             assert!(fr::translate(english).is_some_and(|text| !text.is_empty()), "missing French: {english}");
             assert!(sr::translate(english).is_some_and(|text| !text.is_empty()), "missing Serbian: {english}");
+            assert!(vi::translate(english).is_some_and(|text| !text.is_empty()), "missing Vietnamese: {english}");
         }
         assert_eq!(Language::Ja.tr("Data"), "データ");
         assert_eq!(Language::Zh.tr("Data"), "数据");
@@ -685,6 +693,44 @@ mod tests {
         assert_eq!(Language::from_tag("sr-Latn-RS"), Some(Language::Sr));
         assert_eq!(Language::from_tag("sr-RS"), Some(Language::Sr));
         assert_eq!(Language::parse("sr"), Some(Language::Sr));
+        assert_eq!(Language::from_tag("vi-VN"), Some(Language::Vi));
+        assert_eq!(Language::from_tag("vi_VN.UTF-8"), Some(Language::Vi));
+        assert_eq!(Language::parse("vi"), Some(Language::Vi));
+    }
+
+    /// The `"English" =>` keys of a translation module's source.
+    fn catalog_keys(source: &str) -> Vec<String> {
+        source
+            .lines()
+            .filter_map(|line| line.trim_start().strip_prefix('"')?.split_once("\" =>").map(|(key, _)| key))
+            .map(|key| key.replace("\\n", "\n").replace("\\\"", "\"").replace("\\'", "'").replace("\\\\", "\\"))
+            .collect()
+    }
+
+    #[test]
+    fn vietnamese_covers_every_key_any_catalog_has() {
+        let sources = [
+            include_str!("i18n/cs.rs"),
+            include_str!("i18n/de.rs"),
+            include_str!("i18n/es.rs"),
+            include_str!("i18n/fr.rs"),
+            include_str!("i18n/ko.rs"),
+            include_str!("i18n/pt.rs"),
+            include_str!("i18n/ru.rs"),
+            include_str!("i18n/sr.rs"),
+            include_str!("i18n/zh.rs"),
+        ];
+        let keys: Vec<String> = sources.iter().flat_map(|source| catalog_keys(source)).collect();
+        assert!(keys.len() > 3000, "the key scan found only {}", keys.len());
+        let missing: std::collections::BTreeSet<_> = keys.iter().filter(|key| vi::translate(key).is_none()).collect();
+        assert!(missing.is_empty(), "untranslated Vietnamese keys: {missing:#?}");
+        // Status bar, sheet tab menu and task pane labels, which no other catalog carries yet.
+        for label in ["Sum", "Count", "Average", "Circular References", "Rename", "Tab Color", "Unhide…", "Format Chart Area", "Reply…"] {
+            assert!(vi::translate(label).is_some(), "missing Vietnamese: {label}");
+        }
+        assert_eq!(Language::Vi.tr("Data"), "Dữ liệu");
+        assert_eq!(Language::Vi.tr("Sheet1!A1"), "Sheet1!A1");
+        assert_eq!(Language::Vi.name(), "Tiếng Việt");
     }
 
     #[test]

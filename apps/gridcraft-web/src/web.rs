@@ -59,15 +59,8 @@ pub fn start() {
                     }
                     let mut app = SheetApp::new(session, services);
                     app.ui.system_theme = true;
-                    // Follow the browser's language, except a CJK one: the web build has no system
-                    // CJK fonts (none are bundled), so that interface would render as tofu.
-                    let browser = gridcraft_ui_egui::i18n::Language::system();
-                    if !matches!(
-                        browser,
-                        gridcraft_ui_egui::i18n::Language::Zh | gridcraft_ui_egui::i18n::Language::Ja | gridcraft_ui_egui::i18n::Language::Ko
-                    ) {
-                        app.ui.language = browser;
-                    }
+                    app.ui.language = crate::language::initial();
+                    let language = app.ui.language;
                     SheetApp::setup_context_for_language(&cc.egui_ctx, false, app.ui.language);
                     if let Some(bridge) = &app_bridge {
                         if let Some(author) = query_param("author") {
@@ -77,7 +70,7 @@ pub fn start() {
                     }
                     // Drafts are the office shell's; an embedding parent stores what it opened itself.
                     let drafts = app_bridge.is_none().then(|| crate::drafts::Drafts::install(&cc.egui_ctx));
-                    Ok(Box::new(WebShell { app, inbox, bridge: app_bridge, dirty, drafts }))
+                    Ok(Box::new(WebShell { app, inbox, bridge: app_bridge, dirty, drafts, language }))
                 }),
             )
             .await;
@@ -109,6 +102,8 @@ struct WebShell {
     dirty: Rc<Cell<bool>>,
     /// Draft autosave to the office shell's `window.erpDrafts`; `None` in host mode.
     drafts: Option<crate::drafts::Drafts>,
+    /// The last interface language written to the site-wide preference.
+    language: gridcraft_ui_egui::i18n::Language,
 }
 
 impl eframe::App for WebShell {
@@ -132,6 +127,10 @@ impl eframe::App for WebShell {
             drafts.open_restored(&mut self.app);
         }
         self.app.logic(ctx);
+        if self.app.ui.language != self.language {
+            self.language = self.app.ui.language;
+            crate::language::remember(self.language);
+        }
     }
 
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
