@@ -30,6 +30,7 @@ pub mod panes;
 pub mod paper_view;
 pub mod pivot_pane;
 pub mod printing;
+pub mod region;
 pub mod ribbon;
 pub mod selection_glide;
 pub mod tabs;
@@ -74,6 +75,10 @@ pub struct UiState {
     /// rather than failing the whole `UiState`.
     #[serde(deserialize_with = "i18n::lenient")]
     pub language: i18n::Language,
+    /// Regional format typed numbers, dates, currency and formulas use (File ▸ Options); `None`
+    /// follows the interface language ([`region::default_for`]). See [`UiState::region`].
+    #[serde(deserialize_with = "region::lenient", serialize_with = "region::serialize", skip_serializing_if = "Option::is_none")]
+    pub region: Option<region::Region>,
     /// Interface size in percent on top of the desktop's scale (100 = Auto), applied as egui's
     /// zoom factor so the ribbon, menus, dialogs and grid grow together. Kept within
     /// [`INTERFACE_SCALE_MIN`]..=[`INTERFACE_SCALE_MAX`]; a malformed saved value reads as 100.
@@ -109,12 +114,22 @@ impl Default for UiState {
             recent: vec![],
             keytip_invoke: None,
             language: i18n::Language::En,
+            region: None,
             interface_scale: 100,
         }
     }
 }
 
 impl UiState {
+    /// The regional format in effect: the chosen one, else the interface language's.
+    pub fn region(&self) -> region::Region {
+        self.region.unwrap_or(region::default_for(self.language))
+    }
+
+    pub fn formula_locale(&self) -> gridcraft_engine::formula::FormulaLocale {
+        region::formula_locale(self.region())
+    }
+
     pub fn theme_preference(&self) -> egui::ThemePreference {
         if self.system_theme {
             egui::ThemePreference::System
@@ -739,6 +754,17 @@ impl SheetApp {
                     None => Err(format!("unknown language {code:?} (use \"en\", \"es\", \"zh\", \"ja\", \"ko\", \"ru\", \"pt\" or \"cs\")")),
                 }
             }
+            "app.region.set" => {
+                // `{"region": "vi-VN"}`; `"auto"` follows the interface language again.
+                let code = p.get("region").or_else(|| p.get("code")).and_then(Json::as_str).unwrap_or("");
+                match region::parse_choice(code) {
+                    Some(choice) => {
+                        self.ui.region = choice;
+                        Ok(json!({"region": self.ui.region().code(), "auto": choice.is_none()}))
+                    }
+                    None => Err(format!("unknown region {code:?} (use \"vi-VN\", \"en-US\", \"es-ES\" or \"auto\")")),
+                }
+            }
             "app.language.english" => {
                 self.ui.language = i18n::Language::En;
                 Ok(json!({"language": i18n::Language::En}))
@@ -799,7 +825,7 @@ impl SheetApp {
                     let text = text.map(|text| {
                         self.session
                             .active()
-                            .map(|d| formula_locale::display_template(&text, self.ui.language.formula_locale(), &d.wb, d.wb.active_sheet))
+                            .map(|d| formula_locale::display_template(&text, self.ui.formula_locale(), &d.wb, d.wb.active_sheet))
                             .unwrap_or(text)
                     });
                     self.begin_edit(text, false);
@@ -965,6 +991,14 @@ impl SheetApp {
         d.store_view(&tops);
     }
 
+    /// The Accounting Number Format button's parameters: the regional format's currency.
+    pub fn accounting_params(&self) -> Json {
+        match self.ui.region().currency_symbol() {
+            "$" => json!({}),
+            symbol => json!({"symbol": symbol}),
+        }
+    }
+
     /// Starts editing the active cell. `text` replaces the content (typing) or pre-fills it.
     pub fn begin_edit(&mut self, text: Option<String>, from_formula_bar: bool) {
         if let Err(e) = self.commit_text_box_edit() {
@@ -980,13 +1014,13 @@ impl SheetApp {
         if text.is_none() && sh.cell_pictures.contains_key(&at) {
             return;
         }
-        let locale = self.ui.language.formula_locale();
+        let locale = self.ui.formula_locale();
         let current = if sh.cell_pictures.contains_key(&at) {
             String::new()
         } else {
             match sh.cell(at) {
                 Some(c) if c.formula.is_some() => formula_locale::display(&c.input_text(), locale, &d.wb, d.wb.active_sheet),
-                _ => gridcraft_engine::display::edit_text(&d.wb, sh, at),
+                _ => gridcraft_engine::display::edit_text_in(&d.wb, sh, at, self.ui.region()),
             }
         };
         let (text, replace) = match text {
@@ -995,6 +1029,7 @@ impl SheetApp {
         };
         let mut ed = editor::EditState::new(d.wb.active_sheet, at, text, replace, from_formula_bar);
         ed.locale = locale;
+        ed.region = self.ui.region();
         if replace && self.ui.autocomplete && !ed.is_formula() {
             ed.completion = editor::column_completion(sh, at, &ed.text);
         }
@@ -1022,7 +1057,7 @@ impl SheetApp {
         };
         // Data validation.
         if let Some(d) = self.session.active()
-            && let Some((dv, msg)) = gridcraft_engine::cmd::data::check_validation(&d.wb, ed.sheet, ed.cell, &text)
+            && let Some((dv, msg)) = gridcraft_engine::cmd::data::check_validation_in(&d.wb, ed.sheet, ed.cell, &text, ed.region)
         {
             if dv.error_style == gridcraft_engine::model::ErrorStyle::Stop {
                 let title = if dv.error_title.is_empty() { "GridCraft".to_string() } else { dv.error_title.clone() };
@@ -1033,11 +1068,11 @@ impl SheetApp {
             }
             self.toast = Some((msg, now_ms()));
         }
-        let r = if fill_selection {
-            self.session.run("range.fill", json!({"input": text}))
-        } else {
-            self.session.run("cell.set", json!({"cell": ed.cell.a1(), "input": text, "array": array}))
-        };
+        let mut params = if fill_selection { json!({"input": text}) } else { json!({"cell": ed.cell.a1(), "input": text, "array": array}) };
+        if ed.region != region::Region::EnUs {
+            params["region"] = json!(ed.region.code());
+        }
+        let r = self.session.run(if fill_selection { "range.fill" } else { "cell.set" }, params);
         match r {
             Ok(_) => {
                 if dr != 0 || dc != 0 {
@@ -1255,6 +1290,7 @@ impl SheetApp {
         text_box::before_ui(self, &ctx);
         // The language the widgets translate with this frame (see `i18n::current`).
         i18n::set_current(&ctx, self.ui.language);
+        region::set_current(&ctx, self.ui.region());
         let t = theme::Tokens::get(&ctx);
         if self.backstage.is_none() {
             self.ribbon_keys(&ctx);
@@ -1346,6 +1382,7 @@ impl SheetApp {
                 }
                 keytips::Action::Command(id @ ("edit.copy" | "edit.cut")) => self.copy_to_clipboard(ctx, id),
                 keytips::Action::Command("edit.paste") => self.paste_from_clipboard(),
+                keytips::Action::Command("home.accounting") => self.run_or_alert("home.accounting", self.accounting_params()),
                 keytips::Action::Command(id) => self.run_or_alert(id, json!({})),
                 keytips::Action::Dialog(name) => self.open_dialog(name, json!({})),
                 // Reserved sequence: fires silently while its command is missing. When the

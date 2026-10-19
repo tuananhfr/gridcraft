@@ -1161,7 +1161,7 @@ pub(crate) fn paint_quadrant(
         let avail_w = rect.right() - text_left;
         let (mut text, ncolor, numeric, fill_char) = display_text(wb, sh, c, &v, st, avail_w / z.max(0.1) * z, char_w);
         if sh.show_formulas && sh.cell(c).is_some_and(|cell| cell.formula.is_some()) {
-            text = crate::formula_locale::display(&text, crate::i18n::current(p.ctx()).formula_locale(), wb, si);
+            text = crate::formula_locale::display(&text, crate::region::formula_locale(crate::region::current(p.ctx())), wb, si);
         }
         if text.is_empty() {
             continue;

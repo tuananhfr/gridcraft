@@ -60,7 +60,9 @@ pub fn start() {
                     let mut app = SheetApp::new(session, services);
                     app.ui.system_theme = true;
                     app.ui.language = crate::language::initial();
+                    app.ui.region = crate::region::initial();
                     let language = app.ui.language;
+                    let region = app.ui.region;
                     SheetApp::setup_context_for_language(&cc.egui_ctx, false, app.ui.language);
                     if let Some(bridge) = &app_bridge {
                         if let Some(author) = query_param("author") {
@@ -70,7 +72,7 @@ pub fn start() {
                     }
                     // Drafts are the office shell's; an embedding parent stores what it opened itself.
                     let drafts = app_bridge.is_none().then(|| crate::drafts::Drafts::install(&cc.egui_ctx));
-                    Ok(Box::new(WebShell { app, inbox, bridge: app_bridge, dirty, drafts, language }))
+                    Ok(Box::new(WebShell { app, inbox, bridge: app_bridge, dirty, drafts, language, region }))
                 }),
             )
             .await;
@@ -104,6 +106,8 @@ struct WebShell {
     drafts: Option<crate::drafts::Drafts>,
     /// The last interface language written to the site-wide preference.
     language: gridcraft_ui_egui::i18n::Language,
+    /// The last regional format choice written to its preference (`None` follows the language).
+    region: Option<gridcraft_ui_egui::region::Region>,
 }
 
 impl eframe::App for WebShell {
@@ -130,6 +134,10 @@ impl eframe::App for WebShell {
         if self.app.ui.language != self.language {
             self.language = self.app.ui.language;
             crate::language::remember(self.language);
+        }
+        if self.app.ui.region != self.region {
+            self.region = self.app.ui.region;
+            crate::region::remember(self.region);
         }
     }
 

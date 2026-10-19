@@ -285,7 +285,7 @@ pub fn tokenize_locale(src: &str, locale: crate::FormulaLocale) -> Result<Vec<To
                 push(&mut out, Tok::Comma, i + 1);
                 i += 1;
             }
-            ';' => {
+            c if c == ';' || (array_depth > 0 && c == locale.array_row_separator()) => {
                 push(&mut out, Tok::Semicolon, i + 1);
                 i += 1;
             }

@@ -340,6 +340,15 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Light" => "Sáng",
         "Dark" => "Tối",
         "Interface language" => "Ngôn ngữ giao diện",
+        "Regional format" => "Định dạng vùng",
+        "Regional Format" => "Định dạng Vùng",
+        "Same as interface language" => "Theo ngôn ngữ giao diện",
+        "English (United States)" => "Tiếng Anh (Hoa Kỳ)",
+        "Spanish (Spain)" => "Tiếng Tây Ban Nha (Tây Ban Nha)",
+        "Vietnamese (Vietnam)" => "Tiếng Việt (Việt Nam)",
+        "Numbers, dates, currency and formulas are typed in the regional format; files keep the standard notation." => {
+            "Số, ngày, tiền tệ và công thức được nhập theo định dạng vùng; tệp vẫn lưu theo ký hiệu chuẩn."
+        }
         "Command\nPalette" => "Bảng\nLệnh",
         "Agent\nControl" => "Điều khiển\nTác tử",
         "Action\nJournal" => "Nhật ký\nThao tác",
@@ -524,6 +533,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Zoom…" => "Thu phóng…",
         "£ English (United Kingdom)" => "£ Tiếng Anh (Vương quốc Anh)",
         "¥ Japanese" => "¥ Tiếng Nhật",
+        "₫ Vietnamese" => "₫ Tiếng Việt",
         "€ Euro" => "€ Euro",
         "New sheet (⇧F11)" => "Trang tính mới (⇧F11)",
         "Next sheet" => "Trang tính tiếp theo",

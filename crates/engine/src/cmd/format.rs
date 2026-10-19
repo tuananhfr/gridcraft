@@ -133,9 +133,7 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             number_format
         ),
-        cmd!("home.accounting", "Accounting Number Format", ["Home", "Number"], None, "{range?, symbol?: \"$\"}", has_doc, |s, p| set_fmt(
-            s, p, ACCOUNTING
-        )),
+        cmd!("home.accounting", "Accounting Number Format", ["Home", "Number"], None, "{range?, symbol?: \"$\" | \"₫\"}", has_doc, accounting),
         cmd!("home.percent", "Percent Style", ["Home", "Number"], Some("Ctrl+Shift+%"), "{range?}", has_doc, |s, p| set_fmt(s, p, "0%")),
         cmd!("home.comma", "Comma Style", ["Home", "Number"], None, "{range?}", has_doc, |s, p| set_fmt(s, p, COMMA)),
         cmd!("home.increaseDecimal", "Increase Decimal", ["Home", "Number"], None, "{range?}", has_doc, |s, p| decimals(s, p, 1)),
@@ -653,6 +651,15 @@ fn number_format(s: &mut Session, p: &Json) -> Result<Json> {
         .or_else(|| str_param(p, "format").map(|f| format_code_for(f).to_string()))
         .ok_or_else(|| bad("home.numberFormat", "missing `format` or `code`"))?;
     set_fmt(s, p, &code)
+}
+
+fn accounting(s: &mut Session, p: &Json) -> Result<Json> {
+    let code = match str_param(p, "symbol").map(str::trim) {
+        None | Some("$") => ACCOUNTING,
+        Some("₫") => gridcraft_core::region::VND_ACCOUNTING,
+        Some(other) => return Err(bad("home.accounting", format!("unknown symbol {other:?} (use \"$\" or \"₫\")"))),
+    };
+    set_fmt(s, p, code)
 }
 
 fn set_fmt(s: &mut Session, p: &Json, code: &str) -> Result<Json> {

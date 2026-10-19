@@ -1767,7 +1767,7 @@ fn insert_function(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confir
         let r = ui.add(egui::TextEdit::singleline(&mut d.search).desired_width(300.0).hint_text(tr(ui, "e.g. lookup, average, date")));
         r.request_focus();
     });
-    let locale = app.ui.language.formula_locale();
+    let locale = app.ui.formula_locale();
     let list = gridcraft_engine::cmd::formulas::function_list();
     let q = d.search.to_ascii_lowercase();
     let hits: Vec<&Json> = list

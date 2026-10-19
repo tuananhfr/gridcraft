@@ -17,7 +17,7 @@ pub(crate) fn canonical(
     {
         return Ok(stored);
     }
-    if locale == FormulaLocale::En || wb.sheet(sheet).is_some_and(|sh| wb.styles.get(sh.style_id(cell)).num_fmt.as_str() == "@") {
+    if locale.is_canonical() || wb.sheet(sheet).is_some_and(|sh| wb.styles.get(sh.style_id(cell)).num_fmt.as_str() == "@") {
         return Ok(text.to_string());
     }
     // Same formula detection as the engine's `input_to_cell` (no trimming: " =1" is text).
@@ -38,19 +38,13 @@ pub(crate) fn canonical(
         }
         return Ok(format!("={}", formula::print(&expr?)));
     }
-    // Decimal-comma number entry follows the same preference, without rewriting text or dates.
-    let normalized = body.trim().replace(locale.decimal_separator(), ".");
-    let number = normalized.strip_suffix('%').unwrap_or(&normalized);
-    if number.parse::<f64>().is_ok_and(f64::is_finite) {
-        return Ok(normalized);
-    }
+    // Constants go to the engine as typed, with the regional format (`cell.set`'s `region`).
     Ok(text.to_string())
 }
 
 pub(crate) fn display(text: &str, locale: FormulaLocale, wb: &Workbook, sheet: usize) -> String {
-    // English (and every language without a formula table) shows the stored text, `_xludf.`
-    // prefixes aside, and skips a parse per frame.
-    if locale == FormulaLocale::En {
+    // Canonical syntax shows the stored text, `_xludf.` prefixes aside, and skips a parse per frame.
+    if locale.is_canonical() {
         return hide_udf_prefix(text, locale);
     }
     let Some(body) = text.strip_prefix('=') else { return text.to_string() };
@@ -101,11 +95,17 @@ const SPANISH_HELP: &[(&str, &str, &str)] = &[
     ("FALSE", "FALSO()", "Devuelve el valor lógico FALSO."),
 ];
 
+/// Translated help for a locale's function table; empty where names stay English.
+fn help(locale: FormulaLocale) -> &'static [(&'static str, &'static str, &'static str)] {
+    match locale {
+        FormulaLocale::Es => SPANISH_HELP,
+        FormulaLocale::En | FormulaLocale::Vi => &[],
+    }
+}
+
 pub(crate) fn signature(name: &str, locale: FormulaLocale) -> Option<String> {
     let canonical = locale.canonical_name(name);
-    if locale == FormulaLocale::Es
-        && let Some((_, signature, _)) = SPANISH_HELP.iter().find(|(name, ..)| *name == canonical)
-    {
+    if let Some((_, signature, _)) = help(locale).iter().find(|(name, ..)| *name == canonical) {
         return Some((*signature).into());
     }
     crate::formula_bar::function_signature(canonical).map(|s| s.replace(',', &locale.list_separator().to_string()))
@@ -113,9 +113,7 @@ pub(crate) fn signature(name: &str, locale: FormulaLocale) -> Option<String> {
 
 pub(crate) fn description(name: &str, locale: FormulaLocale) -> Option<String> {
     let canonical = locale.canonical_name(name);
-    if locale == FormulaLocale::Es
-        && let Some((_, _, description)) = SPANISH_HELP.iter().find(|(name, ..)| *name == canonical)
-    {
+    if let Some((_, _, description)) = help(locale).iter().find(|(name, ..)| *name == canonical) {
         return Some((*description).into());
     }
     crate::formula_bar::function_description(canonical)

@@ -791,7 +791,8 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
             let (c, ca) = split_button(ui, Icon::Currency, None, "Accounting Number Format");
             control_keytip(app, ui, &ca, "home.accounting");
             if c {
-                act(app, "home.accounting", json!({}));
+                let params = app.accounting_params();
+                act(app, "home.accounting", params);
             }
             egui::Popup::menu(&ca).show(|ui| {
                 menu_items(
@@ -813,6 +814,7 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
                             "home.numberFormat",
                             json!({"code": "_-[$€-x-euro2] * #,##0.00_-;-[$€-x-euro2] * #,##0.00_-;_-[$€-x-euro2] * \"-\"??_-;_-@_-"}),
                         ),
+                        ("₫ Vietnamese", "home.accounting", json!({"symbol": "₫"})),
                         ("¥ Japanese", "home.numberFormat", json!({"code": "_-[$¥-411]* #,##0_-;-[$¥-411]* #,##0_-;_-[$¥-411]* \"-\"_-;_-@_-"})),
                         ("-", "", json!(null)),
                         ("More Accounting Formats…", "dialog:formatCells", json!({"tab": "Number"})),
@@ -1778,7 +1780,7 @@ fn formulas(app: &mut SheetApp, ui: &mut Ui) {
                     if f["category"].as_str() == Some(cat)
                         && let Some(n) = f["name"].as_str()
                     {
-                        let locale = app.ui.language.formula_locale();
+                        let locale = app.ui.formula_locale();
                         let name =
                             app.session.active().map(|d| crate::formula_locale::completion_name(n, locale, &d.wb, d.wb.active_sheet)).unwrap_or(n);
                         let desc = crate::formula_locale::description(n, locale).unwrap_or_default();

@@ -1,6 +1,6 @@
 //! Cell entry, selection, undo/redo/repeat, clipboard, clear, fill, find & replace.
 
-use gridcraft_core::{CellRef, MAX_ROWS, RangeRef, Value};
+use gridcraft_core::{CellRef, MAX_ROWS, RangeRef, Region, Value};
 use gridcraft_model::{Cell, Formula, StyleId};
 use serde_json::{Value as Json, json};
 
@@ -10,7 +10,15 @@ use crate::{Clipboard, Session};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("cell.set", "Enter Cell", [], None, "{cell?: \"B2\", input: \"text, number or =formula\", sheet?, array?: bool}", has_doc, cell_set),
+        cmd!(
+            "cell.set",
+            "Enter Cell",
+            [],
+            None,
+            "{cell?: \"B2\", input: \"text, number or =formula\", sheet?, array?: bool, region?: \"en-US\"|\"vi-VN\"|\"es-ES\" (notation of typed numbers, dates and currency; formulas stay en-US)}",
+            has_doc,
+            cell_set
+        ),
         cmd!(
             "range.setValues",
             "Set Values",
@@ -25,7 +33,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill Range With Input",
             [],
             Some("Ctrl+Enter"),
-            "{range?, input}: enters the same input in every selected cell (relative formulas adjust)",
+            "{range?, input, region?: \"en-US\"|\"vi-VN\"|\"es-ES\"}: enters the same input in every selected cell (relative formulas adjust)",
             has_doc,
             range_fill
         ),
@@ -132,6 +140,11 @@ pub fn specs() -> Vec<CommandSpec> {
 /// format). Inherits the destination's cell, row or column style, including its number
 /// format, before parsing. Errors when the formula can't be parsed.
 pub(crate) fn input_to_cell(input: &str, sheet: usize, at: CellRef, wb: &mut gridcraft_model::Workbook) -> Result<Option<Cell>> {
+    input_to_cell_in(input, sheet, at, wb, Region::EnUs)
+}
+
+/// [`input_to_cell`] with constants read in `region`'s notation.
+pub(crate) fn input_to_cell_in(input: &str, sheet: usize, at: CellRef, wb: &mut gridcraft_model::Workbook, region: Region) -> Result<Option<Cell>> {
     let style = wb.sheet(sheet).map(|sh| sh.style_id(at)).unwrap_or_default();
     if input.is_empty() {
         let c = Cell { value: Value::Empty, formula: None, style };
@@ -186,7 +199,7 @@ pub(crate) fn input_to_cell(input: &str, sheet: usize, at: CellRef, wb: &mut gri
         }
         return Ok(Some(cell));
     }
-    let parsed = gridcraft_core::parse::parse_input(input, wb.date_system);
+    let parsed = gridcraft_core::parse::parse_input_in(input, wb.date_system, region);
     let mut style = style;
     if let Some(code) = parsed.format {
         let cur = wb.styles.get(style).num_fmt.as_str().to_string();
@@ -232,6 +245,7 @@ fn cell_set(s: &mut Session, p: &Json) -> Result<Json> {
     // Both spellings take a string, number or boolean, as typed (#697).
     let input = p.get("input").or_else(|| p.get("value")).map(json_to_input).ok_or_else(|| bad("cell.set", "missing `input` (or `value`)"))?;
     let array = bool_param(p, "array").unwrap_or(false);
+    let region = region_param(p, "cell.set")?;
     let d = s.doc()?;
     if let Some(sh) = d.wb.sheet(sheet)
         && sh.is_protected()
@@ -251,7 +265,7 @@ fn cell_set(s: &mut Session, p: &Json) -> Result<Json> {
             if !range.is_single() && cx.wb.sheet(sheet).is_some_and(|sh| sh.tables.iter().any(|t| t.range.intersects(&range))) {
                 return Err(EngineError::Other("Multi-cell array formulas aren't allowed in tables.".into()));
             }
-            let mut cell = input_to_cell(&input, sheet, range.start, &mut cx.wb)?.unwrap_or_default();
+            let mut cell = input_to_cell_in(&input, sheet, range.start, &mut cx.wb, region)?.unwrap_or_default();
             if let Some(f) = cell.formula.as_mut() {
                 std::sync::Arc::make_mut(f).array = Some(range);
             }
@@ -267,7 +281,7 @@ fn cell_set(s: &mut Session, p: &Json) -> Result<Json> {
             cx.touch(sheet, range.start);
             return Ok(Json::Null);
         }
-        let cell = input_to_cell(&input, sheet, at, &mut cx.wb)?;
+        let cell = input_to_cell_in(&input, sheet, at, &mut cx.wb, region)?;
         let sh = cx.sheet_mut(sheet)?;
         match cell {
             Some(c) => sh.set_cell(at, c),
@@ -280,6 +294,14 @@ fn cell_set(s: &mut Session, p: &Json) -> Result<Json> {
     })?;
     let v = s.doc()?.wb.sheet(sheet).map(|sh| sh.value(at)).unwrap_or_default();
     Ok(json!({"cell": at.a1(), "value": v.display()}))
+}
+
+/// The optional `region` of an entry command; en-US without it.
+pub(crate) fn region_param(p: &Json, cmd: &str) -> Result<Region> {
+    match str_param(p, "region") {
+        None => Ok(Region::EnUs),
+        Some(code) => Region::parse(code).ok_or_else(|| bad(cmd, format!("unknown region {code:?} (use \"en-US\", \"vi-VN\" or \"es-ES\")"))),
+    }
 }
 
 pub(crate) fn json_to_input(v: &Json) -> String {
@@ -346,9 +368,10 @@ fn range_fill(s: &mut Session, p: &Json) -> Result<Json> {
     let sheet = target_sheet(s, p)?;
     let ranges = target_ranges(s, p)?;
     let input = str_param(p, "input").unwrap_or("").to_string();
+    let region = region_param(p, "range.fill")?;
     let origin = s.doc()?.selection.active;
     edit(s, |cx| {
-        let base = input_to_cell(&input, sheet, origin, &mut cx.wb)?;
+        let base = input_to_cell_in(&input, sheet, origin, &mut cx.wb, region)?;
         for r in &ranges {
             if r.count() > 2_000_000 {
                 return Err(bad("range.fill", "range too large"));

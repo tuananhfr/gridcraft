@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use gridcraft_core::{CellRef, RangeRef, Value};
+use gridcraft_core::{CellRef, RangeRef, Region, Value};
 use gridcraft_model::{Sheet, Workbook};
 use gridcraft_numfmt::{Formatted, NumberFormat, format_value};
 
@@ -39,17 +39,33 @@ pub fn format(v: &Value, code: &str, wb: &Workbook) -> Formatted {
 /// `dddd, mmmm d`), an ISO `yyyy-mm-dd` (with `hh:mm:ss` for a time of day; just `hh:mm:ss`
 /// for a time alone) is used instead, and if even that would not read back, the serial.
 pub fn edit_text(wb: &Workbook, sheet: &Sheet, c: CellRef) -> String {
+    edit_text_in(wb, sheet, c, Region::EnUs)
+}
+
+/// [`edit_text`] in `region`'s notation, so committing it unchanged keeps the value: numbers
+/// take its decimal separator and dates its day/month order.
+pub fn edit_text_in(wb: &Workbook, sheet: &Sheet, c: CellRef, region: Region) -> String {
     let raw = sheet.input_text(c);
     let Some(cell) = sheet.cell(c) else { return raw };
     let Value::Number(n) = &cell.value else { return raw };
     let code = wb.styles.get(cell.style).num_fmt.as_str();
-    if cell.formula.is_some() || !parsed(code).is_date() {
+    if cell.formula.is_some() {
         return raw;
     }
-    let reads_back = |s: &str| matches!(gridcraft_core::parse::parse_input(s, wb.date_system).value, Value::Number(m) if (m - n).abs() < 1e-9);
+    if !parsed(code).is_date() {
+        return region.number_text(&raw);
+    }
+    let raw = region.number_text(&raw);
+    let reads_back =
+        |s: &str| matches!(gridcraft_core::parse::parse_input_in(s, wb.date_system, region).value, Value::Number(m) if (m - n).abs() < 1e-9);
     let shown = format(&cell.value, code, wb).text;
     if reads_back(&shown) {
         return shown;
+    }
+    if let Some(native) = region.edit_date_format(*n >= 1.0, n.fract() != 0.0).map(|code| format(&cell.value, code, wb).text)
+        && reads_back(&native)
+    {
+        return native;
     }
     let Some(dt) = gridcraft_core::date::datetime_from_serial(wb.date_system, *n) else { return raw };
     let time = format!("{:02}:{:02}:{:02}", dt.hour, dt.minute, dt.second);

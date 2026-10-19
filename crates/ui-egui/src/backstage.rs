@@ -956,7 +956,25 @@ fn options(app: &mut SheetApp, ui: &mut Ui) {
             }
         });
         ui.end_row();
+        ui.label(lang.tr("Regional format"));
+        let chosen = app.ui.region;
+        let shown = match chosen {
+            Some(r) => lang.tr(crate::region::label(r)).to_string(),
+            None => format!("{} ({})", lang.tr("Same as interface language"), lang.tr(crate::region::label(app.ui.region()))),
+        };
+        egui::ComboBox::from_id_salt("backstage_region").width(260.0).selected_text(shown).show_ui(ui, |ui| {
+            if ui.selectable_label(chosen.is_none(), lang.tr("Same as interface language")).clicked() {
+                app.run_or_alert("app.region.set", json!({"region": crate::region::AUTO}));
+            }
+            for r in crate::region::Region::ALL {
+                if ui.selectable_label(chosen == Some(r), lang.tr(crate::region::label(r))).clicked() {
+                    app.run_or_alert("app.region.set", json!({"region": r.code()}));
+                }
+            }
+        });
+        ui.end_row();
     });
+    dim(ui, lang.tr("Numbers, dates, currency and formulas are typed in the regional format; files keep the standard notation."));
     ui.add_space(6.0);
     let mut formula_bar = app.session.prefs.formula_bar;
     if ui.checkbox(&mut formula_bar, lang.tr("Show formula bar")).changed() {

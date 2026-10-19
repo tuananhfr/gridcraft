@@ -203,7 +203,7 @@ pub(crate) fn perform(app: &mut SheetApp, shortcut: Shortcut, m: Modifiers, geo:
         Shortcut::FormulaAbove | Shortcut::ValueAbove => {
             let Some(above) = active.row.checked_sub(1).map(|r| CellRef::new(r, active.col)) else { return };
             let text = if shortcut == Shortcut::FormulaAbove {
-                app.session.active().map(|d| gridcraft_engine::display::edit_text(&d.wb, sh, above)).unwrap_or_default()
+                app.session.active().map(|d| gridcraft_engine::display::edit_text_in(&d.wb, sh, above, app.ui.region())).unwrap_or_default()
             } else {
                 app.session
                     .active()
