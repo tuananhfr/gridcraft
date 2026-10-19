@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "GridCraft worksheet function library: math, statistics, text, dates, lookup, financial, engineering"
+publish = false
 
 [lints]
 workspace = true

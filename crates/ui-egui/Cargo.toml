@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "GridCraft egui frontend (Excel-style UI); swappable — nothing below depends on it"
+publish = false
 
 [lints]
 workspace = true

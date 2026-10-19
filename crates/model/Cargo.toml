@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "GridCraft document model: workbooks, sheets, cells, styles, tables, charts"
+publish = false
 
 [lints]
 workspace = true

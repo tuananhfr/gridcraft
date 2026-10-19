@@ -39,6 +39,7 @@ People trust GridCraft with their numbers; a crash loses their work. **This outr
 - **The UI is thin**: panels read engine state and act through `app.run(id, params)`. Colours come from `theme::Tokens`.
 - **Rust only** (no handwritten JS/TS). **Never break wasm** (`cargo xtask wasm`).
 - **Quality gates** before every commit: `cargo xtask ci` (fmt, clippy -D warnings, tests, assets, layers, wasm). One task id per commit (`M2.1: borders gallery`).
+- **Dependency policy:** `cargo deny check` (licences, sources, advisories; `deny.toml`, needs `cargo install cargo-deny --locked`); not part of `cargo xtask ci` yet.
 
 ## Running and looking at the app
 - `cargo run --release -p gridcraft -- --sample sales --control 7979` (sample workbook + control channel).

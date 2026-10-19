@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "GridCraft calculation engine: dependency graph, recalculation, evaluator, dynamic arrays"
+publish = false
 
 [lints]
 workspace = true

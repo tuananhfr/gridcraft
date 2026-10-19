@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "GridCraft MCP server: JSON-RPC 2.0 over stdio, driving a running app or a headless session"
+publish = false
 
 [lints]
 workspace = true
