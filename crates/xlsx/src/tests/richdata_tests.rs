@@ -253,12 +253,31 @@ fn oversized_entry(mut bytes: Vec<u8>, path: &str, size: u32) -> Vec<u8> {
     panic!("fixture entry not found");
 }
 
+/// Break an entry's checksum (local header and central directory), so reading it fails.
+fn corrupt_entry(mut bytes: Vec<u8>, path: &str) -> Vec<u8> {
+    for i in 0..bytes.len().saturating_sub(4) {
+        let (name_at, crc_at) = match bytes[i..i + 4] {
+            [0x50, 0x4b, 0x03, 0x04] => (30, 14),
+            [0x50, 0x4b, 0x01, 0x02] => (46, 16),
+            _ => continue,
+        };
+        if bytes.get(i + name_at..i + name_at + path.len()) == Some(path.as_bytes()) {
+            bytes[i + crc_at] ^= 0xff;
+        }
+    }
+    bytes
+}
+
 #[test]
 fn picture_metadata_limits_and_relationship_read_errors_do_not_block_workbooks() {
     let mut parts = independent_parts(false);
     replace(&mut parts, "sheets/data.xml", "</sheetData>", "<row r=\"3\"><c r=\"C3\"><v>42</v></c></row></sheetData>");
     let oversized_xml = oversized_entry(zip(&parts), "rich/values.xml", 16 * 1024 * 1024 + 1);
-    let broken_rels = oversized_entry(zip(&parts), "rich/_rels/images.xml.rels", 512 * 1024 * 1024 + 1);
+    let broken_rels = corrupt_entry(zip(&parts), "rich/_rels/images.xml.rels");
+    // Past the package's entry cap, though, the workbook is refused as too large, not opened
+    // without its pictures.
+    let huge_rels = oversized_entry(zip(&parts), "rich/_rels/images.xml.rels", 512 * 1024 * 1024 + 1);
+    assert!(matches!(read_xlsx(&huge_rels), Err(IoError::TooLarge(m)) if m.contains("declares")));
     let (_, values) = parts.iter_mut().find(|(path, _)| path == "rich/values.xml").unwrap();
     *values = format!("<rvData count=\"100001\">{}</rvData>", "<rv/>".repeat(100_001)).into_bytes();
     for bytes in [oversized_xml, broken_rels, zip(&parts)] {

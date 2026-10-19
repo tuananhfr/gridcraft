@@ -43,6 +43,9 @@ impl FileKind {
 pub const PASSWORD_REQUIRED: &str = "is password-protected. Enter its password to open it.";
 /// The error for a wrong password contains this.
 pub const WRONG_PASSWORD: &str = "The password is incorrect.";
+/// The whole error for a file refused by the decompression and size limits (a zip bomb or a file
+/// too big for this build). It names no file so the interface can translate it as is.
+pub const FILE_TOO_LARGE: &str = "The file is too large or abnormally compressed, so it can't be opened.";
 /// The first open warning of a workbook decrypted with its password.
 pub const DECRYPTED_NOTICE: &str = "This workbook was password-protected. GridCraft saves it without the password.";
 
@@ -116,7 +119,7 @@ fn open_plain(name: &str, bytes: &[u8]) -> Result<(Workbook, Vec<String>)> {
     let kind = FileKind::from_path(name);
     let sniffed = gridcraft_xlsx::sniff(bytes);
     if sniffed == gridcraft_xlsx::Format::Xls {
-        let (wb, report) = gridcraft_xlsx::read_xls(bytes).map_err(|e| EngineError::Other(format!("We can't open '{name}': {e}")))?;
+        let (wb, report) = gridcraft_xlsx::read_xls(bytes).map_err(|e| read_error("open", name, e))?;
         return Ok((wb, report.warnings));
     }
     if sniffed == gridcraft_xlsx::Format::LegacyBinary {
@@ -135,12 +138,12 @@ fn open_plain(name: &str, bytes: &[u8]) -> Result<(Workbook, Vec<String>)> {
     };
     if let Some(import) = import {
         let read = if import == FileKind::Ods { gridcraft_xlsx::read_ods } else { gridcraft_xlsx::read_xlsb };
-        let (wb, report) = read(bytes).map_err(|e| EngineError::Other(format!("We can't import '{name}': {e}")))?;
+        let (wb, report) = read(bytes).map_err(|e| read_error("import", name, e))?;
         return Ok((wb, report.warnings));
     }
     // Text named `.xlsx` is read as text.
     if sniffed == gridcraft_xlsx::Format::Xlsx || (kind == Some(FileKind::Xlsx) && sniffed != gridcraft_xlsx::Format::Csv) {
-        let (wb, report) = gridcraft_xlsx::read_xlsx(bytes).map_err(|e| EngineError::Other(format!("We can't open '{name}': {e}")))?;
+        let (wb, report) = gridcraft_xlsx::read_xlsx(bytes).map_err(|e| read_error("open", name, e))?;
         return Ok((wb, report.warnings));
     }
     match kind {
@@ -166,6 +169,14 @@ fn open_plain(name: &str, bytes: &[u8]) -> Result<(Workbook, Vec<String>)> {
             rename_first_sheet(&mut wb, name);
             Ok((wb, vec![]))
         }
+    }
+}
+
+/// "We can't open/import 'name': …", or [`FILE_TOO_LARGE`] when a size limit refused the file.
+fn read_error(verb: &str, name: &str, e: gridcraft_xlsx::IoError) -> EngineError {
+    match e {
+        gridcraft_xlsx::IoError::TooLarge(_) => EngineError::Other(FILE_TOO_LARGE.into()),
+        e => EngineError::Other(format!("We can't {verb} '{name}': {e}")),
     }
 }
 

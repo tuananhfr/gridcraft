@@ -343,6 +343,9 @@ pub fn read_xlsx(bytes: &[u8]) -> Result<(Workbook, ReadReport), IoError> {
     // Calls of LAMBDA names are spelled like the names (the parser upper-cases them).
     wb.apply_name_call_case();
     wb.styles = cx.styles;
+    if let Some(refused) = cx.pkg.refusal() {
+        return Err(refused);
+    }
     Ok((wb, cx.report))
 }
 

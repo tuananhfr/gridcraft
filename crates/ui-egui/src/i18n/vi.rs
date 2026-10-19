@@ -1248,6 +1248,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "You can have up to 10 documents open. Close one to open another." => {
             "Chỉ mở được tối đa 10 tài liệu. Hãy đóng bớt một tài liệu để mở tài liệu khác."
         }
+        "The file is too large or abnormally compressed, so it can't be opened." => "Tệp quá lớn hoặc bị nén bất thường nên không mở được.",
         _ => return None,
     })
 }

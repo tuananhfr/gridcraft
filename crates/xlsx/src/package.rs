@@ -7,18 +7,27 @@ use std::io::{Cursor, Read, Write};
 use crate::IoError;
 use crate::xml::{self, El};
 
-/// Largest decompressed part accepted.
-pub const MAX_PART: u64 = 512 * 1024 * 1024;
-/// Largest total decompressed size read from one package.
-pub const MAX_TOTAL: u64 = 1024 * 1024 * 1024;
+use crate::limits::LIMITS;
+pub use crate::limits::Limits;
+
 /// Most entries accepted in the zip directory.
-pub const MAX_ENTRIES: usize = 200_000;
+pub const MAX_ENTRIES: usize = LIMITS.entries;
+
+/// Inflation is read in steps this large, so every limit is checked on what actually came out
+/// rather than on the sizes the zip headers declare.
+const CHUNK: usize = 64 * 1024;
+/// Most capacity reserved up front from a declared size, which a hostile file can inflate.
+const MAX_PREALLOC: u64 = 16 * 1024 * 1024;
 
 pub struct Package<'a> {
     zip: zip::ZipArchive<Cursor<&'a [u8]>>,
     /// Lower-case normalized part name → zip index.
     names: HashMap<String, usize>,
     total: u64,
+    limits: Limits,
+    /// Why the package was refused. Sticky: callers that skip an unreadable optional part must
+    /// not turn a bomb into a partly opened workbook.
+    refused: Option<String>,
 }
 
 /// A relationship.
@@ -39,9 +48,13 @@ pub fn normalize(name: &str) -> String {
 
 impl<'a> Package<'a> {
     pub fn open(bytes: &'a [u8]) -> Result<Package<'a>, IoError> {
+        Package::open_with(bytes, LIMITS)
+    }
+
+    pub fn open_with(bytes: &'a [u8], limits: Limits) -> Result<Package<'a>, IoError> {
         let zip = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|e| IoError::Zip(e.to_string()))?;
-        if zip.len() > MAX_ENTRIES {
-            return Err(IoError::TooLarge(format!("{} zip entries", zip.len())));
+        if zip.len() > limits.entries {
+            return Err(IoError::TooLarge(format!("{} zip entries, more than {}", zip.len(), limits.entries)));
         }
         let mut names = HashMap::new();
         for i in 0..zip.len() {
@@ -49,40 +62,100 @@ impl<'a> Package<'a> {
                 names.entry(normalize(n)).or_insert(i);
             }
         }
-        Ok(Package { zip, names, total: 0 })
+        Ok(Package { zip, names, total: 0, limits, refused: None })
     }
 
     pub fn has(&self, part: &str) -> bool {
         self.names.contains_key(&normalize(part))
     }
 
+    /// Why the package was refused, once a part broke a package limit; readers return it even
+    /// when the part that broke it was optional.
+    pub fn refusal(&self) -> Option<IoError> {
+        self.refused.clone().map(IoError::TooLarge)
+    }
+
+    fn refuse(&mut self, reason: String) -> IoError {
+        IoError::TooLarge(self.refused.get_or_insert(reason).clone())
+    }
+
     /// Reads a part's bytes; `Ok(None)` when it doesn't exist.
     pub fn read(&mut self, part: &str) -> Result<Option<Vec<u8>>, IoError> {
-        self.read_limited(part, MAX_PART)
+        self.read_limited(part, self.limits.entry)
     }
 
     /// Reads a small metadata part without allowing it to expand to the general part limit.
+    /// Going over `maximum` is the caller's to handle; going over a package limit refuses the
+    /// whole package (see [`Package::refusal`]).
     pub fn read_limited(&mut self, part: &str, maximum: u64) -> Result<Option<Vec<u8>>, IoError> {
-        let maximum = maximum.min(MAX_PART);
+        if let Some(e) = self.refusal() {
+            return Err(e);
+        }
+        let limits = self.limits;
+        let maximum = maximum.min(limits.entry);
         let Some(&idx) = self.names.get(&normalize(part)) else {
             return Ok(None);
         };
         let mut f = self.zip.by_index(idx).map_err(|e| IoError::Zip(format!("{part}: {e}")))?;
-        if f.size() > maximum {
-            return Err(IoError::TooLarge(format!("{part} expands to {} bytes", f.size())));
-        }
-        let remaining = MAX_TOTAL.saturating_sub(self.total);
+        let declared = f.size();
+        // The zip crate reads at most this much of the archive for the entry, so it is a true
+        // bound on the input even when the header lies about the output.
+        let compressed = f.compressed_size().max(1);
+        let ratio_exceeded = |inflated: u64| inflated > limits.ratio_floor && inflated > compressed.saturating_mul(limits.ratio);
+        let remaining = limits.total.saturating_sub(self.total);
         let limit = maximum.min(remaining);
-        let mut out = Vec::with_capacity(f.size().min(16 * 1024 * 1024) as usize);
-        (&mut f).take(limit + 1).read_to_end(&mut out).map_err(|e| IoError::Zip(format!("{part}: {e}")))?;
-        if out.len() as u64 > limit {
-            return Err(IoError::TooLarge(if remaining < maximum {
-                "package expands to more than 1 GB".into()
+        let refusal = |inflated: u64| -> Option<String> {
+            if ratio_exceeded(inflated) {
+                Some(format!("{part} is compressed more than {}:1", limits.ratio))
+            } else if inflated > remaining && remaining < maximum {
+                Some(format!("the package expands to more than {} bytes", limits.total))
+            } else if inflated > limits.entry {
+                Some(format!("{part} expands to more than {} bytes", limits.entry))
             } else {
-                format!("{part} expands to more than {maximum} bytes")
-            }));
+                None
+            }
+        };
+        // Past a package limit by the header alone, refuse too: a skipped required part would be
+        // reported as a corrupt workbook rather than a too large one. Nothing is inflated.
+        if declared > limit {
+            drop(f);
+            let what = format!("{part} declares {declared} bytes");
+            return Err(if declared > remaining {
+                self.refuse(format!("{what}, more than the package may expand to ({} bytes)", limits.total))
+            } else if declared > limits.entry {
+                self.refuse(format!("{what}, more than {} bytes", limits.entry))
+            } else {
+                IoError::TooLarge(format!("{what}, more than {maximum}"))
+            });
         }
-        self.total += out.len() as u64;
+        let mut out: Vec<u8> = Vec::new();
+        let mut chunk = vec![0u8; CHUNK];
+        let stop = loop {
+            let n = match f.read(&mut chunk) {
+                Ok(0) => break None,
+                Ok(n) => n,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => break Some(Stop::Fail(IoError::Zip(format!("{part}: {e}")))),
+            };
+            let inflated = (out.len() as u64).saturating_add(n as u64);
+            if inflated > limit || ratio_exceeded(inflated) {
+                break Some(match refusal(inflated) {
+                    Some(reason) => Stop::Refuse(reason),
+                    None => Stop::Fail(IoError::TooLarge(format!("{part} expands to more than {maximum} bytes"))),
+                });
+            }
+            if reserve(&mut out, n, declared, limit).is_err() {
+                break Some(Stop::Refuse(format!("not enough memory to read {part}")));
+            }
+            out.extend_from_slice(chunk.get(..n).unwrap_or_default());
+        };
+        drop(f);
+        match stop {
+            None => {}
+            Some(Stop::Refuse(reason)) => return Err(self.refuse(reason)),
+            Some(Stop::Fail(e)) => return Err(e),
+        }
+        self.total = self.total.saturating_add(out.len() as u64);
         Ok(Some(out))
     }
 
@@ -118,6 +191,27 @@ impl<'a> Package<'a> {
             })
             .collect())
     }
+}
+
+/// Why reading a part stopped early.
+enum Stop {
+    /// A package limit: the whole package is refused.
+    Refuse(String),
+    /// This part only.
+    Fail(IoError),
+}
+
+/// Makes room for `n` more bytes. Capacity doubles but never past `limit` (where the read stops
+/// anyway), and an allocation failure is an error rather than an abort of the whole tab.
+fn reserve(out: &mut Vec<u8>, n: usize, declared: u64, limit: u64) -> Result<(), std::collections::TryReserveError> {
+    let needed = out.len().saturating_add(n);
+    if needed <= out.capacity() {
+        return Ok(());
+    }
+    let first = usize::try_from(declared.min(MAX_PREALLOC)).unwrap_or(usize::MAX);
+    let limit = usize::try_from(limit).unwrap_or(usize::MAX);
+    let target = out.capacity().saturating_mul(2).max(first).min(limit).max(needed);
+    out.try_reserve_exact(target.saturating_sub(out.len()))
 }
 
 fn prefix(part: &str, e: IoError) -> IoError {

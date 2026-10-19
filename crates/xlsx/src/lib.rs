@@ -6,8 +6,9 @@
 //!
 //! Reading is lenient: unsupported or broken optional parts are skipped and reported in
 //! [`ReadReport::warnings`]; only a missing/invalid package or workbook part is an error. Hostile
-//! input is bounded: decompressed parts are capped at 512 MB (1 GB per package), cells outside
-//! Excel's grid are dropped and XML nesting is limited.
+//! input is bounded: decompression is capped per part, per package and by compression ratio
+//! (smaller in the web build, see [`limits`]), cells outside Excel's grid are dropped and XML
+//! nesting is limited.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
@@ -20,6 +21,7 @@ mod csv;
 mod drawing;
 mod feature_bags;
 mod fmla;
+pub mod limits;
 mod ods;
 mod package;
 mod passthrough;

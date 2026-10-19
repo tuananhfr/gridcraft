@@ -9,6 +9,7 @@ mod ink_roundtrip;
 mod literal_category_roundtrip;
 mod malformed;
 mod ods_tests;
+mod package_limits;
 mod passthrough_tests;
 mod pivot_tests;
 mod richdata_tests;

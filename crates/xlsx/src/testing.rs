@@ -35,6 +35,18 @@ pub fn encrypt_workbook_standard(package: &[u8], password: &str) -> Vec<u8> {
     compound_file(&[("EncryptionInfo", &info), ("EncryptedPackage", &encrypted)])
 }
 
+/// A deflated zip package of `parts`, for hostile-package tests in the crates above, which don't
+/// depend on `zip` themselves.
+pub fn zip_package(parts: &[(&str, &[u8])]) -> Vec<u8> {
+    use std::io::Write;
+    let mut z = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for (name, data) in parts {
+        z.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+        z.write_all(data).unwrap();
+    }
+    z.finish().unwrap().into_inner()
+}
+
 /// A version 3 compound file (512-byte sectors) holding `streams` under the root, laid out as
 /// Excel lays it out: streams under 4096 bytes in the mini stream, larger ones in regular
 /// sectors. Up to 109 FAT sectors (about 7 MB of streams).

@@ -298,7 +298,10 @@ fn xlsb_declared_counts_and_decoded_text_are_bounded() {
     count_mismatch.extend(record(160, &[]));
     assert!(read_xlsb(&package(&book(false), &worksheet(&[], &[]), &count_mismatch, ROOT, RELS, TYPES)).is_err());
     let mut data = row(0);
-    let text = wide(&"x".repeat(32767));
+    // Varied letters: a run of one letter would compress past the package's ratio limit and be
+    // refused before the decoded-text bound this checks.
+    let letters: String = (0..32767u32).map(|i| char::from(b'a' + (i.wrapping_mul(2_654_435_761) >> 27) as u8 % 26)).collect();
+    let text = wide(&letters);
     for col in 0..2050 {
         data.extend(cell(6, col, &text));
     }
