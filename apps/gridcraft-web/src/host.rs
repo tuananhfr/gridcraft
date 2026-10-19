@@ -13,17 +13,13 @@
 //! Only the parent window on the page's own origin is heard or answered. In host mode the page
 //! starts with an empty workbook instead of a sample, and the parent guards leaving the page.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::rc::Rc;
 
-use gridcraft_ui_egui::{DeliveryReport, Inbox, Services, SheetApp};
+use gridcraft_ui_egui::{Delivery, DeliveryReport, Inbox, Services, SheetApp};
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
-
-/// Saving one of these hands the whole workbook to the parent, which stores it: the workbook
-/// counts as saved under that name, as it would after Save on the desktop.
-const WORKBOOK_EXTS: &[&str] = &["xlsx"];
 
 /// The longest user name taken from `?author=`.
 const MAX_AUTHOR_CHARS: usize = 200;
@@ -33,8 +29,6 @@ pub struct Bridge {
     window: web_sys::Window,
     parent: web_sys::Window,
     origin: String,
-    /// Names of the files handed to the parent since the last frame.
-    saved: Rc<RefCell<Vec<String>>>,
     /// The unsaved-changes state last reported to the parent.
     reported: Rc<Cell<Option<bool>>>,
 }
@@ -48,7 +42,7 @@ impl Bridge {
             return None;
         }
         let origin = window.location().origin().ok()?;
-        Some(Self { window, parent, origin, saved: Rc::default(), reported: Rc::default() })
+        Some(Self { window, parent, origin, reported: Rc::default() })
     }
 
     /// Send saved and exported files to the parent instead of downloading them, and hear files
@@ -56,10 +50,13 @@ impl Bridge {
     pub fn connect(&self, services: &mut Services, inbox: Inbox, ctx: egui::Context) {
         self.listen(inbox, ctx);
         let bridge = self.clone();
-        // The report is dropped unanswered: `sync` marks a workbook saved once the parent has it.
-        services.download = Some(Box::new(move |name: &str, bytes: &[u8], _report: DeliveryReport| {
-            if let Err(e) = bridge.post_save(name, bytes) {
+        // The parent stores the file and reports its own failures, so handing it over is delivery:
+        // the app then marks the workbook that was written saved as of the bytes written.
+        services.download = Some(Box::new(move |name: &str, bytes: &[u8], report: DeliveryReport| match bridge.post_save(name, bytes) {
+            Ok(()) => report.settle(Delivery::Delivered),
+            Err(e) => {
                 log::error!("couldn't hand {name} to the page: {e}");
+                report.settle(Delivery::Failed(e));
             }
         }));
     }
@@ -80,18 +77,8 @@ impl Bridge {
         self.send(&[("type", "gridcraft:failed".into()), ("error", error.into())]);
     }
 
-    /// After each frame: a workbook handed to the parent this frame counts as saved under the
-    /// name it was saved as, and the parent hears when unsaved changes appear or go away.
+    /// After each frame: the parent hears when unsaved changes appear or go away.
     pub fn sync(&self, app: &mut SheetApp) {
-        let saved = std::mem::take(&mut *self.saved.borrow_mut());
-        if let Some(name) = saved.iter().rev().find(|name| is_workbook(name))
-            && let Some(doc) = app.session.active_mut()
-        {
-            doc.saved = doc.wb.clone();
-            if doc.path.is_none() {
-                doc.title = name.clone();
-            }
-        }
         let dirty = app.session.documents().iter().any(|d| d.is_dirty());
         if self.reported.get() != Some(dirty) && self.send(&[("type", "gridcraft:dirty".into()), ("dirty", dirty.into())]) {
             self.reported.set(Some(dirty));
@@ -106,7 +93,6 @@ impl Bridge {
         self.parent
             .post_message_with_transfer(&message, &self.origin, &js_sys::Array::of1(&buffer))
             .map_err(|e| e.as_string().unwrap_or_else(|| format!("{e:?}")))?;
-        self.saved.borrow_mut().push(name);
         Ok(())
     }
 
@@ -136,10 +122,6 @@ impl Bridge {
     fn send(&self, fields: &[(&str, JsValue)]) -> bool {
         message(fields).is_some_and(|m| self.parent.post_message(&m, &self.origin).is_ok())
     }
-}
-
-fn is_workbook(name: &str) -> bool {
-    name.rsplit_once('.').is_some_and(|(_, ext)| WORKBOOK_EXTS.iter().any(|e| ext.eq_ignore_ascii_case(e)))
 }
 
 fn message(fields: &[(&str, JsValue)]) -> Option<js_sys::Object> {
