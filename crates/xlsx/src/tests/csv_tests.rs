@@ -134,7 +134,7 @@ fn writing() {
 fn tabs_are_quoted_even_with_comma_or_semicolon_delimiters() {
     let mut sheet = Sheet::new("S");
     sheet.set_value(CellRef::new(0, 0), Value::text("'\tx"));
-    for delimiter in [b',', b';', b'\t'] {
+    for &delimiter in b",;\t" {
         let bytes = write_csv(&sheet, delimiter, |_| "'\tx".into()).unwrap();
         assert_eq!(bytes, b"\"'\tx\"\r\n");
         let back = read_csv(&bytes, &CsvOptions { delimiter: 0, ..Default::default() }).unwrap();

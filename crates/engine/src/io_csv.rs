@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn csv_keeps_imported_delimiters_with_safe_text_and_bom() {
-        for delimiter in [b',', b';', b'\t'] {
+        for &delimiter in b",;\t" {
             let mut wb = Workbook::new();
             wb.csv_delimiter = Some(delimiter);
             let sh = wb.sheet_mut(0).unwrap();
