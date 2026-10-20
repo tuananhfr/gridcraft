@@ -82,8 +82,15 @@ pub fn is_secret_param(key: &str) -> bool {
 /// reaches the journal dialog, `engine.journal` or a recorded script (saved in the workbook).
 /// Replaying such an entry runs the command without that param.
 pub fn journal_params(params: &Json) -> Json {
+    journal_entry_params("", params)
+}
+
+/// [`journal_params`] for command `id`. `file.open` is also kept without the file it carries as
+/// `base64`: the journal lives as long as the session, and each opened file would stay in it.
+pub fn journal_entry_params(id: &str, params: &Json) -> Json {
+    let kept = |k: &str| !is_secret_param(k) && !(id == "file.open" && k == "base64");
     match params {
-        Json::Object(o) => Json::Object(o.iter().filter(|(k, _)| !is_secret_param(k)).map(|(k, v)| (k.clone(), v.clone())).collect()),
+        Json::Object(o) => Json::Object(o.iter().filter(|(k, _)| kept(k)).map(|(k, v)| (k.clone(), v.clone())).collect()),
         other => other.clone(),
     }
 }

@@ -1222,8 +1222,12 @@ impl SheetApp {
     /// Opens a file read asynchronously; `true` when it is now the active workbook (a
     /// password-protected one asks for its password first).
     fn open_arrived(&mut self, name: &str, bytes: &[u8]) -> bool {
-        let b64 = gridcraft_engine::io::base64_encode(bytes);
-        let opened = match self.run("file.open", json!({"name": name, "base64": &b64})) {
+        // Moved into the params: `json!` would copy a large file's base64, tens of megabytes.
+        let params = Json::Object(serde_json::Map::from_iter([
+            ("name".to_string(), Json::String(name.to_string())),
+            ("base64".to_string(), Json::String(gridcraft_engine::io::base64_encode(bytes))),
+        ]));
+        let opened = match self.run("file.open", params) {
             // A file picked from File › Open (web) arrives here: show it, not the Backstage.
             Ok(r) => {
                 self.backstage = None;
@@ -1232,7 +1236,7 @@ impl SheetApp {
             }
             Err(e) if e.contains(gridcraft_engine::io::PASSWORD_REQUIRED) => {
                 self.backstage = None;
-                self.open_dialog("openPassword", json!({"name": name, "base64": b64}));
+                self.open_dialog("openPassword", json!({"name": name, "base64": gridcraft_engine::io::base64_encode(bytes)}));
                 false
             }
             Err(e) => {

@@ -49,6 +49,7 @@ use gridcraft_model::Workbook;
 pub use crypto::{DecryptError, check_encryption, decrypt};
 pub use csv::{MAX_CSV_BYTES, read_csv, write_csv, write_csv_limited};
 pub use ods::read_ods;
+pub use package::Packing;
 pub use passthrough::rebase_links;
 pub use xls::read_xls;
 pub use xlsb::read_xlsb;
@@ -132,12 +133,17 @@ impl XlsxKind {
 
 /// Writes a workbook as an `.xlsx` package, or as an `.xlsm` one when it holds a VBA project.
 pub fn write_xlsx(wb: &Workbook) -> Result<Vec<u8>, IoError> {
-    write::write_xlsx(wb, if wb.vba_project.is_some() { XlsxKind::MacroWorkbook } else { XlsxKind::Workbook })
+    write::write_xlsx(wb, if wb.vba_project.is_some() { XlsxKind::MacroWorkbook } else { XlsxKind::Workbook }, Packing::Normal)
 }
 
 /// Writes a workbook as the given member of the `.xlsx` family.
 pub fn write_xlsx_as(wb: &Workbook, kind: XlsxKind) -> Result<Vec<u8>, IoError> {
-    write::write_xlsx(wb, kind)
+    write::write_xlsx(wb, kind, Packing::Normal)
+}
+
+/// [`write_xlsx_as`] with the parts deflated as `packing` says; the parts themselves are the same.
+pub fn write_xlsx_packed(wb: &Workbook, kind: XlsxKind, packing: Packing) -> Result<Vec<u8>, IoError> {
+    write::write_xlsx(wb, kind, packing)
 }
 
 /// CSV import options.

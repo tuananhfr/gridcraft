@@ -249,18 +249,38 @@ pub fn resolve(dir: &str, target: &str) -> String {
 
 // ---------------------------------------------------------------- writing
 
+/// How hard a package's parts are deflated.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Packing {
+    /// What saved files use.
+    Normal,
+    /// The fastest deflate level: on a large workbook about five times faster to zip and two
+    /// thirds larger, for copies that are only ever read back by GridCraft.
+    Fast,
+}
+
+impl Packing {
+    fn level(self) -> i64 {
+        match self {
+            Packing::Normal => 6,
+            Packing::Fast => 1,
+        }
+    }
+}
+
 pub struct ZipOut {
     zip: zip::ZipWriter<Cursor<Vec<u8>>>,
+    packing: Packing,
 }
 
 impl ZipOut {
-    pub fn new() -> ZipOut {
-        ZipOut { zip: zip::ZipWriter::new(Cursor::new(Vec::new())) }
+    pub fn new(packing: Packing) -> ZipOut {
+        ZipOut { zip: zip::ZipWriter::new(Cursor::new(Vec::new())), packing }
     }
     pub fn add(&mut self, name: &str, data: &[u8]) -> Result<(), IoError> {
         let opts = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated)
-            .compression_level(Some(6))
+            .compression_level(Some(self.packing.level()))
             .last_modified_time(zip::DateTime::default())
             .large_file(data.len() as u64 >= u32::MAX as u64);
         self.zip.start_file(name, opts).map_err(|e| IoError::Zip(e.to_string()))?;

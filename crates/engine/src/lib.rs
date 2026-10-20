@@ -239,7 +239,7 @@ pub struct Session {
     pub clipboard: Option<Clipboard>,
     pub prefs: Prefs,
     pub mode: Mode,
-    /// Commands run so far, without their passwords ([`cmd::journal_params`]).
+    /// Commands run so far, without their passwords or opened files ([`cmd::journal_entry_params`]).
     pub journal: Vec<(String, Json)>,
     /// What `edit.repeat` (F4) runs: the last repeatable command, with params that work on the
     /// selection. Any other edit of the workbook clears it, as typing does in Excel.
@@ -384,7 +384,7 @@ impl Session {
             }
         };
         if spec.journal && result.is_ok() {
-            self.journal.push((id.to_string(), cmd::journal_params(&params)));
+            self.journal.push((id.to_string(), cmd::journal_entry_params(id, &params)));
             if self.journal.len() > 10_000 {
                 self.journal.drain(..5_000);
             }

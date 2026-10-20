@@ -924,6 +924,21 @@ fn protection_passwords_stay_out_of_the_journal_and_recorded_scripts() {
     s.execute("automate.runScript", json!({"name": "Lock"})).unwrap();
 }
 
+#[test]
+fn an_opened_file_is_journaled_by_name_without_its_bytes() {
+    let mut book = s();
+    book.execute("cell.set", json!({"cell": "A1", "input": "42"})).unwrap();
+    let b64 = crate::io::base64_encode(&crate::io::save_bytes(&book.doc().unwrap().wb, "book.xlsx").unwrap());
+    let mut s = s();
+    s.execute("file.open", json!({"name": "Data.xlsx", "base64": b64})).unwrap();
+    assert_eq!(s.doc().unwrap().wb.active().unwrap().value(CellRef::new(0, 0)), Value::Number(42.0));
+    assert_eq!(s.journal.last(), Some(&("file.open".to_string(), json!({"name": "Data.xlsx"}))));
+    // Other commands keep their base64: a picture is part of the edit.
+    let png = crate::io::base64_encode(&tiny_png());
+    s.execute("insert.picture", json!({"base64": png, "at": "B2"})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["base64"], json!(png));
+}
+
 /// A sheet with locked data in A1:B3, unlocked cells in D1:D3 and row 10, then protected.
 fn protected(extra: serde_json::Value) -> Session {
     let mut s = s();

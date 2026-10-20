@@ -225,6 +225,13 @@ pub fn save_bytes_as(wb: &Workbook, path: &str, kind: FileKind) -> Result<Vec<u8
     }
 }
 
+/// The `.xlsx` [`save_bytes`] writes, deflated fast: for a temporary copy only GridCraft reads
+/// back (a web draft), never a file the user saves. The package's parts are the same.
+pub fn save_xlsx_fast(wb: &Workbook) -> Result<Vec<u8>> {
+    gridcraft_xlsx::write_xlsx_packed(wb, gridcraft_xlsx::XlsxKind::Workbook, gridcraft_xlsx::Packing::Fast)
+        .map_err(|e| EngineError::Other(e.to_string()))
+}
+
 /// [`save_bytes`] for the file at `path`: relative paths to linked workbooks are rewritten for
 /// its folder, so they still name the same files.
 pub fn save_file_bytes(wb: &Workbook, path: &str) -> Result<Vec<u8>> {
@@ -442,6 +449,18 @@ pub fn write_file(path: &str, _bytes: &[u8]) -> Result<()> {
 }
 
 const B64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const INVALID: u8 = u8::MAX;
+/// Each byte's value in [`B64`]: a scan of `B64` per character made decoding a large dropped
+/// file take most of a second.
+const B64_VALUES: [u8; 256] = {
+    let mut t = [INVALID; 256];
+    let mut i = 0;
+    while i < B64.len() {
+        t[B64[i] as usize] = i as u8;
+        i += 1;
+    }
+    t
+};
 
 pub fn base64_encode(data: &[u8]) -> String {
     let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
@@ -468,7 +487,11 @@ pub fn base64_decode(s: &str) -> Option<Vec<u8>> {
         if c == b'=' || c.is_ascii_whitespace() {
             continue;
         }
-        let v = B64.iter().position(|&x| x == c)? as u32;
+        let v = B64_VALUES[c as usize];
+        if v == INVALID {
+            return None;
+        }
+        let v = v as u32;
         buf = (buf << 6) | v;
         bits += 6;
         if bits >= 8 {
@@ -748,6 +771,50 @@ mod tests {
         for name in ["data.xlsx", "data.csv"] {
             let (opened, _) = open_bytes(name, b"a,b\n1,2\n").unwrap_or_else(|e| panic!("{name}: {e}"));
             assert_eq!(opened.sheet(0).unwrap().value(CellRef::new(0, 1)), gridcraft_core::Value::text("b"), "{name}");
+        }
+    }
+
+    /// Every part of an `.xlsx` package, by name, inflated.
+    fn parts(package: &[u8]) -> Vec<(String, Vec<u8>)> {
+        use std::io::Read as _;
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(package)).unwrap();
+        (0..zip.len())
+            .map(|i| {
+                let mut f = zip.by_index(i).unwrap();
+                let mut data = Vec::new();
+                f.read_to_end(&mut data).unwrap();
+                (f.name().to_string(), data)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_fast_xlsx_holds_the_parts_of_the_saved_one() {
+        let mut wb = Workbook::new();
+        let sh = wb.sheet_mut(0).unwrap();
+        for r in 0..2_000 {
+            sh.set_value(CellRef::new(r, 0), gridcraft_core::Value::text(format!("row {r}")));
+            sh.set_value(CellRef::new(r, 1), gridcraft_core::Value::Number(f64::from(r) * 1.5));
+        }
+        let saved = save_bytes(&wb, "book.xlsx").unwrap();
+        let fast = save_xlsx_fast(&wb).unwrap();
+        assert_ne!(saved, fast, "deflated differently");
+        assert_eq!(parts(&fast), parts(&saved));
+        assert_eq!(open_bytes("book.xlsx", &fast).unwrap().0, open_bytes("book.xlsx", &saved).unwrap().0);
+    }
+
+    #[test]
+    fn base64_round_trips_and_refuses_foreign_characters() {
+        let data: Vec<u8> = (0..=255u8).chain((0..=255u8).rev()).collect();
+        for n in 0..data.len() {
+            let bytes = &data[..n];
+            assert_eq!(base64_decode(&base64_encode(bytes)).as_deref(), Some(bytes), "{n} bytes");
+        }
+        assert_eq!(base64_decode("data:application/octet-stream;base64,aGk=").as_deref(), Some(&b"hi"[..]));
+        assert_eq!(base64_decode("aG\r\nk=").as_deref(), Some(&b"hi"[..]));
+        assert_eq!(base64_decode(" aG k= ").as_deref(), Some(&b"hi"[..]));
+        for bad in ["aG!k", "aGé=", "aG-k", "aG_k", "aG\0k"] {
+            assert_eq!(base64_decode(bad), None, "{bad:?}");
         }
     }
 }

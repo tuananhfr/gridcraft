@@ -161,9 +161,10 @@ pub fn draft_name(title: &str) -> String {
     format!("{stem}.{FORMAT}")
 }
 
-/// The draft bytes: the XLSX web Save writes. The JSON format would drop preserved parts.
+/// The draft bytes: the XLSX web Save writes, deflated fast. The JSON format would drop
+/// preserved parts; the usual deflate was half the encoding time of a large workbook.
 pub fn draft_bytes(wb: &Workbook) -> Result<Vec<u8>, String> {
-    gridcraft_engine::io::save_bytes(wb, "draft.xlsx").map_err(|e| e.to_string())
+    gridcraft_engine::io::save_xlsx_fast(wb).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -236,6 +237,40 @@ mod tests {
         let plan = p.plan(&[doc(1, &b, &saved)], 6_000.0, false);
         assert!(plan.put.is_empty() && plan.waiting, "idle, but only 3.5 s since a put that took 1 s to encode");
         assert_eq!(p.plan(&[doc(1, &b, &saved)], 12_500.0, false).put, vec![1]);
+    }
+
+    #[test]
+    fn a_five_second_encoding_is_put_at_most_every_fifty_seconds_of_typing() {
+        let mut p = Planner::default();
+        let saved = book();
+        p.plan(&[doc(1, &saved, &saved)], 0.0, false);
+        let mut puts = Vec::new();
+        // An edit every 500 ms for four minutes, each draft taking 5 s to encode.
+        let mut now = 0.0;
+        while now < 240_000.0 {
+            now += 500.0;
+            let wb = book();
+            if p.plan(&[doc(1, &wb, &saved)], now, false).put == vec![1] {
+                p.record_put(1, &wb, now, 5_000.0);
+                puts.push(now);
+            }
+        }
+        assert_eq!(puts.first(), Some(&30_500.0), "the first draft waits for the checkpoint");
+        assert!(puts.windows(2).all(|w| w[1] - w[0] >= 50_000.0), "{puts:?}");
+        assert!(puts.len() >= 4, "still drafted while typing: {puts:?}");
+        // Typing stops: the last edit is drafted once the spacing allows, then nothing more.
+        let last = *puts.last().unwrap();
+        let wb = book();
+        p.plan(&[doc(1, &wb, &saved)], now, false);
+        let mut after = Vec::new();
+        while now < 400_000.0 {
+            now += 500.0;
+            if p.plan(&[doc(1, &wb, &saved)], now, false).put == vec![1] {
+                p.record_put(1, &wb, now, 5_000.0);
+                after.push(now);
+            }
+        }
+        assert_eq!(after, vec![(last + 50_000.0).max(240_000.0 + IDLE_MS)]);
     }
 
     #[test]
@@ -351,5 +386,18 @@ mod tests {
         let bytes = draft_bytes(&wb).unwrap();
         let (back, _) = gridcraft_engine::io::open_bytes("Book1.xlsx", &bytes).unwrap();
         assert_eq!(back.sheets[0].name, "Data");
+    }
+
+    #[test]
+    fn a_draft_reopens_as_the_saved_file_does() {
+        let mut s = gridcraft_engine::Session::new();
+        s.run("file.new", serde_json::json!({"sample": "sales"})).unwrap();
+        s.run("cell.set", serde_json::json!({"cell": "H2", "input": "=SUM(B2:B9)"})).unwrap();
+        s.run("home.bold", serde_json::json!({"range": "A1:H1"})).unwrap();
+        let wb = &s.active().unwrap().wb;
+        let saved = gridcraft_engine::io::save_bytes(wb, "Sales.xlsx").unwrap();
+        let draft = draft_bytes(wb).unwrap();
+        let open = |bytes: &[u8]| gridcraft_engine::io::open_bytes("Sales.xlsx", bytes).unwrap().0;
+        assert_eq!(open(&draft), open(&saved));
     }
 }

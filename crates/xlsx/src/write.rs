@@ -7,7 +7,7 @@ use gridcraft_core::RangeRef;
 use gridcraft_formula::quote_sheet;
 use gridcraft_model::{CalcMode, CalcSettings, Style, Visibility, Workbook};
 
-use crate::package::ZipOut;
+use crate::package::{Packing, ZipOut};
 use crate::xml::{esc, esc_attr};
 use crate::{IoError, XlsxKind};
 
@@ -185,7 +185,7 @@ fn check_sheet_names(wb: &Workbook) -> Result<(), IoError> {
     Ok(())
 }
 
-pub fn write_xlsx(wb: &Workbook, kind: XlsxKind) -> Result<Vec<u8>, IoError> {
+pub fn write_xlsx(wb: &Workbook, kind: XlsxKind, packing: Packing) -> Result<Vec<u8>, IoError> {
     if wb.sheets.is_empty() {
         return Err(IoError::Format("a workbook needs at least one sheet".into()));
     }
@@ -450,7 +450,7 @@ pub fn write_xlsx(wb: &Workbook, kind: XlsxKind) -> Result<Vec<u8>, IoError> {
         let _ = write!(ct, "<Override PartName=\"{}\" ContentType=\"{}\"/>", esc_attr(part), esc_attr(t));
     }
     ct.push_str("</Types>");
-    let mut zip = ZipOut::new();
+    let mut zip = ZipOut::new(packing);
     zip.add("[Content_Types].xml", ct.as_bytes())?;
     // Conventional order: rels, docProps, workbook, the rest.
     let rank = |n: &str| match n {
