@@ -1,5 +1,5 @@
-//! Documents closed in this session, kept so File ▸ Open ▸ Reopen Closed Document (Ctrl+Shift+T)
-//! can bring the most recent one back as it was, unsaved changes included.
+//! Documents closed in this session, kept so File ▸ Open ▸ Reopen Closed Document (or the tab
+//! strip's menu) can bring the most recent one back as it was, unsaved changes included.
 
 use std::collections::VecDeque;
 

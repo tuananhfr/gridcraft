@@ -151,7 +151,7 @@ fn tab_button(ui: &mut Ui, t: &Tokens, tab: &DocTab, width: f32, reveal: bool, c
             }
         }
         ui.separator();
-        if ui.add_enabled(can_reopen, egui::Button::new(tr(ui, "Reopen Closed Document")).shortcut_text("Ctrl+Shift+T")).clicked() {
+        if ui.add_enabled(can_reopen, egui::Button::new(tr(ui, "Reopen Closed Document"))).clicked() {
             menu = Some(Click::Reopen);
         }
     });

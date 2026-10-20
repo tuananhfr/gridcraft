@@ -538,7 +538,7 @@ fn reopen_row(app: &SheetApp, ui: &mut Ui) -> bool {
         p.rect_filled(rect, 4.0, t.hover);
     }
     icons::paint(p, Rect::from_center_size(pos2(rect.left() + 24.0, rect.center().y), vec2(24.0, 24.0)), Icon::OpenFolder, fg);
-    p.text(pos2(rect.left() + 52.0, rect.center().y - 9.0), Align2::LEFT_CENTER, format!("{title}  (Ctrl+Shift+T)"), theme::ui_bold(13.5), fg);
+    p.text(pos2(rect.left() + 52.0, rect.center().y - 9.0), Align2::LEFT_CENTER, title, theme::ui_bold(13.5), fg);
     let galley = p.layout_no_wrap(detail, theme::ui_font(12.0), dim);
     let clip = Rect::from_min_max(pos2(rect.left() + 52.0, rect.top()), rect.max);
     p.with_clip_rect(clip).galley(pos2(rect.left() + 52.0, rect.center().y + 10.0 - galley.size().y / 2.0), galley, dim);

@@ -1,4 +1,4 @@
-//! Reopen Closed Document (Ctrl+Shift+T, the tab strip's menu, File › Open) and closing several
+//! Reopen Closed Document (the tab strip's menu, File › Open) and closing several
 //! documents at once (Close All / Close Others, quitting) over the real app.
 
 use egui::{Event, Key, Modifiers, PointerButton};
@@ -70,6 +70,11 @@ fn press(h: &mut Harness, k: Key, m: Modifiers) {
     h.run_steps(3);
 }
 
+fn reopen(h: &mut Harness) {
+    h.state_mut().run_or_alert("file.reopenClosed", json!({}));
+    h.run_steps(3);
+}
+
 #[test]
 fn reopen_restores_content_name_and_unsaved_state() {
     let mut h = harness(&["Alpha.xlsx", "Beta.xlsx", "Gamma.xlsx"]);
@@ -83,13 +88,13 @@ fn reopen_restores_content_name_and_unsaved_state() {
     h.run_steps(3);
     assert_eq!(titles(&h), ["Gamma.xlsx"]);
 
-    press(&mut h, Key::T, CTRL_SHIFT);
+    reopen(&mut h);
     assert_eq!(titles(&h), ["Gamma.xlsx", "Beta.xlsx"], "the most recent first");
     let beta = h.state().session.doc().unwrap();
     assert_eq!(beta.display_title(), "Beta.xlsx");
     assert!(!beta.is_dirty(), "a saved document reopens saved");
 
-    press(&mut h, Key::T, CTRL_SHIFT);
+    reopen(&mut h);
     let alpha = h.state().session.doc().unwrap();
     assert_eq!(alpha.display_title(), "Alpha.xlsx");
     assert!(alpha.is_dirty(), "closed with Don't Save: its unsaved changes come back unsaved");
@@ -148,7 +153,7 @@ fn the_tab_menu_reopens_and_closes_others_or_all() {
     let mut h = harness(&["Alpha.xlsx", "Beta.xlsx", "Gamma.xlsx"]);
     h.get_by_label("Beta.xlsx").click_button(PointerButton::Secondary);
     h.run_steps(3);
-    assert!(h.get_by_label("Reopen Closed Document Ctrl+Shift+T").accesskit_node().is_disabled(), "nothing closed yet: disabled");
+    assert!(h.get_by_label("Reopen Closed Document").accesskit_node().is_disabled(), "nothing closed yet: disabled");
     h.get_by_label("Close Others").click();
     h.run_steps(3);
     assert_eq!(titles(&h), ["Beta.xlsx"], "all clean: closed without asking");
@@ -156,7 +161,7 @@ fn the_tab_menu_reopens_and_closes_others_or_all() {
     h.run_steps(3);
     h.get_by_label("Beta.xlsx").click_button(PointerButton::Secondary);
     h.run_steps(3);
-    h.get_by_label("Reopen Closed Document Ctrl+Shift+T").click();
+    h.get_by_label("Reopen Closed Document").click();
     h.run_steps(3);
     assert_eq!(titles(&h), ["Beta.xlsx", "Book1", "Gamma.xlsx"]);
     h.get_by_label("Book1").click_button(PointerButton::Secondary);
@@ -184,12 +189,17 @@ fn file_open_offers_reopen_and_returns_to_the_sheet() {
 }
 
 #[test]
-fn ctrl_shift_t_is_listed_in_keyboard_shortcuts() {
+fn ctrl_shift_t_stays_autosum_and_reopen_has_no_key() {
     let e = keymap::reference().iter().find(|e| e.keys() == "Ctrl+Shift+T").unwrap();
-    assert_eq!(e.label, "Reopen Closed Document");
-    assert_eq!(Language::Vi.tr(e.label), "Mở lại tài liệu vừa đóng");
-    let mac_cmd_shift = Modifiers { alt: false, ctrl: false, shift: true, mac_cmd: true, command: true };
-    assert_eq!(keymap::lookup(Key::T, Some(Key::T), mac_cmd_shift, true), None, "Excel for Mac's Cmd+Shift+T stays AutoSum");
+    assert_eq!(e.label, "AutoSum");
+    assert!(!keymap::reference().iter().any(|e| e.label == "Reopen Closed Document"));
+    assert_eq!(Language::Vi.tr("Reopen Closed Document"), "Mở lại tài liệu vừa đóng");
+    let mut h = harness(&["Alpha.xlsx", "Beta.xlsx"]);
+    h.state_mut().run("file.close", json!({"index": 0})).unwrap();
+    h.run_steps(3);
+    press(&mut h, Key::T, CTRL_SHIFT);
+    assert_eq!(titles(&h), ["Beta.xlsx"], "the key is Excel's AutoSum, not a browser tab's");
+    assert!(h.state().can_reopen_closed());
 }
 
 // ---------------------------------------------------------------- closing several at once
