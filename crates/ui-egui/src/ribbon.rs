@@ -141,7 +141,8 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
                 ui.add_space(8.0);
                 if narrow && app.session.active().is_some() {
                     let close = icon_button(ui, Icon::Close, t.text_dim, "Close document", vec2(26.0, ch));
-                    close.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr(ui, "Close document")));
+                    let close_label = tr(ui, "Close document").to_string();
+                    close.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &close_label));
                     if close.clicked() {
                         app.close_document_at(app.session.active_index());
                     }
