@@ -169,10 +169,12 @@ fn catalog_now() -> Option<&'static [Face]> {
 }
 
 /// Start cataloging the installed fonts on a background thread, so the first frame doesn't wait for
-/// it. A no-op on wasm and after the scan has started.
+/// it. The web initializes an empty catalog because browser system fonts cannot be read.
 pub fn start_scan() {
     static STARTED: OnceLock<()> = OnceLock::new();
     STARTED.get_or_init(|| {
+        #[cfg(target_arch = "wasm32")]
+        CATALOG.get_or_init(Vec::new);
         #[cfg(not(target_arch = "wasm32"))]
         if CATALOG.get().is_none() {
             // A failed spawn leaves the scan to the first blocking lookup.

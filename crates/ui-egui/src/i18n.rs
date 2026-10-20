@@ -186,6 +186,11 @@ pub fn set_current(ctx: &egui::Context, language: Language) {
 /// English label → Japanese. Keys are the exact interface strings (command ids, file names and
 /// document text are never translated); anything absent falls back to English.
 const JAPANESE: &[(&str, &str)] = &[
+    ("Could not open the legacy .xls format", "旧形式の .xls ファイルを開けません"),
+    ("This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again.", "この旧形式の Excel ファイル (.xls) を開けません。Excel または LibreOffice で開き、.xlsx として保存してから、もう一度開いてください。"),
+    ("The legacy .xls file has been opened. When saved, it will be saved as .xlsx.", "旧形式の .xls ファイルを開きました。保存時には .xlsx 形式で保存されます。"),
+    ("The fonts {fonts} are not available on this device and are displayed using similar fonts.", "このデバイスにはフォント {fonts} がないため、類似のフォントで表示しています。"),
+    ("and {count} more", "ほか {count} 個"),
     ("Close document", "ドキュメントを閉じる"),
     ("The browser could not save the file. Please try again.", "ブラウザーでファイルを保存できませんでした。もう一度お試しください。"),
     ("Paste", "貼り付け"),

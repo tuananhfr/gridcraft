@@ -5,6 +5,11 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Could not open the legacy .xls format" => "Không mở được định dạng .xls cũ",
+        "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "Không mở được tệp Excel cũ (.xls) này. Hãy mở nó bằng Excel hoặc LibreOffice, lưu thành .xlsx rồi mở lại.",
+        "The legacy .xls file has been opened. When saved, it will be saved as .xlsx." => "Tệp .xls cũ đã được mở. Khi lưu, tệp sẽ được lưu thành .xlsx",
+        "The fonts {fonts} are not available on this device and are displayed using similar fonts." => "Các phông {fonts} chưa có trên máy này nên được hiển thị bằng phông tương tự.",
+        "and {count} more" => "và {count} khác",
         "Close document" => "Đóng tài liệu",
         "The browser could not save the file. Please try again." => "Trình duyệt không thể lưu tệp. Vui lòng thử lại.",
         "CSV UTF-8 (with BOM) (*.csv)" => "CSV UTF-8 (có BOM) (*.csv)",

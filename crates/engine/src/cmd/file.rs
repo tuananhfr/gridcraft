@@ -61,7 +61,14 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
     // Refused before decoding, so a full session never asks for a password it can't use.
     s.ensure_room()?;
     let encrypted = gridcraft_xlsx::sniff(&bytes) == gridcraft_xlsx::Format::Encrypted;
-    let (mut wb, warnings) = crate::io::open_bytes_with_password(&name, &bytes, str_param(p, "password"))?;
+    let legacy = crate::legacy::is_legacy_workbook(&name, &bytes);
+    let (mut wb, warnings) = crate::io::open_bytes_with_password(&name, &bytes, str_param(p, "password")).map_err(|error| {
+        if legacy && error.to_string() != crate::io::FILE_TOO_LARGE {
+            EngineError::Other(crate::legacy::FAILED.into())
+        } else {
+            error
+        }
+    })?;
     wb.source_dir = str_param(p, "path").and_then(crate::io::source_dir);
     let imported =
         matches!(crate::io::FileKind::from_path(&name), Some(crate::io::FileKind::Ods | crate::io::FileKind::Xlsb | crate::io::FileKind::Xls))
@@ -88,7 +95,9 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
     let i = s.add_document(doc)?;
     // The decrypted-workbook notice is for the info bar, not a message box.
     let shown: Vec<&str> = warnings.iter().map(String::as_str).filter(|w| *w != crate::io::DECRYPTED_NOTICE).collect();
-    if !shown.is_empty() {
+    if legacy {
+        s.ui_requests.push(crate::UiRequest::Message(crate::legacy::OPENED.into()));
+    } else if !shown.is_empty() {
         let mut message = shown.iter().take(5).copied().collect::<Vec<_>>().join("\n\n");
         if shown.len() > 5 {
             message.push_str(&format!("\n\n{} additional import warnings.", shown.len() - 5));

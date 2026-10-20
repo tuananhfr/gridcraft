@@ -2,6 +2,11 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Could not open the legacy .xls format" => "Starý formát .xls nelze otevřít",
+        "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "Tento soubor ve starém formátu Excel (.xls) nelze otevřít. Otevřete jej v Excelu nebo LibreOffice, uložte jako .xlsx a zkuste to znovu.",
+        "The legacy .xls file has been opened. When saved, it will be saved as .xlsx." => "Soubor ve starém formátu .xls byl otevřen. Při ukládání bude uložen jako .xlsx.",
+        "The fonts {fonts} are not available on this device and are displayed using similar fonts." => "Písma {fonts} nejsou v tomto zařízení dostupná a zobrazují se pomocí podobných písem.",
+        "and {count} more" => "a dalších {count}",
         "Close document" => "Zavřít dokument",
         "The browser could not save the file. Please try again." => "Prohlížeč nemohl soubor uložit. Zkuste to znovu.",
         "Paste" => "Vložit",

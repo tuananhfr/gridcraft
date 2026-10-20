@@ -21,6 +21,7 @@ pub mod dialogs;
 pub mod doc_tabs;
 pub mod drafts;
 pub mod editor;
+mod font_notice;
 pub mod fonts;
 pub mod formula_bar;
 mod formula_locale;
@@ -306,6 +307,7 @@ pub struct SheetApp {
     pub toast: Option<(String, f64)>,
     /// Dismissible info bar under the ribbon (open-time notices).
     pub notice: Option<Notice>,
+    font_notice_pending: std::collections::HashSet<u64>,
     pub services: Services,
     pending_saves: Vec<PendingSave>,
     pub(crate) save_failures: save_status::SaveFailures,
@@ -381,6 +383,7 @@ impl SheetApp {
             message: None,
             toast: None,
             notice: None,
+            font_notice_pending: Default::default(),
             services,
             pending_saves: Vec::new(),
             save_failures: Default::default(),
@@ -428,12 +431,12 @@ impl SheetApp {
     ///
     /// [`logic`]: SheetApp::logic
     pub fn setup_context(ctx: &egui::Context, dark: bool) {
-        fonts::start_scan();
         Self::setup_context_for_language(ctx, dark, i18n::Language::En);
     }
 
     /// Sets up fonts and visuals for a specific persisted interface language.
     pub fn setup_context_for_language(ctx: &egui::Context, dark: bool, language: i18n::Language) {
+        fonts::start_scan();
         ctx.set_fonts(theme::font_definitions_for_language(language));
         theme::apply(ctx, dark);
     }
@@ -455,6 +458,15 @@ impl SheetApp {
     /// Runs an engine command (or a UI command) and handles UI requests it makes.
     pub fn run(&mut self, id: &str, params: Json) -> Result<Json, String> {
         let r = self.run_command(id, params);
+        if id == "file.open"
+            && let Ok(result) = &r
+            && result.get("index").is_some()
+            && result.get("alreadyOpen").and_then(Json::as_bool) != Some(true)
+            && let Some(doc) = self.session.active()
+        {
+            self.font_notice_pending.insert(doc.uid);
+            self.notice = None;
+        }
         if id == "file.open"
             && let Ok(r) = &r
             && r.get("warnings")
@@ -659,7 +671,9 @@ impl SheetApp {
 
     /// Shows a command error: a toast for an unavailable command, else a message box.
     fn alert(&mut self, e: String) {
-        if e.contains("is not available right now") {
+        if e == gridcraft_engine::legacy::FAILED {
+            self.message = Some((gridcraft_engine::legacy::FAILED_TITLE.into(), e));
+        } else if e.contains("is not available right now") {
             self.toast = Some((e, now_ms()));
         } else {
             self.message = Some(("GridCraft".into(), clean_error(&e)));
@@ -895,7 +909,7 @@ impl SheetApp {
             Ok(r) => self.after_open(Some(path), &r),
             // A password-protected workbook: ask for the password; the dialog opens it.
             Err(e) if e.contains(gridcraft_engine::io::PASSWORD_REQUIRED) => self.open_dialog("openPassword", json!({"path": path})),
-            Err(e) => self.message = Some(("GridCraft".into(), clean_error(&e))),
+            Err(e) => self.alert(e),
         }
         self.after_engine();
     }
@@ -1170,6 +1184,7 @@ impl SheetApp {
                 }
             }
         }
+        self.show_font_notice();
         if let Some(answer) = self.desktop_theme.take_change() {
             self.desktop_dark = Some(answer);
         }
@@ -1233,7 +1248,7 @@ impl SheetApp {
                 false
             }
             Err(e) => {
-                self.message = Some(("GridCraft".into(), clean_error(&e)));
+                self.alert(e);
                 false
             }
         };

@@ -2,6 +2,11 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Could not open the legacy .xls format" => "이전 .xls 형식을 열 수 없습니다",
+        "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "이전 Excel 파일(.xls)을 열 수 없습니다. Excel 또는 LibreOffice에서 열고 .xlsx로 저장한 다음 다시 시도하세요.",
+        "The legacy .xls file has been opened. When saved, it will be saved as .xlsx." => "이전 .xls 파일을 열었습니다. 저장하면 .xlsx 형식으로 저장됩니다.",
+        "The fonts {fonts} are not available on this device and are displayed using similar fonts." => "이 장치에 {fonts} 글꼴이 없어 비슷한 글꼴로 표시됩니다.",
+        "and {count} more" => "외 {count}개",
         "Close document" => "문서 닫기",
         "The browser could not save the file. Please try again." => "브라우저에서 파일을 저장하지 못했습니다. 다시 시도해 주세요.",
         "Paste" => "붙여넣기",
