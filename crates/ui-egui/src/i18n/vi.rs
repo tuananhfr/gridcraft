@@ -636,6 +636,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Search Commands" => "Tìm Lệnh",
         "Agent Control" => "Điều khiển Tác tử",
         "About GridCraft" => "Giới thiệu Bảng tính",
+        "GridCraft" => "Bảng tính",
         "Insert Chart" => "Chèn Biểu đồ",
         "Select Data Source" => "Chọn Nguồn Dữ liệu",
         "Action Journal" => "Nhật ký Thao tác",
