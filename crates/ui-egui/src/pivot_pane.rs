@@ -189,14 +189,18 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
             }
         });
         ui.separator();
-        ui.horizontal(|ui| {
+        // The three don't fit the pane's width in one row in every language, so a button that
+        // doesn't fit moves to the next row whole (one-line labels). A ComboBox wouldn't move.
+        ui.horizontal_wrapped(|ui| {
+            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
             if ui.button(lang.tr("Refresh")).clicked() {
                 app.run_or_alert("pivot.refresh", json!({"pivot": name}));
             }
             if ui.button(lang.tr("Calculated Field…")).clicked() {
                 app.run_or_alert("pivot.calculatedField", json!({"pivot": name}));
             }
-            egui::ComboBox::from_id_salt("pv_layout").selected_text(lang.tr("Report Layout")).show_ui(ui, |ui| {
+            let layout = ui.button(format!("{} ▾", lang.tr("Report Layout")));
+            egui::Popup::menu(&layout).show(|ui| {
                 for (l, v) in [("Compact", "compact"), ("Outline", "outline"), ("Tabular", "tabular")] {
                     if ui.button(lang.tr(l)).clicked() {
                         app.run_or_alert("pivot.layout", json!({"pivot": name, "layout": v}));

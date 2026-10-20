@@ -281,7 +281,7 @@ pub fn message_box(app: &mut SheetApp, ctx: &egui::Context) {
             ui.painter().text(r.center(), Align2::CENTER_CENTER, "!", theme::ui_bold(20.0), Color32::WHITE);
             ui.vertical(|ui| {
                 ui.label(egui::RichText::new(tr(ui, &title)).strong());
-                ui.add(egui::Label::new(tr(ui, &msg)).wrap());
+                ui.add(egui::Label::new(i18n::current(ui.ctx()).tr_message(&msg)).wrap());
             });
         });
         ui.add_space(8.0);

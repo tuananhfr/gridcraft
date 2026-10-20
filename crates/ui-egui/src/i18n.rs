@@ -14,6 +14,7 @@ mod de;
 mod es;
 mod fr;
 mod ko;
+mod messages;
 mod pt;
 mod ru;
 mod sr;
@@ -134,6 +135,12 @@ impl Language {
             Self::Vi => vi::translate(text),
         };
         translated.unwrap_or_else(|| text.rsplit_once('|').map_or(text, |(_, label)| label))
+    }
+
+    /// [`Self::tr`] for a message that may embed a file name or another message, such as the
+    /// engine's "We can't open 'Book.xlsx': …" errors.
+    pub fn tr_message(self, text: &str) -> std::borrow::Cow<'_, str> {
+        messages::translate(self, text)
     }
 }
 

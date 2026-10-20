@@ -1249,6 +1249,37 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
             "Chỉ mở được tối đa 10 tài liệu. Hãy đóng bớt một tài liệu để mở tài liệu khác."
         }
         "The file is too large or abnormally compressed, so it can't be opened." => "Tệp quá lớn hoặc bị nén bất thường nên không mở được.",
+        "We can't open '{name}': {reason}" => "Không mở được '{name}': {reason}",
+        "We can't import '{name}': {reason}" => "Không nhập được '{name}': {reason}",
+        "'{name}' uses {scheme} encryption, which GridCraft can't open yet. Remove the password in Excel and try again." => {
+            "'{name}' dùng kiểu mã hóa {scheme}, GridCraft chưa mở được. Hãy gỡ mật khẩu trong Excel rồi thử lại."
+        }
+        "'{name}' is a legacy binary file but not an Excel workbook (no workbook stream). GridCraft can't open it." => {
+            "'{name}' là tệp nhị phân cũ nhưng không phải sổ làm việc Excel (không có luồng Workbook). GridCraft không mở được tệp này."
+        }
+        "the file is not a valid zip package: {detail}" => "tệp không phải là gói zip hợp lệ: {detail}",
+        "the file contains invalid XML: {detail}" => "tệp chứa XML không hợp lệ: {detail}",
+        "the file is not a valid spreadsheet: {detail}" => "tệp không phải là bảng tính hợp lệ: {detail}",
+        "the encrypted file is damaged ({detail})." => "tệp mã hóa bị hỏng ({detail}).",
+        "the encrypted file is damaged (it holds another encrypted file)." => "tệp mã hóa bị hỏng (bên trong lại là một tệp mã hóa khác).",
+        "not a GridCraft JSON workbook: {detail}" => "không phải sổ làm việc JSON của GridCraft: {detail}",
+        "missing part {part}" => "thiếu phần {part}",
+        "unexpected root element <{element}> in workbook part" => "phần sổ làm việc có phần tử gốc <{element}> không hợp lệ",
+        "XLS: {detail}" => "XLS: {detail}",
+        "XLSB: {detail}" => "XLSB: {detail}",
+        "no workbook part" => "thiếu phần sổ làm việc",
+        "this is an OpenDocument file, not XLSX" => "đây là tệp OpenDocument, không phải XLSX",
+        "missing or invalid ODS mimetype" => "thiếu hoặc sai mimetype của ODS",
+        "ODS content.xml is missing" => "thiếu content.xml của ODS",
+        "ODS contains no worksheets" => "tệp ODS không có trang tính nào",
+        "encrypted ODS files are not supported" => "chưa hỗ trợ tệp ODS được mã hóa",
+        "this .xls workbook is password-protected (encrypted). GridCraft can't open encrypted .xls files; remove the password in Excel and try again." => {
+            "sổ làm việc .xls này được bảo vệ bằng mật khẩu (đã mã hóa). GridCraft không mở được tệp .xls mã hóa; hãy gỡ mật khẩu trong Excel rồi thử lại."
+        }
+        "The password is incorrect. Check that Caps Lock is off and try again." => {
+            "Mật khẩu không đúng. Hãy kiểm tra phím Caps Lock đã tắt chưa rồi thử lại."
+        }
+        "files larger than 2 GB aren't supported" => "Chưa hỗ trợ tệp lớn hơn 2 GB.",
         _ => return None,
     })
 }
