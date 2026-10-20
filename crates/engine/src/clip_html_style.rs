@@ -20,7 +20,7 @@ impl Rules {
             for selector in selectors.split(',') {
                 let selector = selector.trim();
                 let name = selector.strip_prefix('.').unwrap_or(selector);
-                if !name.is_empty() && name.bytes().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') && self.0.len() < 256 {
+                if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') && self.0.len() < 256 {
                     self.0.push((selector.to_string(), body.to_string()));
                 }
             }
