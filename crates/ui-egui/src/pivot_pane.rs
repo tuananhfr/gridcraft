@@ -17,16 +17,49 @@ pub fn active_pivot(app: &SheetApp) -> Option<String> {
     sh.pivots.iter().find(|p| p.last_range.is_some_and(|r| r.contains(a)) || p.anchor == a).map(|p| p.name.clone())
 }
 
+/// The pivot whose pane the user closed: (document uid, sheet, pivot name).
+pub type ClosedPivot = (u64, usize, String);
+
+fn pivot_key(app: &SheetApp, name: &str) -> Option<ClosedPivot> {
+    let d = app.session.active()?;
+    Some((d.uid, d.wb.active_sheet, name.to_string()))
+}
+
 pub fn show(app: &mut SheetApp, ui: &mut Ui) {
-    let Some(name) = active_pivot(app) else { return };
+    let Some(name) = active_pivot(app) else {
+        app.grid.pivot_pane_closed = None;
+        return;
+    };
+    let key = pivot_key(app, &name);
+    if app.grid.pivot_pane_closed.is_some() && app.grid.pivot_pane_closed != key {
+        app.grid.pivot_pane_closed = None;
+    }
+    // On a phone the pane covers most of the sheet, so it can be closed; it stays closed until the
+    // active cell leaves this pivot. A wide window shows it as before.
+    let narrow = app.narrow.is_narrow();
+    if narrow && app.grid.pivot_pane_closed.is_some() {
+        return;
+    }
     let t = Tokens::get(ui.ctx());
     let lang = i18n::current(ui.ctx());
     let info = match app.session.run("pivot.fields", json!({"pivot": name})) {
         Ok(v) => v,
         Err(_) => return,
     };
-    egui::Panel::right("pivot_pane").default_size(280.0).resizable(true).frame(egui::Frame::NONE.fill(t.ribbon).inner_margin(10)).show(ui, |ui| {
-        ui.label(egui::RichText::new(lang.tr("PivotTable Fields")).font(theme::ui_bold(15.0)));
+    let frame = egui::Frame::NONE.fill(t.ribbon).inner_margin(10);
+    crate::narrow::side_pane(narrow, ui, "pivot_pane", 280.0, None, frame, |ui| {
+        if narrow {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(lang.tr("PivotTable Fields")).font(theme::ui_bold(15.0)));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if crate::widgets::icon_button(ui, crate::icons::Icon::Close, t.text_dim, "Close", vec2(22.0, 22.0)).clicked() {
+                        app.grid.pivot_pane_closed = key.clone();
+                    }
+                });
+            });
+        } else {
+            ui.label(egui::RichText::new(lang.tr("PivotTable Fields")).font(theme::ui_bold(15.0)));
+        }
         ui.label(egui::RichText::new(lang.tr("Choose fields to add to report:")).small().color(t.text_dim));
         ui.add_space(4.0);
         let fields = info["fields"].as_array().cloned().unwrap_or_default();

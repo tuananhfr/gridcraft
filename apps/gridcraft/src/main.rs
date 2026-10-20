@@ -127,7 +127,7 @@ fn save_prefs(app: &SheetApp) {
     }
     let Some(dir) = config_dir() else { return };
     let _ = std::fs::create_dir_all(&dir);
-    if let Ok(b) = serde_json::to_vec_pretty(&app.ui) {
+    if let Ok(b) = serde_json::to_vec_pretty(&app.saved_ui()) {
         let _ = std::fs::write(dir.join("ui.json"), b);
     }
     if let Ok(b) = serde_json::to_vec_pretty(&app.session.prefs) {

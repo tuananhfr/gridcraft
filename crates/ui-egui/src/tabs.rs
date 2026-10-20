@@ -225,11 +225,22 @@ pub fn sheet_tabs(app: &mut SheetApp, ui: &mut Ui) {
     });
 }
 
+/// Temp data id (in the context) under which the status bar leaves its last layout for tests:
+/// `(left notes, right controls and totals)`.
+pub const STATUS_BAR_LAYOUT: &str = "gridcraft.status_bar_layout";
+
 pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     egui::Panel::bottom("status_bar").exact_size(26.0).frame(egui::Frame::NONE.fill(t.status_bar).inner_margin(egui::Margin::symmetric(12, 0))).show(
         ui,
         |ui| {
+            // A narrow window keeps only what fits: the right-hand controls' width is measured each
+            // frame, and the notes on the left and the selection totals give way to them.
+            let narrow = app.narrow.is_narrow();
+            let fixed_id = ui.id().with("status_right_fixed");
+            let right_fixed: f32 = ui.data(|d| d.get_temp(fixed_id)).unwrap_or(0.0);
+            let fits =
+                |ui: &Ui, text: &str| !narrow || text_width(ui, text) + 12.0 + ui.spacing().item_spacing.x <= ui.available_width() - right_fixed;
             ui.horizontal_centered(|ui| {
                 let mode = match app.session.mode {
                     gridcraft_engine::Mode::Ready => "Ready",
@@ -239,38 +250,59 @@ pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
                 };
                 ui.label(egui::RichText::new(app.ui.language.tr(mode)).font(theme::ui_font(12.5)).color(t.text_dim));
                 if let Some(d) = app.session.active() {
-                    if d.wb.vba_project.is_some() {
+                    let lang = app.ui.language;
+                    if d.wb.vba_project.is_some() && fits(ui, lang.tr("Macros preserved (not executed)")) {
                         ui.add_space(12.0);
-                        ui.label(
-                            egui::RichText::new(app.ui.language.tr("Macros preserved (not executed)")).font(theme::ui_font(12.5)).color(t.danger),
-                        );
+                        ui.label(egui::RichText::new(lang.tr("Macros preserved (not executed)")).font(theme::ui_font(12.5)).color(t.danger));
                     }
-                    if d.wb.calc.mode == gridcraft_engine::model::CalcMode::Manual {
+                    if d.wb.calc.mode == gridcraft_engine::model::CalcMode::Manual && fits(ui, lang.tr("Calculate")) {
                         ui.add_space(12.0);
-                        ui.label(egui::RichText::new(app.ui.language.tr("Calculate")).font(theme::ui_font(12.5)).color(t.text_dim));
+                        ui.label(egui::RichText::new(lang.tr("Calculate")).font(theme::ui_font(12.5)).color(t.text_dim));
                     }
                     if !d.calc.circular.is_empty() {
-                        ui.add_space(12.0);
                         let (si, c) = d.calc.circular[0];
                         let name = d.wb.sheet(si).map(|s| s.name.clone()).unwrap_or_default();
-                        ui.label(
-                            egui::RichText::new(format!("{}: {name}!{}", app.ui.language.tr("Circular References"), c.a1()))
-                                .font(theme::ui_font(12.5))
-                                .color(t.danger),
-                        );
+                        let text = format!("{}: {name}!{}", lang.tr("Circular References"), c.a1());
+                        if fits(ui, &text) {
+                            ui.add_space(12.0);
+                            ui.label(egui::RichText::new(text).font(theme::ui_font(12.5)).color(t.danger));
+                        }
                     }
-                    if app.session.clipboard.is_some() && app.editor.is_none() {
+                    if app.session.clipboard.is_some()
+                        && app.editor.is_none()
+                        && fits(ui, lang.tr("Select destination and press Enter or choose Paste"))
+                    {
                         ui.add_space(12.0);
                         ui.label(
-                            egui::RichText::new(app.ui.language.tr("Select destination and press Enter or choose Paste"))
+                            egui::RichText::new(lang.tr("Select destination and press Enter or choose Paste"))
                                 .font(theme::ui_font(12.5))
                                 .color(t.text_dim),
                         );
                     }
                 }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let left_end = ui.min_rect().right();
+                let zoom = app.session.active().and_then(|d| d.wb.active().map(|s| s.zoom)).unwrap_or(100);
+                let parts = selection_totals(app);
+                // A narrow window keeps what fits, by priority: the zoom buttons always, then Sum,
+                // the view buttons, Count, Average and last the zoom slider.
+                let gap = ui.spacing().item_spacing.x;
+                let part_w = |p: &str| text_width(ui, p) + 10.0 + 2.0 * gap;
+                let base = text_width(ui, &format!("{zoom}%")) + 4.0 + 2.0 * (18.0 + gap) + 16.0 + 2.0 * gap;
+                let mut wants = vec![10.0 + 3.0 * (26.0 + gap), ui.spacing().slider_width + gap];
+                wants.extend(parts.iter().map(|p| part_w(p)));
+                // Indices into `wants`: 0 the views, 1 the slider, 2.. the totals.
+                let mut order = Vec::new();
+                if !parts.is_empty() {
+                    order.push(2);
+                }
+                order.push(0);
+                order.extend(3..2 + parts.len());
+                order.push(1);
+                let shown = if narrow { fit_in(ui.available_width(), base, &wants, &order) } else { vec![true; wants.len()] };
+                let show_views = shown[0];
+                let show_slider = shown[1];
+                let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     // Zoom percentage and slider.
-                    let zoom = app.session.active().and_then(|d| d.wb.active().map(|s| s.zoom)).unwrap_or(100);
                     let zl = ui.add(
                         egui::Label::new(egui::RichText::new(format!("{zoom}%")).font(theme::ui_font(12.5)).color(t.text_dim)).sense(Sense::click()),
                     );
@@ -282,74 +314,118 @@ pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
                         let z = ((zoom as f32 / 10.0).floor() * 10.0 + 10.0).min(400.0);
                         app.run_or_alert("view.zoom", json!({"percent": z}));
                     }
-                    let mut z = zoom as f32;
-                    let slider = ui.add(egui::Slider::new(&mut z, 10.0..=400.0).show_value(false).logarithmic(true));
-                    if slider.changed() {
-                        let _ = app.session.run("view.zoom", json!({"percent": z.round()}));
+                    if show_slider {
+                        let mut z = zoom as f32;
+                        let slider = ui.add(egui::Slider::new(&mut z, 10.0..=400.0).show_value(false).logarithmic(true));
+                        if slider.changed() {
+                            let _ = app.session.run("view.zoom", json!({"percent": z.round()}));
+                        }
                     }
                     if crate::widgets::icon_button(ui, Icon::Minus, t.text_dim, "Zoom Out", vec2(18.0, 18.0)).clicked() {
                         let z = ((zoom as f32 / 10.0).ceil() * 10.0 - 10.0).max(10.0);
                         app.run_or_alert("view.zoom", json!({"percent": z}));
                     }
-                    ui.add_space(10.0);
-                    for (icon, tip, mode, cmd) in [
-                        (Icon::PageBreak, "Page Break Preview", "pageBreakPreview", "view.pageBreakPreview"),
-                        (Icon::PageLayout, "Page Layout", "pageLayout", "view.pageLayout"),
-                        (Icon::Normal, "Normal", "normal", "view.normal"),
-                    ] {
-                        let (r, resp) = ui.allocate_exact_size(vec2(26.0, 20.0), Sense::click());
-                        let cur = app.session.active().and_then(|d| d.wb.active().map(|s| s.view.as_str())).unwrap_or("normal");
-                        if cur == mode {
-                            ui.painter().rect_filled(r, 3.0, t.pressed);
-                        } else if resp.hovered() {
-                            ui.painter().rect_filled(r, 3.0, t.hover);
-                        }
-                        icons::paint(ui.painter(), Rect::from_center_size(r.center(), vec2(14.0, 14.0)), icon, t.text_dim);
-                        if resp.on_hover_text(app.ui.language.tr(tip)).clicked() {
-                            app.run_or_alert(cmd, json!({}));
+                    if show_views {
+                        ui.add_space(10.0);
+                        for (icon, tip, mode, cmd) in [
+                            (Icon::PageBreak, "Page Break Preview", "pageBreakPreview", "view.pageBreakPreview"),
+                            (Icon::PageLayout, "Page Layout", "pageLayout", "view.pageLayout"),
+                            (Icon::Normal, "Normal", "normal", "view.normal"),
+                        ] {
+                            let (r, resp) = ui.allocate_exact_size(vec2(26.0, 20.0), Sense::click());
+                            let cur = app.session.active().and_then(|d| d.wb.active().map(|s| s.view.as_str())).unwrap_or("normal");
+                            if cur == mode {
+                                ui.painter().rect_filled(r, 3.0, t.pressed);
+                            } else if resp.hovered() {
+                                ui.painter().rect_filled(r, 3.0, t.hover);
+                            }
+                            icons::paint(ui.painter(), Rect::from_center_size(r.center(), vec2(14.0, 14.0)), icon, t.text_dim);
+                            if resp.on_hover_text(app.ui.language.tr(tip)).clicked() {
+                                app.run_or_alert(cmd, json!({}));
+                            }
                         }
                     }
                     ui.add_space(16.0);
-                    // Average / Count / Sum.
-                    if let Some(d) = app.session.active()
-                        && let Some(sh) = d.wb.active()
-                        && !d.selection.is_single_cell()
-                    {
-                        let st = gridcraft_engine::display::stats(sh, &d.selection.ranges);
-                        let region = app.ui.region();
-                        let fmt = |v: f64| {
-                            let code = d.wb.styles.get(sh.style_id(d.selection.active)).num_fmt.as_str().to_string();
-                            let code = if code == "General" { "#,##0.##########".to_string() } else { code };
-                            gridcraft_engine::display::format_in(&gridcraft_engine::core::Value::Number(v), &code, &d.wb, region)
-                                .text
-                                // A whole number leaves the decimal point of `#,##0.###…`: `.` in en-US, `,` in vi-VN.
-                                .trim_end_matches(['.', ','])
-                                .to_string()
-                        };
-                        let mut parts = Vec::new();
-                        if st.numeric > 0 {
-                            parts.push(format!("{}: {}", app.ui.language.tr("Sum"), fmt(st.sum)));
-                        }
-                        if st.count > 0 {
-                            parts.push(format!("{}: {}", app.ui.language.tr("Count"), st.count));
-                        }
-                        if let Some(a) = st.average {
-                            parts.push(format!("{}: {}", app.ui.language.tr("Average"), fmt(a)));
-                        }
-                        for p in parts {
+                    ui.data_mut(|d| d.insert_temp(fixed_id, ui.min_rect().width()));
+                    // Sum, Count and Average, right to left.
+                    for (p, show) in parts.into_iter().zip(shown.into_iter().skip(2)) {
+                        if show {
                             ui.label(egui::RichText::new(p).font(theme::ui_font(12.5)).color(t.text_dim));
                             ui.add_space(10.0);
                         }
                     }
                 });
+                let left = Rect::from_x_y_ranges(ui.max_rect().left()..=left_end, ui.max_rect().y_range());
+                ui.data_mut(|d| d.insert_temp(egui::Id::new(STATUS_BAR_LAYOUT), (left, right.response.rect)));
             });
         },
     );
 }
 
+/// The selection's Sum, Count and Average as the status bar shows them (none for one cell).
+fn selection_totals(app: &SheetApp) -> Vec<String> {
+    let Some(d) = app.session.active() else { return Vec::new() };
+    let Some(sh) = d.wb.active() else { return Vec::new() };
+    if d.selection.is_single_cell() {
+        return Vec::new();
+    }
+    let st = gridcraft_engine::display::stats(sh, &d.selection.ranges);
+    let region = app.ui.region();
+    let fmt = |v: f64| {
+        let code = d.wb.styles.get(sh.style_id(d.selection.active)).num_fmt.as_str().to_string();
+        let code = if code == "General" { "#,##0.##########".to_string() } else { code };
+        gridcraft_engine::display::format_in(&gridcraft_engine::core::Value::Number(v), &code, &d.wb, region)
+            .text
+            // A whole number leaves the decimal point of `#,##0.###…`: `.` in en-US, `,` in vi-VN.
+            .trim_end_matches(['.', ','])
+            .to_string()
+    };
+    let mut parts = Vec::new();
+    if st.numeric > 0 {
+        parts.push(format!("{}: {}", app.ui.language.tr("Sum"), fmt(st.sum)));
+    }
+    if st.count > 0 {
+        parts.push(format!("{}: {}", app.ui.language.tr("Count"), st.count));
+    }
+    if let Some(a) = st.average {
+        parts.push(format!("{}: {}", app.ui.language.tr("Average"), fmt(a)));
+    }
+    parts
+}
+
+/// Which of `widths` to show in `available` after `base`, taking them greedily in `order`
+/// (indices into `widths`, most important first); one that doesn't fit is skipped.
+fn fit_in(available: f32, base: f32, widths: &[f32], order: &[usize]) -> Vec<bool> {
+    let mut shown = vec![false; widths.len()];
+    let mut used = base;
+    for &i in order {
+        if let Some(&w) = widths.get(i)
+            && used + w <= available
+        {
+            used += w;
+            shown[i] = true;
+        }
+    }
+    shown
+}
+
+fn text_width(ui: &Ui, text: &str) -> f32 {
+    ui.painter().layout_no_wrap(text.to_string(), theme::ui_font(12.5), egui::Color32::WHITE).size().x
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{navigator_items, rename_needs_focus};
+    use super::{fit_in, navigator_items, rename_needs_focus};
+
+    #[test]
+    fn status_items_fit_by_priority_and_skip_what_does_not_fit() {
+        let widths = [100.0, 110.0, 120.0, 40.0];
+        // Base 50: index 2 (120) fits, then 0 (100) doesn't in 250, 3 (40) does, 1 doesn't.
+        assert_eq!(fit_in(250.0, 50.0, &widths, &[2, 0, 3, 1]), vec![false, false, true, true]);
+        assert_eq!(fit_in(1000.0, 50.0, &widths, &[2, 0, 3, 1]), vec![true; 4]);
+        assert_eq!(fit_in(f32::NAN, 50.0, &widths, &[2, 0, 3, 1]), vec![false; 4]);
+        assert_eq!(fit_in(500.0, 0.0, &widths, &[9]), vec![false; 4], "an index past the list is ignored");
+    }
     use gridcraft_engine::model::{Sheet, Visibility};
     use std::sync::Arc;
 

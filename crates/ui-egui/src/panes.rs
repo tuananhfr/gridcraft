@@ -20,8 +20,8 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
     let lang = app.ui.language;
     // Capped at half the window so a pane can never cover the sheet, whatever its content asks for.
     let max = (ui.available_width() / 2.0).max(300.0);
-    let panel = egui::Panel::right("task_pane").default_size(300.0).max_size(max).resizable(true);
-    panel.frame(egui::Frame::NONE.fill(t.ribbon).inner_margin(10)).show(ui, |ui| {
+    let frame = egui::Frame::NONE.fill(t.ribbon).inner_margin(10);
+    crate::narrow::side_pane(app.narrow.is_narrow(), ui, "task_pane", 300.0, Some(max), frame, |ui| {
         ui.horizontal(|ui| {
             let title = match pane.as_str() {
                 "comments" => "Comments",

@@ -98,6 +98,8 @@ pub enum Drag {
         orig: (CellRef, f32, f32, f32, f32),
         resize: bool,
     },
+    /// A finger dragging the sheet around.
+    Pan,
 }
 
 #[derive(Default)]
@@ -149,6 +151,10 @@ pub struct GridState {
     pub hscroll: Option<Rect>,
     /// Ctrl+wheel zoom in progress (see [`WheelZoom`]).
     pub wheel_zoom: Option<WheelZoom>,
+    /// Whether the user is on a touch screen, and a pan's fling.
+    pub touch: crate::touch::TouchInput,
+    /// A narrow window's PivotTable Fields pane closed by the user, until the active cell leaves that pivot.
+    pub pivot_pane_closed: Option<crate::pivot_pane::ClosedPivot>,
 }
 
 /// Ctrl+wheel zoom for one (doc uid, sheet). egui eases a notch in over several frames and
@@ -637,6 +643,20 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
                 d = vec2(d.y, 0.0);
             }
             view.scroll -= d / z;
+        }
+    }
+    // A quick pan keeps going after the finger lifts; the next press stops it.
+    if app.grid.touch.flinging() {
+        if ui.input(|i| i.pointer.any_down()) {
+            app.grid.touch.stop();
+        } else {
+            let z = if paper { make_geo(app, view.scroll).z } else { sh.zoom as f32 / 100.0 * DISPLAY_SCALE };
+            let mut d = app.grid.touch.fling_step(ui.input(|i| i.stable_dt));
+            if sh.right_to_left {
+                d.x = -d.x;
+            }
+            view.scroll -= d / z;
+            ui.ctx().request_repaint();
         }
     }
     // The zoom glides to its step like egui eases a wheel notch (90% of the way in 0.1 s), or goes
@@ -1648,9 +1668,15 @@ pub(crate) fn paint_selection(
     }
     // Fill handle (bottom-right of the current area).
     if app.editor.is_none() && range_in_pane(RangeRef::cell(sel.current().end), rows, cols) {
-        let h = Rect::from_center_size(outline.right_bottom(), vec2(6.0, 6.0));
-        p.rect_filled(h.expand(1.0), 0.0, Color32::WHITE);
-        p.rect_filled(h, 0.0, t.sel_border);
+        if app.grid.touch.active {
+            // The range handle a finger drags (see `touch::HANDLE_HIT_RADIUS`).
+            p.circle_filled(outline.right_bottom(), crate::touch::HANDLE_RADIUS + 1.5, Color32::WHITE);
+            p.circle_filled(outline.right_bottom(), crate::touch::HANDLE_RADIUS, t.sel_border);
+        } else {
+            let h = Rect::from_center_size(outline.right_bottom(), vec2(6.0, 6.0));
+            p.rect_filled(h.expand(1.0), 0.0, Color32::WHITE);
+            p.rect_filled(h, 0.0, t.sel_border);
+        }
     }
     // Fill-handle drag preview.
     if let crate::grid::Drag::Fill { target: Some(tr) } = &app.grid.drag
@@ -1800,7 +1826,17 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
     // over the frozen rows/columns that a scrolled selection lies under.
     let handle_panes = geo.range_panes(RangeRef::cell(sel.current().end));
     let border_panes = geo.range_panes(sel.current());
-    let on_handle = |p: Pos2| handle.contains(p) && handle_panes.iter().any(|r| r.contains(p));
+    // On a touch screen the corner is a handle that drags out a range (a finger can't aim at the
+    // fill handle, and a drag elsewhere pans).
+    let touch = app.grid.touch.active;
+    let on_handle = |p: Pos2| !touch && handle.contains(p) && handle_panes.iter().any(|r| r.contains(p));
+    let corner = cur_rect.right_bottom();
+    let on_touch_handle = |p: Pos2| {
+        touch
+            && app.editor.is_none()
+            && (p - corner).length() <= crate::touch::HANDLE_HIT_RADIUS
+            && handle_panes.iter().any(|r| r.expand(1.0).contains(corner))
+    };
     let on_cur_border = |p: Pos2| on_border(cur_rect, p) && border_panes.iter().any(|r| r.contains(p));
 
     let (freeze_cols, freeze_rows) = freeze_handles(geo);
@@ -1916,8 +1952,11 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
     if resp.drag_started() || primary_clicked {
         // A drag is recognised only after the pointer has moved, so grab the object where the press began.
         let at = if resp.drag_started() { pointer.press_origin().or(pos) } else { pos };
+        // A finger only moves the object already selected; elsewhere its drag pans the sheet.
+        let touch_pan = touch && resp.drag_started();
         if let Some(p) = at
             && let Some((kind, id, rect)) = crate::chartview::hit(app, geo, sh, p)
+            && (!touch_pan || app.selected_chart == Some(id))
         {
             app.selected_chart = Some(id);
             if kind == "shape"
@@ -1938,7 +1977,7 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
                 }
             }
             return;
-        } else if primary_clicked || resp.drag_started() {
+        } else if !touch_pan {
             app.selected_chart = None;
         }
     }
@@ -2007,6 +2046,23 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
         // Freeze handles sit on the header edges (and the corner's edges when nothing is frozen).
         if freeze_cols.contains(p) || freeze_rows.contains(p) {
             app.grid.drag = Drag::Freeze { cols: freeze_cols.contains(p), to: None };
+            return;
+        }
+        if touch && resp.drag_started() && geo.in_cells(p) {
+            if on_touch_handle(p) {
+                // Drag the far corner: the range grows from its top-left cell.
+                if let Some(d) = app.session.active_mut() {
+                    d.selection.anchor = sel.current().start;
+                }
+                app.grid.drag = Drag::Select;
+                app.grid.drag_select = true;
+                if let Some(p) = pos {
+                    select_to_pointer(app, geo, sh, wb, p);
+                }
+            } else {
+                app.grid.drag = Drag::Pan;
+                app.grid.touch.stop();
+            }
             return;
         }
         if in_corner {
@@ -2267,6 +2323,16 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
                 let _ = app.session.run("object.move", params);
                 coalesce_last_undo(app);
             }
+            Drag::Pan => {
+                // Two fingers are pinching: the zoom follows them, not the first finger.
+                if !ctx.input(|i| i.multi_touch().is_some()) {
+                    let mut d = resp.drag_delta();
+                    if geo.rtl {
+                        d.x = -d.x;
+                    }
+                    scroll_by(app, -d / geo.z);
+                }
+            }
             Drag::None => {}
         }
     }
@@ -2308,6 +2374,10 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
                 if let Err(e) = app.run("sheet.moveColumns", json!({"cols": source.a1(), "before": before})) {
                     app.message = Some(("GridCraft".into(), crate::clean_error(&e)));
                 }
+            }
+            // Like the zoom glide: no fling without animations.
+            Drag::Pan if app.ui.animations && ctx.global_style().animation_time > 0.0 => {
+                app.grid.touch.release(pointer.velocity());
             }
             _ => {}
         }

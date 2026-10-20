@@ -25,6 +25,7 @@ pub mod i18n;
 pub mod icons;
 pub mod keymap;
 pub mod keytips;
+pub mod narrow;
 pub mod outline;
 pub mod panes;
 pub mod paper_view;
@@ -36,6 +37,8 @@ pub mod selection_glide;
 pub mod tabs;
 pub mod text_box;
 pub mod theme;
+pub mod title_fit;
+pub mod touch;
 pub mod widgets;
 
 use std::collections::HashMap;
@@ -319,6 +322,8 @@ pub struct SheetApp {
     pub name_box: Option<String>,
     /// Transient ribbon keyboard navigation; never saved with UI preferences.
     pub keytips: keytips::KeyTips,
+    /// Compacting for narrow windows (phones); see [`SheetApp::saved_ui`].
+    pub narrow: narrow::NarrowLayout,
     pub(crate) shots: control::Shots,
     /// Chart selected on the sheet (id).
     pub selected_chart: Option<u32>,
@@ -374,6 +379,7 @@ impl SheetApp {
             desktop_dark: None,
             name_box: None,
             keytips: keytips::KeyTips::default(),
+            narrow: narrow::NarrowLayout::default(),
             shots: control::Shots::default(),
             selected_chart: None,
             clipboard_text_at_copy: None,
@@ -1268,6 +1274,14 @@ impl SheetApp {
             .collect()
     }
 
+    /// The preferences to write to `ui.json`: as shown, except that a ribbon folded for a narrow
+    /// window is saved as the user left it in a wide one.
+    pub fn saved_ui(&self) -> UiState {
+        let mut ui = self.ui.clone();
+        ui.ribbon_collapsed = self.narrow.saved_ribbon_collapsed(ui.ribbon_collapsed);
+        ui
+    }
+
     /// A cell or text box editor is open: its text isn't in the workbook yet.
     pub fn editing_in_place(&self) -> bool {
         self.editor.is_some() || self.text_box_editor.is_some()
@@ -1295,6 +1309,8 @@ impl SheetApp {
         region::set_current(&ctx, self.ui.region());
         self.session.region = self.ui.region();
         let t = theme::Tokens::get(&ctx);
+        self.narrow.update(ctx.content_rect().width(), &mut self.ui.ribbon_collapsed);
+        ctx.input(|i| self.grid.touch.observe(&i.events));
         if self.backstage.is_none() {
             self.ribbon_keys(&ctx);
         }
