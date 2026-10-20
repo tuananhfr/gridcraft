@@ -126,7 +126,7 @@ pub(crate) fn render_date(sec: &Section, v: f64, sys: DateSystem, loc: Locale) -
                     DatePart::ElapsedH(n) => pad(total_ms / 3_600_000, n),
                     DatePart::ElapsedM(n) => pad(total_ms / 60_000, n),
                     DatePart::ElapsedS(n) => pad(total_ms / 1000, n),
-                    DatePart::AmPm => (if hour >= 12 { "PM" } else { "AM" }).to_string(),
+                    DatePart::AmPm => loc.day_period(hour >= 12).to_string(),
                     DatePart::AP(a, p) => (if hour >= 12 { p } else { a }).to_string(),
                 };
                 out.push(&s);

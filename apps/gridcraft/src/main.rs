@@ -41,7 +41,7 @@ impl eframe::App for App {
         }
         self.0.logic(ctx);
         self.0.poll_printing(ctx);
-        if ctx.input(|input| input.viewport().close_requested()) && self.0.printing.busy() {
+        if ctx.input(|input| input.viewport().close_requested()) && (self.0.printing.busy() || !self.0.confirm_quit()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
     }

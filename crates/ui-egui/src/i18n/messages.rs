@@ -16,6 +16,7 @@ const NESTED: [&str; 2] = ["reason", "detail"];
 const TEMPLATES: &[&str] = &[
     "We can't open '{name}': {reason}",
     "We can't import '{name}': {reason}",
+    "Couldn't save '{name}': {reason}",
     "'{name}' uses {scheme} encryption, which GridCraft can't open yet. Remove the password in Excel and try again.",
     "'{name}' is a legacy binary file but not an Excel workbook (no workbook stream). GridCraft can't open it.",
     "the file is not a valid zip package: {detail}",

@@ -1395,7 +1395,7 @@ fn cell_style_gallery(app: &mut SheetApp, ui: &mut Ui) {
         ("Number Format", &["Comma", "Comma [0]", "Currency", "Currency [0]", "Percent"]),
     ];
     for (g, names) in groups {
-        ui.label(egui::RichText::new(*g).strong());
+        ui.label(egui::RichText::new(tr(ui, g)).strong());
         egui::Grid::new(("csg", *g)).spacing(vec2(4.0, 4.0)).show(ui, |ui| {
             for (i, n) in names.iter().enumerate() {
                 let st = gridcraft_engine::cmd::format::builtin_cell_style(n, &wb.theme).unwrap_or_default();
@@ -1418,13 +1418,18 @@ fn cell_style_gallery(app: &mut SheetApp, ui: &mut Ui) {
                 }
                 let col = st.font.color.resolve(&wb.theme).map(theme::color32).unwrap_or(Color32::BLACK);
                 let fam = theme::cell_family(&st.font.name, st.font.bold, st.font.italic);
-                ui.painter().text(
+                // The engine and the file keep the English name; only the swatch is translated.
+                let key = format!("Cell Style|{n}");
+                let label = tr(ui, &key).to_string();
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
+                ui.painter().with_clip_rect(r.shrink(1.0)).text(
                     r.left_center() + vec2(4.0, 0.0),
                     Align2::LEFT_CENTER,
-                    *n,
+                    &label,
                     egui::FontId::new((st.font.size).clamp(10.0, 15.0), fam),
                     col,
                 );
+                let resp = resp.on_hover_text(&label);
                 if resp.hovered() {
                     ui.painter().rect_stroke(r.expand(1.5), 2.0, Stroke::new(2.0, Color32::from_rgb(0xE8, 0x7D, 0x2B)), StrokeKind::Outside);
                 }

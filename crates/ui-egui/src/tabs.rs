@@ -249,6 +249,7 @@ pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
                     gridcraft_engine::Mode::Point => "Point",
                 };
                 ui.label(egui::RichText::new(app.ui.language.tr(mode)).font(theme::ui_font(12.5)).color(t.text_dim));
+                crate::save_status::status_label(app, ui, &t);
                 if let Some(d) = app.session.active() {
                     let lang = app.ui.language;
                     if d.wb.vba_project.is_some() && fits(ui, lang.tr("Macros preserved (not executed)")) {

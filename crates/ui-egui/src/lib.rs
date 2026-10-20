@@ -10,6 +10,8 @@ pub mod backstage;
 mod border_preview;
 mod cell_pictures;
 pub mod chartview;
+pub mod close_many;
+pub mod closed_docs;
 pub mod control;
 mod craft_fonts;
 pub mod credits;
@@ -29,10 +31,12 @@ pub mod narrow;
 pub mod outline;
 pub mod panes;
 pub mod paper_view;
+pub mod pivot_labels;
 pub mod pivot_pane;
 pub mod printing;
 pub mod region;
 pub mod ribbon;
+pub mod save_status;
 pub mod selection_glide;
 pub mod tabs;
 pub mod text_box;
@@ -291,6 +295,14 @@ pub struct SheetApp {
     pub notice: Option<Notice>,
     pub services: Services,
     pending_saves: Vec<PendingSave>,
+    pub(crate) save_failures: save_status::SaveFailures,
+    /// Documents closed this session, for Reopen Closed Document.
+    pub closed_docs: closed_docs::ClosedDocs,
+    close_queue: Option<close_many::CloseQueue>,
+    /// Desktop: the unsaved documents were dealt with, so the window may close.
+    pub quit_confirmed: bool,
+    /// Close the window on the next frame.
+    quit_requested: bool,
     /// Workbooks opened by decrypting them with their password. GridCraft can't encrypt, so
     /// they get no web drafts: those would hold the content unprotected.
     decrypted: std::collections::HashSet<u64>,
@@ -356,6 +368,11 @@ impl SheetApp {
             notice: None,
             services,
             pending_saves: Vec::new(),
+            save_failures: Default::default(),
+            closed_docs: Default::default(),
+            close_queue: None,
+            quit_confirmed: false,
+            quit_requested: false,
             decrypted: Default::default(),
             printing: Default::default(),
             print_feedback_seen: None,
@@ -469,9 +486,18 @@ impl SheetApp {
         if let Some(r) = self.run_ui_command(id, &params) {
             return r;
         }
+        let closing = if id == "file.close" { self.closing_snapshot(&params) } else { None };
         // Commands run between frames (tests, the control channel) see a region change at once.
         self.session.region = self.ui.region();
         let r = self.session.run(id, params);
+        if let (Some(doc), Ok(result)) = (closing, &r)
+            && result.get("closed").and_then(Json::as_bool) == Some(true)
+        {
+            self.closed_docs.push(doc);
+        }
+        if matches!(id, "file.save" | "file.saveAs") {
+            self.note_save_result(&r);
+        }
         self.after_engine();
         // The new chart is selected, as after inserting any object, so Delete removes it, not its data.
         if id == "insert.chart"
@@ -590,6 +616,7 @@ impl SheetApp {
     /// the bytes written, a cancelled or failed one stays unsaved (a failure says why).
     pub fn settle_saves(&mut self) {
         let session = &mut self.session;
+        let failures = &mut self.save_failures;
         let mut failed = Vec::new();
         self.pending_saves.retain(|p| {
             // Checked before `take`: a host that settles and then drops its copy is still heard.
@@ -597,11 +624,15 @@ impl SheetApp {
             match p.report.take() {
                 Some(Delivery::Delivered) => {
                     session.mark_saved(p.uid, &p.written);
+                    failures.clear(p.uid);
                     false
                 }
                 Some(Delivery::Cancelled) => false,
                 Some(Delivery::Failed(e)) => {
-                    failed.push(format!("Couldn't save {}: {e}", p.name));
+                    if let Some(d) = session.documents().iter().find(|d| d.uid == p.uid) {
+                        failures.record(p.uid, d.wb.clone(), e.clone());
+                    }
+                    failed.push(format!("Couldn't save '{}': {e}", p.name));
                     false
                 }
                 None => !abandoned,
@@ -818,6 +849,7 @@ impl SheetApp {
                 self.notice = None;
                 Ok(Json::Null)
             }
+            "file.reopenClosed" => self.reopen_closed(),
             _ => return None,
         };
         Some(r)
@@ -869,12 +901,19 @@ impl SheetApp {
                         let path = if std::path::Path::new(&path).extension().is_none() { format!("{path}.xlsx") } else { path };
                         self.run_or_alert("file.save", json!({"path": path}));
                     }
-                } else if self.services.download.is_some()
-                    && let Ok(r) = self.run("file.saveBytes", json!({"format": "xlsx"}))
-                    && let Some(b) = r.get("base64").and_then(Json::as_str).and_then(gridcraft_engine::io::base64_decode)
-                {
-                    let name = r.get("name").and_then(Json::as_str).unwrap_or("Book.xlsx").to_string();
-                    self.download_workbook(&name, &b);
+                } else if self.services.download.is_some() {
+                    match self.run("file.saveBytes", json!({"format": "xlsx"})) {
+                        Ok(r) => {
+                            if let Some(b) = r.get("base64").and_then(Json::as_str).and_then(gridcraft_engine::io::base64_decode) {
+                                let name = r.get("name").and_then(Json::as_str).unwrap_or("Book.xlsx").to_string();
+                                self.download_workbook(&name, &b);
+                            }
+                        }
+                        Err(e) => {
+                            self.note_save_result(&Err(e.clone()));
+                            self.alert(e);
+                        }
+                    }
                 }
             }
             // File › Options (`file.options`) and the File tab itself open the Backstage view.
@@ -1141,6 +1180,10 @@ impl SheetApp {
         // anything that never reached a control (collapsed ribbon, tab switch) is dropped.
         self.ui.keytip_invoke = None;
         self.settle_saves();
+        self.advance_close_queue();
+        if std::mem::take(&mut self.quit_requested) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
         if self.fonts_han.is_some_and(|han| han != theme::HanOrder::of(self.ui.language)) {
             self.fonts_ready = false;
             self.fonts_set = false;
@@ -1367,7 +1410,8 @@ impl SheetApp {
         {
             self.grid.last_autosave = now;
             self.store_view_state();
-            let _ = self.session.run("file.save", json!({}));
+            let saved = self.session.run("file.save", json!({}));
+            self.note_save_result(&saved);
         }
         // Window title.
         if let Some(d) = self.session.active() {

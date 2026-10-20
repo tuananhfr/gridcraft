@@ -517,6 +517,34 @@ fn action_row(ui: &mut Ui, icon: Icon, title: &str, detail: &str) -> egui::Respo
     resp
 }
 
+/// Open › Reopen Closed Document: the most recently closed document's name, greyed out when
+/// none was closed. `true` when clicked.
+fn reopen_row(app: &SheetApp, ui: &mut Ui) -> bool {
+    let lang = app.ui.language;
+    let t = Tokens::get(ui.ctx());
+    let title = lang.tr("Reopen Closed Document");
+    let detail = match app.closed_docs.latest() {
+        Some(d) if d.unsaved => format!("{} · {}", d.title, lang.tr("Unsaved changes")),
+        Some(d) => d.title.clone(),
+        None => lang.tr("Nothing to reopen").to_string(),
+    };
+    let enabled = app.can_reopen_closed();
+    let width = ui.available_width().min(CONTENT_W);
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, 56.0), if enabled { Sense::click() } else { Sense::hover() });
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, title));
+    let (fg, dim) = if enabled { (t.text, t.text_dim) } else { (t.text_disabled, t.text_disabled) };
+    let p = ui.painter();
+    if enabled && resp.hovered() {
+        p.rect_filled(rect, 4.0, t.hover);
+    }
+    icons::paint(p, Rect::from_center_size(pos2(rect.left() + 24.0, rect.center().y), vec2(24.0, 24.0)), Icon::OpenFolder, fg);
+    p.text(pos2(rect.left() + 52.0, rect.center().y - 9.0), Align2::LEFT_CENTER, format!("{title}  (Ctrl+Shift+T)"), theme::ui_bold(13.5), fg);
+    let galley = p.layout_no_wrap(detail, theme::ui_font(12.0), dim);
+    let clip = Rect::from_min_max(pos2(rect.left() + 52.0, rect.top()), rect.max);
+    p.with_clip_rect(clip).galley(pos2(rect.left() + 52.0, rect.center().y + 10.0 - galley.size().y / 2.0), galley, dim);
+    resp.clicked()
+}
+
 /// A bordered square command button (Browse…, Print, Protect Workbook).
 fn square_button(ui: &mut Ui, icon: Icon, label: &str) -> egui::Response {
     let t = Tokens::get(ui.ctx());
@@ -558,6 +586,14 @@ fn open_page(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outc
         let before = app.session.active().map(|d| d.uid);
         app.open_dialog("open", json!({}));
         // Desktop pickers return at once; the web picker delivers later (see `SheetApp::logic`).
+        if app.session.active().map(|d| d.uid) != before {
+            out.close = true;
+        }
+    }
+    ui.add_space(12.0);
+    if reopen_row(app, ui) {
+        let before = app.session.active().map(|d| d.uid);
+        app.run_or_alert("file.reopenClosed", json!({}));
         if app.session.active().map(|d| d.uid) != before {
             out.close = true;
         }

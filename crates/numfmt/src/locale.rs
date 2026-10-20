@@ -89,6 +89,16 @@ impl Locale {
         if short { name.chars().take(3).collect() } else { name.to_string() }
     }
 
+    /// `AM/PM`: vi-VN's `SA`/`CH` (Windows NLS and CLDR `vi` agree). `A/P` keeps its typed letters.
+    pub(crate) fn day_period(self, pm: bool) -> &'static str {
+        match (self.vietnamese, pm) {
+            (true, false) => "SA",
+            (true, true) => "CH",
+            (false, false) => "AM",
+            (false, true) => "PM",
+        }
+    }
+
     /// The code a regional format shows with here, when it differs from its own. Like Excel, ids
     /// 14 and 22 follow the region's short date (vi-VN `dd/MM/yyyy`) and `[$-F800]` its long date
     /// (`dd MMMM yyyy`; both per Windows NLS). The other ids in 15–21 are spelled the same in

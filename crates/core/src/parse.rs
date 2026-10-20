@@ -268,11 +268,15 @@ fn month_from_name(s: &str) -> Option<u32> {
     MONTHS.iter().position(|m| m.to_ascii_lowercase().starts_with(&l)).map(|i| i as u32 + 1)
 }
 
-/// Time part: `h:mm`, `h:mm:ss`, `h:mm:ss.000`, `h AM`, with optional AM/PM.
-fn parse_time(t: &str) -> Option<(f64, bool, bool)> {
+/// Time part: `h:mm`, `h:mm:ss`, `h:mm:ss.000`, `h AM`, with optional AM/PM (or the notation's
+/// own names for them, such as vi-VN `SA`/`CH`).
+fn parse_time(t: &str, notation: &DateNotation) -> Option<(f64, bool, bool)> {
     let t = t.trim();
     let lower = t.to_ascii_lowercase();
-    let (body, ampm) = if let Some(b) = lower.strip_suffix("am").or_else(|| lower.strip_suffix('a')) {
+    let local = notation.day_periods.iter().find_map(|(name, pm)| lower.strip_suffix(name).map(|b| (b.trim().to_string(), Some(*pm))));
+    let (body, ampm) = if let Some(local) = local {
+        local
+    } else if let Some(b) = lower.strip_suffix("am").or_else(|| lower.strip_suffix('a')) {
         (b.trim().to_string(), Some(false))
     } else if let Some(b) = lower.strip_suffix("pm").or_else(|| lower.strip_suffix('p')) {
         (b.trim().to_string(), Some(true))
@@ -312,11 +316,14 @@ fn parse_time(t: &str) -> Option<(f64, bool, bool)> {
 struct DateNotation {
     order: DateOrder,
     separators: &'static [char],
+    /// Names for AM and PM besides `AM`/`PM` (lowercase, `true` for PM).
+    day_periods: &'static [(&'static str, bool)],
 }
 
-const EN_DATES: DateNotation = DateNotation { order: DateOrder::MonthDay, separators: &['/', '-', '.'] };
-/// `.` groups thousands in vi-VN, so it never separates date parts there.
-const VI_DATES: DateNotation = DateNotation { order: DateOrder::DayMonth, separators: &['/', '-'] };
+const EN_DATES: DateNotation = DateNotation { order: DateOrder::MonthDay, separators: &['/', '-', '.'], day_periods: &[] };
+/// `.` groups thousands in vi-VN, so it never separates date parts there. Times show `SA`/`CH`
+/// there, so they read back.
+const VI_DATES: DateNotation = DateNotation { order: DateOrder::DayMonth, separators: &['/', '-'], day_periods: &[("sa", false), ("ch", true)] };
 
 fn parse_date(t: &str, sys: DateSystem, notation: &DateNotation) -> Option<(f64, &'static str)> {
     let t = t.trim().trim_end_matches(',');
@@ -405,7 +412,7 @@ pub fn current_year() -> i64 {
 }
 
 fn parse_datetime(t: &str, sys: DateSystem, dates: &DateNotation) -> Option<(f64, Option<&'static str>)> {
-    if let Some((tf, secs, ampm)) = parse_time(t) {
+    if let Some((tf, secs, ampm)) = parse_time(t, dates) {
         let f = match (secs, ampm) {
             // 24 hours or more: elapsed hours, so 25:00 shows as 25:00:00, not 1:00.
             _ if tf >= 1.0 => "[h]:mm:ss",
@@ -422,7 +429,7 @@ fn parse_datetime(t: &str, sys: DateSystem, dates: &DateNotation) -> Option<(f64
     // date + time: split at the last space(s) before a time-looking tail.
     for (i, _) in t.match_indices(' ') {
         let (a, b) = (t.get(..i)?, t.get(i + 1..)?);
-        if let (Some((d, _)), Some((tf, _, _))) = (parse_date(a, sys, dates), parse_time(b)) {
+        if let (Some((d, _)), Some((tf, _, _))) = (parse_date(a, sys, dates), parse_time(b, dates)) {
             return Some((d + tf, Some("m/d/yyyy h:mm")));
         }
     }
@@ -593,6 +600,13 @@ mod tests {
         let at = vi("19/10/2026 18:00");
         assert_eq!(at.value, Value::Number(46314.75));
         assert_eq!(at.format, Some("m/d/yyyy h:mm"));
+        // vi-VN shows AM/PM as SA/CH, so typed (and Ctrl+Shift+; inserted) times read back.
+        assert_eq!(vi("1:30 CH"), Parsed { value: Value::Number(13.5 / 24.0), format: Some("h:mm AM/PM") });
+        assert_eq!(vi("12:00:00 SA"), Parsed { value: Value::Number(0.0), format: Some("h:mm:ss AM/PM") });
+        assert_eq!(vi("6 ch").value, Value::Number(0.75));
+        assert_eq!(vi("1:30 PM").value, Value::Number(13.5 / 24.0), "AM/PM still read");
+        assert_eq!(vi("19/10/2026 6:00 CH").value, Value::Number(46314.75));
+        assert_eq!(p("1:30 CH").value, Value::text("1:30 CH"), "en-US doesn't read SA/CH");
     }
 
     #[test]

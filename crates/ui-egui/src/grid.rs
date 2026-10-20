@@ -557,6 +557,13 @@ fn display_text(
         };
     }
     let f = gridcraft_engine::display::format_in(v, code, wb, region);
+    if matches!(v, Value::Text(_))
+        && region == crate::region::Region::ViVn
+        && crate::pivot_labels::in_date_grouped_pivot(sh, c)
+        && let Some(label) = crate::pivot_labels::translate(&f.text, region)
+    {
+        return (label, f.color.map(numfmt_color), f.numeric, f.fill);
+    }
     (f.text, f.color.map(numfmt_color), f.numeric, f.fill)
 }
 
@@ -2255,7 +2262,7 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
                     app.ui
                         .language
                         .tr("Width: {width} ({pixels} pixels)")
-                        .replace("{width}", &format!("{:.2}", gridcraft_engine::cmd::format::points_to_chars(w as f64)))
+                        .replace("{width}", &app.ui.region().number_text(&format!("{:.2}", gridcraft_engine::cmd::format::points_to_chars(w as f64))))
                         .replace("{pixels}", &w.round().to_string()),
                     crate::now_ms(),
                 ));
@@ -2275,7 +2282,7 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
                     app.ui
                         .language
                         .tr("Height: {height} ({pixels} pixels)")
-                        .replace("{height}", &format!("{:.2}", h * 0.75))
+                        .replace("{height}", &app.ui.region().number_text(&format!("{:.2}", h * 0.75)))
                         .replace("{pixels}", &h.round().to_string()),
                     crate::now_ms(),
                 ));

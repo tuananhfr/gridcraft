@@ -43,6 +43,9 @@ pub fn tabs(session: &Session) -> Vec<DocTab> {
 enum Click {
     Activate,
     Close,
+    CloseOthers,
+    CloseAll,
+    Reopen,
 }
 
 pub fn show(app: &mut SheetApp, ui: &mut Ui) {
@@ -52,6 +55,7 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
     }
     let t = Tokens::get(ui.ctx());
     let mut clicked = None;
+    let can_reopen = app.can_reopen_closed();
     egui::Panel::top("document_tabs").exact_size(STRIP_H).frame(egui::Frame::NONE.fill(t.window)).show(ui, |ui| {
         let rect = ui.max_rect();
         ui.painter()
@@ -76,7 +80,7 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
                     ui.spacing_mut().item_spacing.x = 1.0;
                     ui.add_space(PAD);
                     for tab in &tabs {
-                        if let Some(c) = tab_button(ui, &t, tab, width, reveal) {
+                        if let Some(c) = tab_button(ui, &t, tab, width, reveal, can_reopen) {
                             clicked = Some((tab.index, c));
                         }
                     }
@@ -88,12 +92,19 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
         Some((i, Click::Activate)) => {
             app.activate_document(i);
         }
+        Some((i, Click::CloseOthers)) => {
+            if let Some(uid) = app.session.documents().get(i).map(|d| d.uid) {
+                app.close_others(uid);
+            }
+        }
+        Some((_, Click::CloseAll)) => app.close_all(),
+        Some((_, Click::Reopen)) => app.run_or_alert("file.reopenClosed", json!({})),
         None => return,
     }
     app.note_active_document();
 }
 
-fn tab_button(ui: &mut Ui, t: &Tokens, tab: &DocTab, width: f32, reveal: bool) -> Option<Click> {
+fn tab_button(ui: &mut Ui, t: &Tokens, tab: &DocTab, width: f32, reveal: bool, can_reopen: bool) -> Option<Click> {
     let (rect, resp) = ui.allocate_exact_size(vec2(width, STRIP_H), Sense::click());
     if tab.active && reveal {
         resp.scroll_to_me(None);
@@ -132,7 +143,21 @@ fn tab_button(ui: &mut Ui, t: &Tokens, tab: &DocTab, width: f32, reveal: bool) -
     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, tab.active, &tab.title));
     let tip = if tab.dirty { format!("{}\n{}", tab.title, tr(ui, "Unsaved changes")) } else { tab.title.clone() };
     let resp = resp.on_hover_text(tip);
-    if close_resp.clicked() || resp.middle_clicked() {
+    let mut menu = None;
+    resp.context_menu(|ui| {
+        for (label, click) in [("Close", Click::Close), ("Close Others", Click::CloseOthers), ("Close All", Click::CloseAll)] {
+            if ui.button(tr(ui, label)).clicked() {
+                menu = Some(click);
+            }
+        }
+        ui.separator();
+        if ui.add_enabled(can_reopen, egui::Button::new(tr(ui, "Reopen Closed Document")).shortcut_text("Ctrl+Shift+T")).clicked() {
+            menu = Some(Click::Reopen);
+        }
+    });
+    if menu.is_some() {
+        menu
+    } else if close_resp.clicked() || resp.middle_clicked() {
         Some(Click::Close)
     } else if resp.clicked() && !tab.active {
         Some(Click::Activate)
