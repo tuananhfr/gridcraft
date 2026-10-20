@@ -2,6 +2,8 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Close document" => "Zavřít dokument",
+        "The browser could not save the file. Please try again." => "Prohlížeč nemohl soubor uložit. Zkuste to znovu.",
         "Paste" => "Vložit",
         "Paste Values" => "Vložit hodnoty",
         "Paste Formulas" => "Vložit vzorce",

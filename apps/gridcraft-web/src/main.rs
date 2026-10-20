@@ -17,6 +17,8 @@
 #[cfg(any(target_arch = "wasm32", test))]
 mod clipboard;
 #[cfg(target_arch = "wasm32")]
+mod closed;
+#[cfg(target_arch = "wasm32")]
 mod drafts;
 #[cfg(target_arch = "wasm32")]
 mod host;

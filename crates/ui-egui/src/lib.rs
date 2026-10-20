@@ -11,6 +11,7 @@ mod border_preview;
 mod cell_pictures;
 pub mod chartview;
 mod clipboard;
+mod close_after_save;
 pub mod close_many;
 pub mod closed_docs;
 pub mod control;
@@ -233,6 +234,8 @@ pub struct Services {
     /// Web: hand PDF bytes to the browser's print flow directly (no download,
     /// no intermediate file) — opens the system print dialog on that PDF.
     pub print: Option<Box<dyn Fn(&[u8])>>,
+    /// Web host notification after a successful close leaves no documents.
+    pub editor_closed: Option<Box<dyn Fn()>>,
 }
 
 /// Shared queue of files read asynchronously (browser file picker, drag and drop).
@@ -309,6 +312,7 @@ pub struct SheetApp {
     /// Documents closed this session, for Reopen Closed Document.
     pub closed_docs: closed_docs::ClosedDocs,
     close_queue: Option<close_many::CloseQueue>,
+    pending_closes: Vec<close_after_save::PendingClose>,
     /// Desktop: the unsaved documents were dealt with, so the window may close.
     pub quit_confirmed: bool,
     /// Close the window on the next frame.
@@ -382,6 +386,7 @@ impl SheetApp {
             save_failures: Default::default(),
             closed_docs: Default::default(),
             close_queue: None,
+            pending_closes: Vec::new(),
             quit_confirmed: false,
             quit_requested: false,
             decrypted: Default::default(),
@@ -498,6 +503,9 @@ impl SheetApp {
         if let Some(r) = self.run_ui_command(id, &params) {
             return r;
         }
+        if id == "file.close" && self.defer_close_command(&params) {
+            return Ok(json!({"closed": false, "waiting": true}));
+        }
         let closing = if id == "file.close" { self.closing_snapshot(&params) } else { None };
         // Commands run between frames (tests, the control channel) see a region change at once.
         self.session.region = self.ui.region();
@@ -509,6 +517,12 @@ impl SheetApp {
         }
         if matches!(id, "file.save" | "file.saveAs") {
             self.note_save_result(&r);
+        }
+        let did_close = id == "file.close" && r.as_ref().ok().and_then(|r| r.get("closed")).and_then(Json::as_bool) == Some(true);
+        if close_after_save::closed_last_document(did_close, self.session.documents().len())
+            && let Some(notify) = &self.services.editor_closed
+        {
+            notify();
         }
         self.after_engine();
         // The new chart is selected, as after inserting any object, so Delete removes it, not its data.
@@ -556,6 +570,7 @@ impl SheetApp {
         let session = &mut self.session;
         let failures = &mut self.save_failures;
         let mut failed = Vec::new();
+        let mut cancelled = Vec::new();
         self.pending_saves.retain(|p| {
             // Checked before `take`: a host that settles and then drops its copy is still heard.
             let abandoned = p.report.abandoned();
@@ -565,17 +580,29 @@ impl SheetApp {
                     failures.clear(p.uid);
                     false
                 }
-                Some(Delivery::Cancelled) => false,
+                Some(Delivery::Cancelled) => {
+                    cancelled.push(p.uid);
+                    false
+                }
                 Some(Delivery::Failed(e)) => {
+                    cancelled.push(p.uid);
                     if let Some(d) = session.documents().iter().find(|d| d.uid == p.uid) {
                         failures.record(p.uid, d.wb.clone(), e.clone());
                     }
                     failed.push(format!("Couldn't save '{}': {e}", p.name));
                     false
                 }
-                None => !abandoned,
+                None => {
+                    if abandoned {
+                        cancelled.push(p.uid);
+                    }
+                    !abandoned
+                }
             }
         });
+        for uid in cancelled {
+            self.cancel_close_after_save(uid);
+        }
         if let Some(m) = failed.pop() {
             self.message = Some(("GridCraft".into(), m));
         }
@@ -1102,6 +1129,7 @@ impl SheetApp {
         // anything that never reached a control (collapsed ribbon, tab switch) is dropped.
         self.ui.keytip_invoke = None;
         self.settle_saves();
+        self.advance_pending_closes();
         self.advance_close_queue();
         if std::mem::take(&mut self.quit_requested) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);

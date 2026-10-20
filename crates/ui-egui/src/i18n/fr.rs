@@ -2,6 +2,8 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Close document" => "Fermer le document",
+        "The browser could not save the file. Please try again." => "Le navigateur n’a pas pu enregistrer le fichier. Veuillez réessayer.",
         "Different First Page" => "Première page différente",
         "Different Odd & Even Pages" => "Pages paires et impaires différentes",
         "Paste" => "Coller",

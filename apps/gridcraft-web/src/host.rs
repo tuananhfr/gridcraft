@@ -56,7 +56,7 @@ impl Bridge {
             Ok(()) => report.settle(Delivery::Delivered),
             Err(e) => {
                 log::error!("couldn't hand {name} to the page: {e}");
-                report.settle(Delivery::Failed(e));
+                report.settle(Delivery::Failed(crate::web::SAVE_FAILED.into()));
             }
         }));
     }

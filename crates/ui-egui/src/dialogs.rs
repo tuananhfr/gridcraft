@@ -1221,12 +1221,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                         }
                         // File operations must include the cell the user is still editing (as the File > Save menu item already does).
                         if ui.button(tr(ui, "Save")).clicked() && app.commit_edit(0, 0, false, false) {
-                            app.in_document(target, |app| {
-                                app.run_or_alert("file.save", json!({}));
-                                if app.session.active().is_some_and(|x| !x.is_dirty()) {
-                                    app.run_or_alert("file.close", json!({"force": true}));
-                                }
-                            });
+                            app.save_before_close(target);
                             open = false;
                         }
                     });

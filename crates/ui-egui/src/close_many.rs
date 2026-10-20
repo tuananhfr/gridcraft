@@ -53,6 +53,9 @@ impl SheetApp {
             return;
         }
         crate::paper_view::commit(self);
+        if self.defer_close(uids.clone(), then) {
+            return;
+        }
         let unsaved: Vec<u64> = uids.iter().copied().filter(|&uid| self.is_unsaved(uid)).collect();
         if unsaved.is_empty() {
             return self.finish_close(&uids, then);

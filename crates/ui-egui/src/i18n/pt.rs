@@ -3,6 +3,8 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Close document" => "Fechar documento",
+        "The browser could not save the file. Please try again." => "O navegador não conseguiu salvar o arquivo. Tente novamente.",
         "Paste" => "Colar",
         "Paste Values" => "Colar Valores",
         "Paste Formulas" => "Colar Fórmulas",

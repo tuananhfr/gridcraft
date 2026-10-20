@@ -5,6 +5,8 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Close document" => "Đóng tài liệu",
+        "The browser could not save the file. Please try again." => "Trình duyệt không thể lưu tệp. Vui lòng thử lại.",
         "CSV UTF-8 (with BOM) (*.csv)" => "CSV UTF-8 (có BOM) (*.csv)",
         "CSV UTF-8 (with BOM)" => "CSV UTF-8 (có BOM)",
         "The browser cannot read the clipboard — use Ctrl+V" => "Trình duyệt không cho đọc bảng tạm — hãy dùng Ctrl+V",

@@ -139,6 +139,13 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
             let left_end = ui.min_rect().right();
             let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0);
+                if narrow && app.session.active().is_some() {
+                    let close = icon_button(ui, Icon::Close, t.text_dim, "Close document", vec2(26.0, ch));
+                    close.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr(ui, "Close document")));
+                    if close.clicked() {
+                        app.close_document_at(app.session.active_index());
+                    }
+                }
                 let __k = icon_button(ui, Icon::Search, t.text_dim, "Search commands (⌘⇧Space)", vec2(28.0, ch));
                 control_keytip(app, ui, &__k, "commandSearch");
                 if __k.clicked() {
@@ -189,11 +196,11 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
 fn title_fit(ui: &Ui, available: f32) -> TitleFit {
     let gap = ui.spacing().item_spacing.x;
     let text = |label: &str| ui.painter().layout_no_wrap(tr(ui, label).to_string(), theme::ui_font(12.5), Color32::WHITE).size().x;
-    // Always shown: the AutoSave switch, Save, Undo, More, the Share icon and Search, with the
+    // Always shown: the AutoSave switch, Save, Undo, More, the Share icon, Search and Close, with the
     // spaces around them. The optional controls also leave room for a few characters of the
     // document title, so a phone still says which workbook is open.
     const TITLE_ROOM: f32 = 100.0;
-    let fixed = TITLE_LEFT_PAD + (30.0 + gap) + 6.0 + 3.0 * (26.0 + gap) + 8.0 + (28.0 + gap) + (36.0 + gap) + TITLE_ROOM;
+    let fixed = TITLE_LEFT_PAD + (30.0 + gap) + 6.0 + 4.0 * (26.0 + gap) + 8.0 + (28.0 + gap) + (36.0 + gap) + TITLE_ROOM;
     TitleFit::new(available, fixed, |o| match o {
         Optional::AutoSaveLabel => text("AutoSave") + gap,
         Optional::ShareLabel => text("Share") + 6.0,

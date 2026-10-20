@@ -10,6 +10,7 @@ use wasm_bindgen::JsValue;
 
 const CANVAS_ID: &str = "gridcraft_canvas";
 const LOADING_ID: &str = "gridcraft_loading";
+pub(crate) const SAVE_FAILED: &str = "The browser could not save the file. Please try again.";
 
 pub fn start() {
     eframe::WebLogger::init(log::LevelFilter::Info).ok();
@@ -223,7 +224,7 @@ fn services(inbox: Inbox, ctx: egui::Context) -> Services {
         download: Some(Box::new(move |name: &str, bytes: &[u8], report: DeliveryReport| {
             if let Err(e) = download(name, bytes, report.clone(), save_ctx.clone()) {
                 log::error!("download of {name} failed: {e}");
-                report.settle(Delivery::Failed(e));
+                report.settle(Delivery::Failed(SAVE_FAILED.into()));
             }
         })),
         print: Some(Box::new(|bytes: &[u8]| {
@@ -239,6 +240,7 @@ fn services(inbox: Inbox, ctx: egui::Context) -> Services {
             }
         })),
         inbox: Some(inbox),
+        editor_closed: Some(Box::new(crate::closed::notify)),
         ..Default::default()
     }
 }
@@ -354,21 +356,6 @@ fn download(name: &str, bytes: &[u8], report: DeliveryReport, ctx: egui::Context
         let prom: js_sys::Promise = prom_val.dyn_into().map_err(|_| "not a promise".to_string())?;
 
         let bytes_vec = bytes.to_vec();
-        let name_owned = name.to_string();
-        // Anything but the user cancelling (no user gesture, a denied permission, a failed write)
-        // falls back to an ordinary download, so a save never fails silently.
-        // The browser reports nothing back from an anchor download, so starting one counts as
-        // delivered.
-        let fallback = move |bytes: &[u8], why: String| -> Delivery {
-            let started = web_sys::window().ok_or_else(|| "no window".to_string()).and_then(|w| trigger_anchor_download(&w, &name_owned, bytes));
-            match started {
-                Ok(()) => Delivery::Delivered,
-                Err(e) => {
-                    log::error!("download fallback failed: {e}");
-                    Delivery::Failed(format!("{why}; download fallback: {e}"))
-                }
-            }
-        };
         wasm_bindgen_futures::spawn_local(async move {
             let delivery = match wasm_bindgen_futures::JsFuture::from(prom).await {
                 Ok(handle_val) => match write_file_handle(&handle_val, &bytes_vec).await {
@@ -378,7 +365,7 @@ fn download(name: &str, bytes: &[u8], report: DeliveryReport, ctx: egui::Context
                     }
                     Err(e) => {
                         log::error!("failed writing to file handle: {e}");
-                        fallback(&bytes_vec, e)
+                        Delivery::Failed(SAVE_FAILED.into())
                     }
                 },
                 Err(e) => {
@@ -387,8 +374,8 @@ fn download(name: &str, bytes: &[u8], report: DeliveryReport, ctx: egui::Context
                         log::info!("Save file dialog cancelled by user");
                         Delivery::Cancelled
                     } else {
-                        log::warn!("showSaveFilePicker refused ({err_name}); downloading instead");
-                        fallback(&bytes_vec, format!("{e:?}"))
+                        log::error!("showSaveFilePicker failed ({err_name}): {e:?}");
+                        Delivery::Failed(SAVE_FAILED.into())
                     }
                 }
             };

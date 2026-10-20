@@ -186,6 +186,8 @@ pub fn set_current(ctx: &egui::Context, language: Language) {
 /// English label → Japanese. Keys are the exact interface strings (command ids, file names and
 /// document text are never translated); anything absent falls back to English.
 const JAPANESE: &[(&str, &str)] = &[
+    ("Close document", "ドキュメントを閉じる"),
+    ("The browser could not save the file. Please try again.", "ブラウザーでファイルを保存できませんでした。もう一度お試しください。"),
     ("Paste", "貼り付け"),
     ("Paste Values", "値の貼り付け"),
     ("Paste Formulas", "数式の貼り付け"),
