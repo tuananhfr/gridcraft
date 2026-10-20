@@ -69,12 +69,11 @@ fn pasted_currency_text_keeps_the_number_from_the_clipboard_html() {
     assert_eq!(crate::display::cell_text(&d.wb, sh, CellRef::parse("A1").unwrap()), "Rp10,000.00");
     assert_eq!(crate::display::cell_text(&d.wb, sh, CellRef::parse("B1").unwrap()), "Rp2,500.50");
 
-    // HTML that doesn't show the same text (left over from another copy) changes nothing; without
-    // HTML the text stays text, as typing it would in an en-US locale.
-    let stale = r#"<table><tr><td x:num="7">Rp7.00</td></tr></table>"#;
-    s.execute("edit.paste", json!({"at": "A3", "text": "Rp10,000.00", "html": stale})).unwrap();
+    // External HTML is authoritative; without HTML the text follows the input locale.
+    let external = r#"<table><tr><td x:num="7">Rp7.00</td></tr></table>"#;
+    s.execute("edit.paste", json!({"at": "A3", "text": "Rp10,000.00", "html": external})).unwrap();
     s.execute("edit.paste", json!({"at": "A4", "text": "Rp10,000.00"})).unwrap();
-    assert_eq!(v(&s, "A3"), Value::text("Rp10,000.00"));
+    assert_eq!(v(&s, "A3"), Value::number(7.0));
     assert_eq!(v(&s, "A4"), Value::text("Rp10,000.00"));
 }
 

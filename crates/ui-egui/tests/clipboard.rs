@@ -102,6 +102,89 @@ fn pasting_reads_the_clipboard_html_for_the_numbers_behind_the_text() {
 }
 
 #[test]
+fn web_copy_and_cut_start_one_rich_write_without_egui_text_write() {
+    for event in [Event::Copy, Event::Cut] {
+        let calls = Rc::new(RefCell::new(Vec::new()));
+        let received = calls.clone();
+        let mut h = harness(Services {
+            set_clipboard_html: Some(Box::new(move |html, text| {
+                received.borrow_mut().push((html.to_string(), text.to_string()));
+                true
+            })),
+            ..Default::default()
+        });
+        h.input_mut().events.push(event);
+        h.step();
+        assert_eq!(calls.borrow().len(), 1);
+        assert!(calls.borrow()[0].0.contains("<table"));
+        assert_eq!(calls.borrow()[0].1, "Name\tScore\nAda\t42\n");
+        assert!(!h.output().platform_output.commands.iter().any(|c| matches!(c, OutputCommand::CopyText(_))));
+    }
+}
+
+#[test]
+fn unsupported_web_rich_write_uses_egui_text_fallback() {
+    let mut h = harness(Services { set_clipboard_html: Some(Box::new(|_, _| false)), ..Default::default() });
+    h.input_mut().events.push(Event::Copy);
+    h.step();
+    assert!(h.output().platform_output.commands.iter().any(|c| matches!(c, OutputCommand::CopyText(text) if text == "Name\tScore\nAda\t42\n")));
+}
+
+#[test]
+fn web_ribbon_paste_requests_read_and_waits_for_one_paste_event() {
+    let requests = Rc::new(RefCell::new(0));
+    let read = requests.clone();
+    let mut h = harness(Services {
+        request_clipboard: Some(Box::new(move || *read.borrow_mut() += 1)),
+        paste_html: Some(Box::new(|| Some("<table><tr><td>web</td><td>2</td></tr><tr><td>HTML</td><td>4</td></tr></table>".into()))),
+        ..Default::default()
+    });
+    h.state_mut().run("edit.copy", json!({"range": "A1:B2"})).unwrap();
+    h.state_mut().run("selection.set", json!({"cell": "D5"})).unwrap();
+    h.get_by_role_and_label(Role::Button, "Paste").click();
+    h.run_steps(2);
+    assert_eq!(*requests.borrow(), 1);
+    assert_eq!(value_at(&h, "D5"), Some(Value::Empty));
+    h.input_mut().events.push(Event::Paste("plain fallback".into()));
+    h.run_steps(2);
+    assert_eq!(value_at(&h, "D5"), Some(Value::text("web")));
+    assert_eq!(value_at(&h, "E6"), Some(Value::number(4.0)));
+    h.state_mut().run("edit.undo", json!({})).unwrap();
+    assert_eq!(value_at(&h, "D5"), Some(Value::Empty));
+}
+
+#[test]
+fn ui_internal_copy_is_not_replaced_by_stale_external_html() {
+    let mut h = harness(Services { paste_html: Some(Box::new(|| Some("<table><tr><td>stale</td></tr></table>".into()))), ..Default::default() });
+    h.state_mut().run("cell.set", json!({"cell": "A1", "input": "=21*2"})).unwrap();
+    h.state_mut().run("home.bold", json!({"range": "A1"})).unwrap();
+    let copied = h.state_mut().run("edit.copy", json!({"range": "A1"})).unwrap();
+    h.state_mut().run("selection.set", json!({"cell": "D5"})).unwrap();
+    h.input_mut().events.push(Event::Paste(copied["text"].as_str().unwrap().into()));
+    h.run_steps(2);
+    let sheet = h.state().session.active().unwrap().wb.active().unwrap();
+    let original = sheet.cell(CellRef::parse("A1").unwrap()).unwrap();
+    let pasted = sheet.cell(CellRef::parse("D5").unwrap()).unwrap();
+    assert_eq!(pasted.formula, original.formula);
+    assert_eq!(pasted.style, original.style);
+    assert_eq!(pasted.value, Value::number(42.0));
+}
+
+#[test]
+fn web_clipboard_notices_have_vietnamese_and_english_strings() {
+    use gridcraft_ui_egui::i18n::Language;
+
+    for (english, vietnamese) in [
+        ("The browser cannot read the clipboard — use Ctrl+V", "Trình duyệt không cho đọc bảng tạm — hãy dùng Ctrl+V"),
+        ("Could not write to the clipboard", "Không ghi được vào bảng tạm"),
+        ("Some clipboard content was too large and was skipped.", "Một phần nội dung bảng tạm quá lớn nên đã được bỏ qua."),
+    ] {
+        assert_eq!(Language::En.tr(english), english);
+        assert_eq!(Language::Vi.tr(english), vietnamese);
+    }
+}
+
+#[test]
 fn copying_multiple_areas_copies_lined_up_areas_and_explains_the_rest() {
     // Issue #348: lined-up areas copy as one block; others get Excel's message instead of nothing.
     let mut h = harness(Services::default());

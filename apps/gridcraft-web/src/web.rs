@@ -53,11 +53,18 @@ pub fn start() {
                     } else if q.contains("sample") {
                         let _ = session.execute("file.new", serde_json::json!({"sample": "sales"}));
                     }
+                    let clipboard = crate::clipboard::ClipboardBridge::install(cc.egui_ctx.clone()).ok();
                     let mut services = services(inbox.clone(), cc.egui_ctx.clone());
+                    if let Some(clipboard) = &clipboard {
+                        clipboard.connect(&mut services);
+                    }
                     if let Some(bridge) = &app_bridge {
                         bridge.connect(&mut services, inbox.clone(), cc.egui_ctx.clone());
                     }
                     let mut app = SheetApp::new(session, services);
+                    if clipboard.is_none() {
+                        app.toast = Some(("The browser cannot read the clipboard — use Ctrl+V".into(), gridcraft_ui_egui::now_ms()));
+                    }
                     app.ui.system_theme = true;
                     app.ui.language = crate::language::initial();
                     app.ui.region = crate::region::initial();
@@ -72,7 +79,7 @@ pub fn start() {
                     }
                     // Drafts are the office shell's; an embedding parent stores what it opened itself.
                     let drafts = app_bridge.is_none().then(|| crate::drafts::Drafts::install(&cc.egui_ctx));
-                    Ok(Box::new(WebShell { app, inbox, bridge: app_bridge, dirty, drafts, language, region }))
+                    Ok(Box::new(WebShell { app, inbox, bridge: app_bridge, clipboard, dirty, drafts, language, region }))
                 }),
             )
             .await;
@@ -100,6 +107,7 @@ struct WebShell {
     app: SheetApp,
     inbox: Inbox,
     bridge: Option<crate::host::Bridge>,
+    clipboard: Option<crate::clipboard::ClipboardBridge>,
     /// Whether any open workbook has unsaved changes, for the `beforeunload` guard.
     dirty: Rc<Cell<bool>>,
     /// Draft autosave to the office shell's `window.erpDrafts`; `None` in host mode.
@@ -131,6 +139,9 @@ impl eframe::App for WebShell {
             drafts.open_restored(&mut self.app);
         }
         self.app.logic(ctx);
+        if let Some(clipboard) = &self.clipboard {
+            clipboard.show_notice(&mut self.app);
+        }
         if self.app.ui.language != self.language {
             self.language = self.app.ui.language;
             crate::language::remember(self.language);
@@ -142,6 +153,9 @@ impl eframe::App for WebShell {
     }
 
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        if let Some(clipboard) = &self.clipboard {
+            clipboard.raw_input(raw, &mut self.app);
+        }
         self.app.raw_input_hook(raw);
     }
 
@@ -179,7 +193,6 @@ fn services(inbox: Inbox, ctx: egui::Context) -> Services {
     let picture_ctx = ctx.clone();
     let save_ctx = ctx.clone();
     Services {
-        copy_html: Some(Box::new(copy_html)),
         open_async: Some(Box::new(move || {
             let inbox = open_inbox.clone();
             let ctx = ctx.clone();
@@ -228,39 +241,6 @@ fn services(inbox: Inbox, ctx: egui::Context) -> Services {
         inbox: Some(inbox),
         ..Default::default()
     }
-}
-
-/// Start inside the copy gesture; deferring `write` can lose browser user activation.
-fn copy_html(html: &str, text: &str) -> Result<(), String> {
-    let js = |e: wasm_bindgen::JsValue| format!("{e:?}");
-    let window = web_sys::window().ok_or("no window")?;
-    let clipboard = window.navigator().clipboard();
-    if clipboard.is_undefined() || clipboard.is_null() {
-        return Err("browser clipboard is unavailable (a secure context is required)".into());
-    }
-    if !js_sys::Reflect::get(&clipboard, &"write".into()).map_err(js)?.is_function() {
-        return Err("browser does not support rich clipboard writes".into());
-    }
-    let data = js_sys::Object::new();
-    for (mime, value) in [("text/html", html), ("text/plain", text)] {
-        let opts = web_sys::BlobPropertyBag::new();
-        opts.set_type(mime);
-        let parts = js_sys::Array::of1(&wasm_bindgen::JsValue::from_str(value));
-        let blob = web_sys::Blob::new_with_str_sequence_and_options(&parts, &opts).map_err(js)?;
-        js_sys::Reflect::set(&data, &mime.into(), &blob).map_err(js)?;
-    }
-    let item = web_sys::ClipboardItem::new_with_record_from_str_to_blob_promise(&data).map_err(js)?;
-    let promise = clipboard.write(&js_sys::Array::of1(&item));
-    let text = text.to_owned();
-    wasm_bindgen_futures::spawn_local(async move {
-        if let Err(e) = wasm_bindgen_futures::JsFuture::from(promise).await {
-            log::warn!("Rich clipboard write failed; trying plain text: {e:?}");
-            if let Err(e) = wasm_bindgen_futures::JsFuture::from(clipboard.write_text(&text)).await {
-                log::error!("Plain-text clipboard fallback also failed: {e:?}");
-            }
-        }
-    });
-    Ok(())
 }
 
 /// Opens `bytes` (a PDF) as an object URL in a hidden iframe and calls the iframe's own

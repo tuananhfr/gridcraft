@@ -65,7 +65,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste",
             ["Home", "Clipboard"],
             Some("Cmd+V"),
-            "{at?: \"C3\", text?: \"tab-separated text from the system clipboard\", html?: \"the clipboard's HTML flavour; cells the source recorded as numbers (x:num, sdval) stay numbers\", region?: \"en-US\"|\"vi-VN\"|\"es-ES\" (notation the text's numbers and dates are read in, default the session's)}",
+            "{at?: \"C3\", text?: \"tab-separated text from the system clipboard\", html?: \"the clipboard's HTML table; table values take priority over external text, numbers (x:num, sdval) stay numbers; matching internal copy text keeps formulas and styles\", region?: \"en-US\"|\"vi-VN\"|\"es-ES\" (notation the text's numbers and dates are read in, default the session's)}",
             has_doc,
             paste
         ),
@@ -906,11 +906,20 @@ enum What {
 }
 
 fn paste(s: &mut Session, p: &Json) -> Result<Json> {
-    // External text (from the system clipboard) when it differs from ours.
+    // A same-session copy retains formulas and styles even if the host offers stale HTML.
     if let Some(text) = str_param(p, "text")
-        && s.clipboard.as_ref().is_none_or(|c| c.text.trim_end_matches(['\r', '\n']) != text.trim_end_matches(['\r', '\n']))
+        && s.clipboard.as_ref().is_none_or(|c| {
+            !c.text
+                .trim_end_matches(['\r', '\n'])
+                .chars()
+                .filter(|c| *c != '\r')
+                .eq(text.trim_end_matches(['\r', '\n']).chars().filter(|c| *c != '\r'))
+        })
     {
         return paste_text(s, p, text);
+    }
+    if str_param(p, "text").is_none() && str_param(p, "html").is_some() {
+        return paste_text(s, p, "");
     }
     if s.clipboard.is_none() {
         return Err(EngineError::Other("Nothing to paste.".into()));
@@ -922,9 +931,12 @@ fn paste_text(s: &mut Session, p: &Json, text: &str) -> Result<Json> {
     let sheet = target_sheet(s, p)?;
     let region = display_region(s, p, "edit.paste")?;
     let at = cell_param_on(s, p, "at", sheet)?.unwrap_or(s.doc()?.selection.current().start);
-    let rows: Vec<Vec<String>> = parse_tsv(text);
-    // The HTML flavour, when the host passed it: the number behind each cell's shown text.
-    let html = str_param(p, "html").map(crate::clip_html::table_cells).unwrap_or_default();
+    let html = str_param(p, "html").filter(|html| crate::clipboard_limits::accepts_html(html)).map(crate::clip_html::table_cells).unwrap_or_default();
+    let rows: Vec<Vec<String>> = if html.iter().any(|row| !row.is_empty()) {
+        html.iter().map(|row| row.iter().map(|cell| cell.text.clone()).collect()).collect()
+    } else {
+        parse_tsv(text)
+    };
     let h = rows.len();
     let w = rows.iter().map(Vec::len).max().unwrap_or(0);
     edit(s, |cx| {

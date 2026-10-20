@@ -209,6 +209,10 @@ pub struct Services {
     /// Publish HTML and its plain-text alternative together. `Ok` means the host owns the
     /// write (including any asynchronous fallback); an immediate error uses egui's text path.
     pub copy_html: Option<Box<dyn FnMut(&str, &str) -> Result<(), String>>>,
+    /// `true` transfers ownership of the write to the host, avoiding a second text write.
+    pub set_clipboard_html: Option<Box<dyn Fn(&str, &str) -> bool>>,
+    /// The host delivers asynchronous reads as a later paste event.
+    pub request_clipboard: Option<Box<dyn Fn()>>,
     /// Read the HTML flavour of the system clipboard when the user pastes text, so cells the
     /// source spreadsheet recorded as numbers stay numbers ("Rp10,000.00" → 10000). `None` from
     /// the host pastes the plain text alone.
@@ -523,7 +527,8 @@ impl SheetApp {
     /// their existing internal clipboard behavior and do not write to the host clipboard.
     pub fn copy_to_clipboard(&mut self, ctx: &egui::Context, command: &str) {
         // Only ask the engine for HTML when the host can publish it.
-        let result = match self.run_command(command, json!({"html": self.services.copy_html.is_some()})) {
+        let rich = self.services.set_clipboard_html.is_some() || self.services.copy_html.is_some();
+        let result = match self.run_command(command, json!({"html": rich})) {
             Ok(result) => result,
             Err(e) => return self.alert(e),
         };
@@ -531,6 +536,12 @@ impl SheetApp {
         // The system clipboard gets this copy, so its text decides what Paste pastes.
         self.clipboard_text_at_copy = None;
         self.cut_text = (command == "edit.cut").then(|| text.replace("\r\n", "\n"));
+        if let Some(html) = result.get("html").and_then(Json::as_str)
+            && let Some(write) = &self.services.set_clipboard_html
+            && write(html, text)
+        {
+            return;
+        }
         if let Some(html) = result.get("html").and_then(Json::as_str)
             && let Some(copy_html) = &mut self.services.copy_html
         {
@@ -569,6 +580,10 @@ impl SheetApp {
     /// text there, no host clipboard (web), or the text that was there when GridCraft last copied
     /// without publishing, GridCraft's own clipboard is pasted.
     pub fn paste_from_clipboard(&mut self) {
+        if let Some(request) = &self.services.request_clipboard {
+            request();
+            return;
+        }
         match self.system_clipboard_text() {
             Some(text) if self.session.clipboard.is_none() || self.clipboard_text_at_copy.as_ref() != Some(&text) => self.paste_external(text),
             _ => self.run_or_alert("edit.paste", json!({})),
