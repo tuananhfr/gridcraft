@@ -1,4 +1,4 @@
-//! Allocation bounds checked before the existing clipboard HTML parser runs.
+//! Allocation bounds checked before the clipboard HTML parser runs.
 
 pub const MAX_HTML_BYTES: usize = 8 * 1024 * 1024;
 const MAX_CELLS: usize = 20_000;
@@ -19,7 +19,7 @@ pub fn accepts_html(html: &str) -> bool {
             rest = comment.find("-->").and_then(|i| comment.get(i + 3..)).unwrap_or_default();
             continue;
         }
-        let Some(end) = tag_end(rest) else { break };
+        let Some(end) = tag_end(rest) else { return false };
         let tag = rest.get(1..end).unwrap_or_default();
         rest = rest.get(end + 1..).unwrap_or_default();
         let closing = tag.starts_with('/');
@@ -38,12 +38,22 @@ pub fn accepts_html(html: &str) -> bool {
         if name == "tr" {
             rows = rows.saturating_add(1);
         }
+        let attrs = body.get(name_end..).unwrap_or_default();
+        if crate::clip_html::attr(attrs, "style").is_some_and(|s| s.len() > crate::clip_html_style::MAX_STYLE) {
+            return false;
+        }
         if matches!(name.as_str(), "td" | "th") {
-            let span = colspan(body.get(name_end..).unwrap_or_default());
-            cells = cells.saturating_add(span);
+            let colspan = span(attrs, "colspan", gridcraft_core::MAX_COLS as usize);
+            let rowspan = span(attrs, "rowspan", MAX_CELLS + 1);
+            cells = cells.saturating_add(colspan.saturating_mul(rowspan));
         }
         if rows > MAX_CELLS || cells > MAX_CELLS {
             return false;
+        }
+        let raw_text = matches!(name.as_str(), "style" | "script");
+        if raw_text {
+            let end = format!("</{name}");
+            rest = crate::clip_html::find_ci(rest, &end).and_then(|i| rest.get(i..)).unwrap_or_default();
         }
         if !tag.ends_with('/') && !is_void(&name) {
             if open.len() >= MAX_DEPTH {
@@ -73,38 +83,11 @@ fn is_void(name: &str) -> bool {
     matches!(name, "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input" | "link" | "meta" | "param" | "source" | "track" | "wbr")
 }
 
-fn colspan(mut attrs: &str) -> usize {
-    while !attrs.is_empty() {
-        attrs = attrs.trim_start_matches(|c: char| c.is_whitespace() || c == '/');
-        let end = attrs.find(|c: char| c.is_whitespace() || c == '=' || c == '/').unwrap_or(attrs.len());
-        let key = attrs.get(..end).unwrap_or_default();
-        attrs = attrs.get(end..).unwrap_or_default().trim_start();
-        if let Some(value) = attrs.strip_prefix('=') {
-            let value = value.trim_start();
-            let (text, tail) = if let Some(q @ ('\'' | '"')) = value.chars().next() {
-                let inner = value.get(1..).unwrap_or_default();
-                let end = inner.find(q).unwrap_or(inner.len());
-                (inner.get(..end).unwrap_or_default(), inner.get(end + 1..).unwrap_or_default())
-            } else {
-                let end = value.find(char::is_whitespace).unwrap_or(value.len());
-                (value.get(..end).unwrap_or_default(), value.get(end..).unwrap_or_default())
-            };
-            if key.eq_ignore_ascii_case("colspan") {
-                return text.trim().parse::<usize>().unwrap_or(1).clamp(1, gridcraft_core::MAX_COLS as usize);
-            }
-            attrs = tail;
-        } else {
-            if key.eq_ignore_ascii_case("colspan") {
-                return 1;
-            }
-            if key.is_empty() {
-                let mut chars = attrs.chars();
-                chars.next();
-                attrs = chars.as_str();
-            }
-        }
-    }
-    1
+fn span(attrs: &str, name: &str, cap: usize) -> usize {
+    crate::clip_html::attr(attrs, name).map_or(1, |s| {
+        let s = s.trim();
+        if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) { s.parse::<usize>().unwrap_or(cap).clamp(1, cap) } else { 1 }
+    })
 }
 
 #[cfg(test)]
@@ -136,5 +119,14 @@ mod tests {
         assert!(accepts_html(&"x".repeat(MAX_HTML_BYTES)));
         assert!(!accepts_html(&"x".repeat(MAX_HTML_BYTES + 1)));
         assert!(accepts_html(&format!("<!--{}-->{}", "<div>".repeat(MAX_DEPTH + 1), "<br>".repeat(MAX_DEPTH + 1))));
+    }
+
+    #[test]
+    fn inline_style_and_rowspan_limits_are_checked_before_parsing() {
+        assert!(accepts_html(&format!("<table><tr><td style='{}'>x</td></tr></table>", " ".repeat(8192))));
+        assert!(!accepts_html(&format!("<table><tr><td style='{}'>x</td></tr></table>", " ".repeat(8193))));
+        assert!(accepts_html("<table><tr><td rowspan=20000>x</td></tr></table>"));
+        assert!(!accepts_html("<table><tr><td rowspan=20001>x</td></tr></table>"));
+        assert!(!accepts_html("<table><tr><td rowspan=10001 colspan=2>x</td></tr></table>"));
     }
 }

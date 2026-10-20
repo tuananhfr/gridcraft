@@ -269,6 +269,9 @@ pub fn source_dir(path: &str) -> Option<std::path::PathBuf> {
 /// transferred to other file formats*): number formats applied, never column-width `#####`.
 fn csv(wb: &Workbook, sh: &Sheet, delimiter: u8) -> Result<Vec<u8>> {
     gridcraft_xlsx::write_csv(sh, delimiter, |c| {
+        if delimiter == b'\t' && sh.merges.iter().any(|m| m.contains(c) && m.start != c) {
+            return String::new();
+        }
         // General's grid-width formatting rounds large identifiers to scientific notation.
         // Delimited files have no column width, so preserve the whole numeric value instead.
         if wb.styles.get(sh.style_id(c)).num_fmt.as_str().eq_ignore_ascii_case("General")
@@ -289,31 +292,20 @@ fn esc(s: &str) -> String {
 
 fn html_cell_css(wb: &Workbook, sh: &Sheet, c: CellRef) -> String {
     let st = wb.styles.get(sh.style_id(c));
-    let mut css = String::new();
-    if st.font.bold {
-        css.push_str("font-weight:bold;");
+    let mut css = crate::clip_html_style::to_css(st, &wb.theme);
+    if st.align.h == gridcraft_model::HAlign::General {
+        let align = if sh.value(c).is_number() { "right" } else { "left" };
+        let _ = write!(css, "text-align:{align};mso-text-align:general;");
     }
-    if st.font.italic {
-        css.push_str("font-style:italic;");
-    }
-    if let Some(h) = st.font.color.hex(&wb.theme) {
-        let _ = write!(css, "color:{h};");
-    }
-    if st.fill.pattern != gridcraft_model::PatternType::None
-        && let Some(h) = st.fill.fg.hex(&wb.theme)
-    {
-        let _ = write!(css, "background:{h};");
-    }
-    let v = sh.value(c);
-    let align = match st.align.h {
-        gridcraft_model::HAlign::Center => "center",
-        gridcraft_model::HAlign::Right => "right",
-        gridcraft_model::HAlign::Left => "left",
-        _ if v.is_number() => "right",
-        _ => "left",
-    };
-    let _ = write!(css, "text-align:{align};");
     css
+}
+
+fn html_cell_type(sh: &Sheet, c: CellRef) -> String {
+    match sh.value(c) {
+        gridcraft_core::Value::Number(n) if n.is_finite() => format!(" x:num=\"{n}\""),
+        gridcraft_core::Value::Text(_) => " x:str".into(),
+        _ => String::new(),
+    }
 }
 
 const CLIPBOARD_HTML_MAX_BYTES: usize = 4 * 1024 * 1024;
@@ -328,7 +320,7 @@ pub(crate) fn range_html(wb: &Workbook, sheet: usize, r: RangeRef, plain_text: &
     }
     let sh = wb.sheet(sheet)?;
     let mut out = ClipboardHtml(String::new());
-    out.write_str("<table style=\"border-collapse:collapse;font-family:Calibri,Carlito,Arial,sans-serif;font-size:11pt\">").ok()?;
+    out.write_str("<table style=\"border-collapse:collapse\">").ok()?;
     for row in r.start.row..=r.end.row {
         if sh.is_row_hidden(row) {
             continue;
@@ -347,10 +339,15 @@ pub(crate) fn range_html(wb: &Workbook, sheet: usize, r: RangeRef, plain_text: &
                 String::new()
             };
             let css = html_cell_css(wb, sh, c);
-            write!(out, "<td style=\"border:1px solid #d4d4d4;padding:2px 4px;white-space:pre-wrap;{css}\"{span}>").ok()?;
-            // Use the visible selected cell, even when the merge's original anchor
-            // is outside the range or hidden. This matches the plain-text copy.
-            let text = crate::display::cell_text_in(wb, sh, c, region);
+            let css = esc(&css);
+            if css.len() > crate::clip_html_style::MAX_STYLE {
+                return None;
+            }
+            let covered = sh.merges.iter().any(|m| m.contains(c) && m.start != c);
+            let typed = if covered { String::new() } else { html_cell_type(sh, c) };
+            write!(out, "<td style=\"{css}\"{span}{typed}>").ok()?;
+            // A clipped or hidden merge anchor must not expose a covered cell's stored value.
+            let text = if covered { String::new() } else { crate::display::cell_text_in(wb, sh, c, region) };
             let mut chars = text.chars().peekable();
             while let Some(ch) = chars.next() {
                 match ch {
@@ -426,7 +423,8 @@ pub fn to_html(wb: &Workbook, sheet: usize) -> Result<String> {
                     .find(|m| m.start == c)
                     .map(|m| format!(" rowspan=\"{}\" colspan=\"{}\"", m.height(), m.width()))
                     .unwrap_or_default();
-                let _ = write!(out, "<td style=\"{css}\"{span}>{}</td>", esc(&crate::display::cell_text(wb, sh, c)));
+                let typed = html_cell_type(sh, c);
+                let _ = write!(out, "<td style=\"{}\"{span}{typed}>{}</td>", esc(&css), esc(&crate::display::cell_text(wb, sh, c)));
             }
             out.push_str("</tr>");
         }

@@ -9,6 +9,7 @@
 pub mod catalog;
 pub mod cf;
 mod clip_html;
+mod clip_html_style;
 pub mod clipboard_limits;
 pub mod cmd;
 pub mod display;

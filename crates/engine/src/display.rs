@@ -160,7 +160,8 @@ pub fn range_text_in(wb: &Workbook, sheet: usize, r: RangeRef, region: Region) -
                 out.push('\t');
             }
             first = false;
-            let t = cell_text_in(wb, sh, CellRef::new(row, col), region);
+            let c = CellRef::new(row, col);
+            let t = if sh.merges.iter().any(|m| m.contains(c) && m.start != c) { String::new() } else { cell_text_in(wb, sh, c, region) };
             if t.contains(['\t', '\n', '"']) {
                 out.push('"');
                 out.push_str(&t.replace('"', "\"\""));

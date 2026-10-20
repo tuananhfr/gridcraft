@@ -931,23 +931,32 @@ fn paste_text(s: &mut Session, p: &Json, text: &str) -> Result<Json> {
     let sheet = target_sheet(s, p)?;
     let region = display_region(s, p, "edit.paste")?;
     let at = cell_param_on(s, p, "at", sheet)?.unwrap_or(s.doc()?.selection.current().start);
-    let html = str_param(p, "html").filter(|html| crate::clipboard_limits::accepts_html(html)).map(crate::clip_html::table_cells).unwrap_or_default();
-    let rows: Vec<Vec<String>> = if html.iter().any(|row| !row.is_empty()) {
-        html.iter().map(|row| row.iter().map(|cell| cell.text.clone()).collect()).collect()
-    } else {
-        parse_tsv(text)
-    };
+    let html = str_param(p, "html").map(crate::clip_html::table_cells).unwrap_or_default();
+    let rows: Vec<Vec<String>> =
+        if !html.is_empty() { html.iter().map(|row| row.iter().map(|cell| cell.text.clone()).collect()).collect() } else { parse_tsv(text) };
     let h = rows.len();
     let w = rows.iter().map(Vec::len).max().unwrap_or(0);
     edit(s, |cx| {
+        if !html.is_empty() && h > 0 && w > 0 {
+            let end = at.offset_clamped(h as i64 - 1, w as i64 - 1);
+            let pasted = RangeRef::new(at, end);
+            cx.sheet_mut(sheet)?.merges.retain(|m| !m.intersects(&pasted));
+        }
         for (ri, row) in rows.iter().enumerate() {
             for (ci, v) in row.iter().enumerate() {
                 let Some(c) = at.offset(ri as i64, ci as i64) else { continue };
-                let mut cell = input_to_cell_in(v, sheet, c, &mut cx.wb, region).unwrap_or_else(|_| Some(Cell::value(Value::text(v.as_str()))));
-                if let Some(cl) = cell.as_mut() {
-                    numeric_from_html(cl, v, html.get(ri).and_then(|r| r.get(ci)), &mut cx.wb);
-                }
+                let hc = html.get(ri).and_then(|r| r.get(ci));
+                let cell = if let Some(hc) = hc {
+                    Some(hc.to_cell(cx.wb.date_system, region, &mut cx.wb.styles))
+                } else {
+                    input_to_cell_in(v, sheet, c, &mut cx.wb, region).unwrap_or_else(|_| Some(Cell::value(Value::text(v.as_str()))))
+                };
                 let sh = cx.sheet_mut(sheet)?;
+                if let Some(hc) = hc.filter(|hc| hc.rowspan > 1 || hc.colspan > 1)
+                    && let Some(end) = c.offset(hc.rowspan.saturating_sub(1) as i64, hc.colspan.saturating_sub(1) as i64)
+                {
+                    sh.merges.push(RangeRef::new(c, end));
+                }
                 match cell {
                     Some(cell) => sh.set_cell(c, cell),
                     None => {
@@ -964,27 +973,6 @@ fn paste_text(s: &mut Session, p: &Json, text: &str) -> Result<Json> {
         Ok(())
     })?;
     Ok(json!({"rows": h, "cols": w}))
-}
-
-/// A pasted cell that came out as text ("Rp10,000.00" isn't en-US input) becomes the number the
-/// source recorded for it in its HTML, with a format that shows the same text when one can be
-/// inferred and the cell has none. The HTML cell must show the same text as the tab-separated
-/// field, so HTML that belongs to another copy (or a table laid out differently) changes nothing.
-fn numeric_from_html(cell: &mut Cell, field: &str, html: Option<&crate::clip_html::HtmlCell>, wb: &mut gridcraft_model::Workbook) {
-    let Some(hc) = html else { return };
-    let Some(n) = hc.num else { return };
-    if cell.formula.is_some() || !matches!(cell.value, Value::Text(_)) || wb.styles.get(cell.style).num_fmt.as_str() == "@" {
-        return;
-    }
-    if crate::clip_html::normalized(&hc.text) != crate::clip_html::normalized(field) {
-        return;
-    }
-    cell.value = Value::number(n);
-    if wb.styles.get(cell.style).num_fmt.as_str() == "General"
-        && let Some(code) = crate::clip_html::format_for(field, n)
-    {
-        cell.style = wb.styles.derive(cell.style, |s| s.num_fmt = gridcraft_model::NumFmt::new(&code));
-    }
 }
 
 /// Tab-separated text with Excel-style quoting.

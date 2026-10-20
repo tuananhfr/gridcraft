@@ -4,11 +4,13 @@
 //! what each cell *shows* ("Rp10,000.00"), which en-US input parsing can't always turn back into a
 //! number. The HTML of the common sources also carries the underlying number as a cell attribute:
 //! `x:num="10000"` (Excel, Excel for the web) and `sdval="10000"` (LibreOffice Calc). Paste uses
-//! it to keep such cells numeric (#257). Only the table structure, the cell text and these two
-//! attributes are read; everything else in the markup is ignored.
+//! it to keep such cells numeric (#257). Formatting is limited to the clipboard CSS allow-list.
 
-/// Largest clipboard HTML we look at; past this the paste uses the plain text alone.
-const MAX_HTML: usize = 16 * 1024 * 1024;
+use gridcraft_model::Style;
+
+use crate::clip_html_style::{self, Rules};
+
+const MAX_CELLS: usize = 20_000;
 /// Widest `colspan` honoured (the sheet's column count).
 const MAX_SPAN: usize = gridcraft_core::MAX_COLS as usize;
 
@@ -17,26 +19,83 @@ const MAX_SPAN: usize = gridcraft_core::MAX_COLS as usize;
 pub(crate) struct HtmlCell {
     pub text: String,
     pub num: Option<f64>,
+    pub string: bool,
+    pub style: Style,
+    pub rowspan: usize,
+    pub colspan: usize,
+    preserve: bool,
+    breaks: Vec<usize>,
+}
+
+impl HtmlCell {
+    pub fn to_cell(
+        &self,
+        date_system: gridcraft_core::DateSystem,
+        region: gridcraft_core::Region,
+        styles: &mut gridcraft_model::StyleTable,
+    ) -> gridcraft_model::Cell {
+        let mut style = self.style.clone();
+        if self.num.is_none()
+            && !self.string
+            && style.num_fmt.as_str() != "@"
+            && let Some(body) = self.text.strip_prefix('=')
+            && let Ok(expr) = gridcraft_formula::parse(body)
+        {
+            let mut cell = gridcraft_model::Cell::formula(gridcraft_model::Formula::from_expr(expr));
+            cell.style = styles.intern(style);
+            return cell;
+        }
+        let value = if let Some(n) = self.num {
+            let general =
+                gridcraft_numfmt::format_value_in(&gridcraft_core::Value::number(n), &gridcraft_numfmt::NumberFormat::general(), date_system, region)
+                    .text;
+            if style.num_fmt.as_str() == "General"
+                && normalized(&general) != normalized(&self.text)
+                && let Some(code) = format_for(&self.text, n)
+            {
+                style.num_fmt = gridcraft_model::NumFmt::new(&code);
+            }
+            gridcraft_core::Value::number(n)
+        } else if self.string || style.num_fmt.as_str() == "@" {
+            gridcraft_core::Value::text(self.text.as_str())
+        } else {
+            let parsed = gridcraft_core::parse::parse_input_in(&self.text, date_system, region);
+            if style.num_fmt.as_str() == "General"
+                && let Some(code) = parsed.format
+            {
+                style.num_fmt = gridcraft_model::NumFmt::new(code);
+            }
+            parsed.value
+        };
+        gridcraft_model::Cell { value, formula: None, style: styles.intern(style) }
+    }
 }
 
 /// The cells of the first table in `html`, row by row; a cell spanning columns is followed by
 /// empty cells so positions line up with the tab-separated text. Empty when there is no table.
 pub(crate) fn table_cells(html: &str) -> Vec<Vec<HtmlCell>> {
-    let mut rows: Vec<Vec<HtmlCell>> = Vec::new();
-    if html.len() > MAX_HTML {
-        return rows;
+    if !crate::clipboard_limits::accepts_html(html) {
+        return Vec::new();
     }
-    let mut cell: Option<(HtmlCell, usize)> = None;
+    parse_table(html).unwrap_or_default()
+}
+
+fn parse_table(html: &str) -> Option<Vec<Vec<HtmlCell>>> {
+    let mut grid = Grid::default();
+    let mut rules = Rules::default();
+    let mut stack: Vec<(String, Style, bool, bool)> = Vec::new();
+    let mut cell: Option<HtmlCell> = None;
     let mut in_table = false;
+    let mut row_hidden = false;
     let mut rest = html;
     while !rest.is_empty() {
         let Some(lt) = rest.find('<') else {
-            if let Some((c, _)) = cell.as_mut() {
+            if let Some(c) = cell.as_mut().filter(|_| !stack.last().is_some_and(|s| s.2)) {
                 c.text.push_str(rest);
             }
             break;
         };
-        if let Some((c, _)) = cell.as_mut() {
+        if let Some(c) = cell.as_mut().filter(|_| !stack.last().is_some_and(|s| s.2)) {
             c.text.push_str(rest.get(..lt).unwrap_or_default());
         }
         rest = rest.get(lt..).unwrap_or_default();
@@ -52,63 +111,198 @@ pub(crate) fn table_cells(html: &str) -> Vec<Vec<HtmlCell>> {
         let name_end = body.find(|c: char| c.is_whitespace() || c == '/').unwrap_or(body.len());
         let name = body.get(..name_end).unwrap_or_default().to_ascii_lowercase();
         let attrs = body.get(name_end..).unwrap_or_default();
+        if closing {
+            if matches!(name.as_str(), "td" | "th" | "tr" | "table") {
+                grid.finish(&mut cell)?;
+            }
+            if let Some(i) = stack.iter().rposition(|s| s.0 == name) {
+                stack.truncate(i);
+            }
+            if name == "table" && in_table {
+                break;
+            }
+            continue;
+        }
+        if matches!(name.as_str(), "td" | "th" | "tr") {
+            grid.finish(&mut cell)?;
+            let close = if name == "tr" { "tr" } else { "td" };
+            if let Some(i) = stack.iter().rposition(|s| s.0 == close || close == "td" && s.0 == "th") {
+                stack.truncate(i);
+            }
+        }
+        let (mut style, parent_hidden) = stack.last().map(|s| (s.1.clone(), s.2)).unwrap_or_default();
+        let mut preserve = stack.last().is_some_and(|s| s.3);
+        let mut hidden = false;
+        rules.apply(&name, attr(attrs, "class").unwrap_or_default(), &mut style, &mut hidden, &mut preserve);
+        if let Some(css) = attr(attrs, "style") {
+            if css.len() > clip_html_style::MAX_STYLE {
+                return None;
+            }
+            clip_html_style::apply(&decode_entities(css), &mut style, &mut hidden, &mut preserve);
+        }
+        if matches!(name.as_str(), "td" | "th")
+            && let Some(code) = attr(attrs, "sdnum").and_then(|v| v.splitn(3, ';').nth(2)).and_then(clip_html_style::number_format)
+        {
+            style.num_fmt = gridcraft_model::NumFmt::new(&code);
+        }
+        hidden |= parent_hidden || has_attr(attrs, "hidden");
+        if !is_void(&name) && !tag.ends_with('/') {
+            if stack.len() >= 64 {
+                return None;
+            }
+            stack.push((name.clone(), style.clone(), hidden, preserve));
+        }
         match (name.as_str(), closing) {
             ("style" | "script", false) => {
-                // Raw text: skip to the closing tag.
                 let end = format!("</{name}");
-                rest = find_ci(rest, &end).and_then(|i| rest.get(i..)).unwrap_or_default();
+                let i = find_ci(rest, &end).unwrap_or(rest.len());
+                if name == "style" {
+                    rules.add(rest.get(..i).unwrap_or_default());
+                }
+                rest = rest.get(i..).unwrap_or_default();
             }
             ("table", false) => {
                 if in_table {
-                    break; // a nested table: the outer one is the clipboard grid, stop here
+                    return None;
                 }
                 in_table = true;
             }
-            ("table", true) => {
-                finish(&mut rows, &mut cell);
-                if !rows.is_empty() {
-                    break;
-                }
-                in_table = false;
-            }
             ("tr", false) if in_table => {
-                finish(&mut rows, &mut cell);
-                rows.push(Vec::new());
+                row_hidden = hidden;
+                if hidden {
+                    grid.skip_row();
+                } else {
+                    grid.start_row()?;
+                }
             }
             ("td" | "th", false) if in_table => {
-                finish(&mut rows, &mut cell);
-                if rows.is_empty() {
-                    rows.push(Vec::new());
+                if row_hidden || hidden {
+                    continue;
                 }
                 let num = attr(attrs, "x:num").or_else(|| attr(attrs, "sdval")).and_then(|v| v.trim().parse::<f64>().ok()).filter(|n| n.is_finite());
-                let span = attr(attrs, "colspan").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(1).clamp(1, MAX_SPAN);
-                cell = Some((HtmlCell { text: String::new(), num }, span));
+                let colspan = span(attrs, "colspan", MAX_SPAN)?;
+                let rowspan = span(attrs, "rowspan", MAX_CELLS)?;
+                cell = Some(HtmlCell { num, string: has_attr(attrs, "x:str"), style, rowspan, colspan, preserve, ..Default::default() });
             }
-            ("td" | "th", true) | ("tr", true) => finish(&mut rows, &mut cell),
             ("br", _) => {
-                if let Some((c, _)) = cell.as_mut() {
-                    c.text.push(' ');
+                if let Some(c) = cell.as_mut().filter(|_| !hidden) {
+                    c.breaks.push(c.text.len());
+                }
+            }
+            _ if !hidden => {
+                if let Some(c) = cell.as_mut() {
+                    c.style = style;
+                    c.preserve = preserve;
                 }
             }
             _ => {}
         }
     }
-    finish(&mut rows, &mut cell);
-    rows
+    grid.finish(&mut cell)?;
+    if in_table && grid.rows.is_empty() {
+        grid.rows.push(Vec::new());
+    }
+    Some(grid.rows)
 }
 
-/// Closes the open cell (if any) into the last row, decoding its text.
-fn finish(rows: &mut Vec<Vec<HtmlCell>>, cell: &mut Option<(HtmlCell, usize)>) {
-    let Some((mut c, span)) = cell.take() else { return };
-    c.text = decode(&c.text);
-    if rows.is_empty() {
-        rows.push(Vec::new());
+#[derive(Default)]
+struct Grid {
+    rows: Vec<Vec<HtmlCell>>,
+    occupied: std::collections::BTreeSet<(usize, usize)>,
+    row: Option<usize>,
+    col: usize,
+    width: usize,
+}
+
+impl Grid {
+    fn start_row(&mut self) -> Option<()> {
+        let row = self.row.map_or(0, |r| r.saturating_add(1));
+        if row >= MAX_CELLS || row.saturating_add(1).checked_mul(self.width)? > MAX_CELLS {
+            return None;
+        }
+        self.row = Some(row);
+        self.col = 0;
+        if self.rows.len() <= row {
+            self.rows.push(vec![HtmlCell::default(); self.width]);
+        }
+        Some(())
     }
-    if let Some(row) = rows.last_mut() {
-        row.push(c);
-        let room = MAX_SPAN.saturating_sub(row.len());
-        row.extend(std::iter::repeat_n(HtmlCell::default(), span.saturating_sub(1).min(room)));
+
+    fn skip_row(&mut self) {
+        let next = self.row.map_or(0, |r| r.saturating_add(1));
+        if next >= self.rows.len() {
+            return;
+        }
+        self.rows.remove(next);
+        self.occupied =
+            self.occupied.iter().filter_map(|&(r, c)| if r == next { None } else { Some((if r > next { r - 1 } else { r }, c)) }).collect();
+        for (r, cells) in self.rows.iter_mut().enumerate().take(next) {
+            for cell in cells {
+                if r.saturating_add(cell.rowspan) > next {
+                    cell.rowspan = cell.rowspan.saturating_sub(1);
+                }
+            }
+        }
     }
+
+    fn finish(&mut self, cell: &mut Option<HtmlCell>) -> Option<()> {
+        let Some(mut cell) = cell.take() else { return Some(()) };
+        if self.row.is_none() {
+            self.start_row()?;
+        }
+        let row = self.row?;
+        while self.occupied.contains(&(row, self.col)) {
+            self.col = self.col.checked_add(1)?;
+        }
+        let end_row = row.checked_add(cell.rowspan)?;
+        let end_col = self.col.checked_add(cell.colspan)?;
+        let width = self.width.max(end_col);
+        let height = self.rows.len().max(end_row);
+        if width > MAX_SPAN || height.checked_mul(width)? > MAX_CELLS {
+            return None;
+        }
+        for r in row..end_row {
+            for c in self.col..end_col {
+                if !self.occupied.insert((r, c)) {
+                    return None;
+                }
+            }
+        }
+        self.rows.resize_with(height, || vec![HtmlCell::default(); width]);
+        if width != self.width {
+            for cells in &mut self.rows {
+                cells.resize(width, HtmlCell::default());
+            }
+        }
+        self.width = width;
+        let mut text = String::new();
+        let mut start = 0;
+        for (i, end) in cell.breaks.iter().copied().chain(std::iter::once(cell.text.len())).enumerate() {
+            if i > 0 {
+                text.push('\n');
+            }
+            let raw = cell.text.get(start..end).unwrap_or_default();
+            text.push_str(&if cell.preserve { decode_entities(raw) } else { decode(raw) });
+            start = end;
+        }
+        cell.text = text;
+        cell.breaks.clear();
+        *self.rows.get_mut(row)?.get_mut(self.col)? = cell;
+        self.col = end_col;
+        Some(())
+    }
+}
+
+fn span(attrs: &str, name: &str, cap: usize) -> Option<usize> {
+    match attr(attrs, name) {
+        Some(v) if v.trim().bytes().all(|b| b.is_ascii_digit()) && !v.trim().is_empty() => Some(v.trim().parse::<usize>().ok()?.clamp(1, cap)),
+        _ => Some(1),
+    }
+}
+
+fn is_void(name: &str) -> bool {
+    matches!(name, "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input" | "link" | "meta" | "param" | "source" | "track" | "wbr")
+        || name.starts_with(['!', '?'])
 }
 
 /// Byte index of the `>` that closes the tag `rest` starts with; a `>` inside a quoted attribute
@@ -128,7 +322,7 @@ fn tag_end(rest: &str) -> Option<usize> {
 }
 
 /// Case-insensitive ASCII search.
-fn find_ci(hay: &str, needle: &str) -> Option<usize> {
+pub(crate) fn find_ci(hay: &str, needle: &str) -> Option<usize> {
     let (h, n) = (hay.as_bytes(), needle.as_bytes());
     if n.is_empty() || h.len() < n.len() {
         return None;
@@ -136,9 +330,8 @@ fn find_ci(hay: &str, needle: &str) -> Option<usize> {
     (0..=h.len() - n.len()).find(|&i| h.get(i..i + n.len()).is_some_and(|w| w.eq_ignore_ascii_case(n)))
 }
 
-/// The value of attribute `name` in a tag's attribute text (quoted or bare). A bare attribute
-/// without `=` has no value.
-fn attr<'a>(attrs: &'a str, name: &str) -> Option<&'a str> {
+/// A boolean attribute is present with an empty value.
+pub(crate) fn attr<'a>(attrs: &'a str, name: &str) -> Option<&'a str> {
     let mut s = attrs;
     loop {
         s = s.trim_start_matches(|c: char| c.is_whitespace() || c == '/');
@@ -166,7 +359,7 @@ fn attr<'a>(attrs: &'a str, name: &str) -> Option<&'a str> {
             s = next;
         }
         if key.eq_ignore_ascii_case(name) {
-            return value;
+            return Some(value.unwrap_or_default());
         }
         if key.is_empty() && value.is_none() {
             // Stray character (e.g. a lone '='): skip it so the loop always advances.
@@ -177,9 +370,11 @@ fn attr<'a>(attrs: &'a str, name: &str) -> Option<&'a str> {
     }
 }
 
-/// HTML text to plain text: entities decoded, whitespace runs (and `<br>`) collapsed to one
-/// space, trimmed. The text only serves to match a cell with the tab-separated text.
-fn decode(raw: &str) -> String {
+fn has_attr(attrs: &str, name: &str) -> bool {
+    attr(attrs, name).is_some()
+}
+
+fn decode_entities(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     let mut rest = raw;
     while let Some(amp) = rest.find('&') {
@@ -215,6 +410,11 @@ fn decode(raw: &str) -> String {
         }
     }
     out.push_str(rest);
+    out
+}
+
+fn decode(raw: &str) -> String {
+    let out = decode_entities(raw);
     let mut text = String::with_capacity(out.len());
     let mut space = false;
     for c in out.chars() {
@@ -278,18 +478,21 @@ mod tests {
             <tr><td colspan=2 x:num="2.5">2.50 &amp; up</td><td>x</td></tr><!--EndFragment--></table></body></html>"#;
         let rows = table_cells(excel);
         assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0][0], HtmlCell { text: "Rp10,000.00".into(), num: Some(10000.0) });
-        assert_eq!(rows[0][1], HtmlCell { text: "Name".into(), num: None });
+        assert_eq!(rows[0][0].text, "Rp10,000.00");
+        assert_eq!(rows[0][0].num, Some(10000.0));
+        assert_eq!(rows[0][1].text, "Name");
+        assert!(rows[0][1].string);
         assert_eq!(rows[1].len(), 3, "colspan keeps the next cell in its column");
         assert_eq!(rows[1][0].text, "2.50 & up");
         assert_eq!(rows[1][2].text, "x");
 
         let calc = r#"<table cellspacing="0" border="0"><colgroup width="85"></colgroup><tr>
             <td height="17" align="right" sdval="10000" sdnum="1033;0;[$Rp-421]#,##0.00"><font face="Liberation Sans">Rp10,000.00</font></td></tr></table>"#;
-        assert_eq!(table_cells(calc), vec![vec![HtmlCell { text: "Rp10,000.00".into(), num: Some(10000.0) }]]);
+        assert_eq!(table_cells(calc)[0][0].num, Some(10000.0));
+        assert_eq!(table_cells(calc)[0][0].text, "Rp10,000.00");
 
         let quoted_gt = r#"<table><tr><td style='mso-number-format:"\[>=1000\]0"' x:num="1500">1500</td></tr></table>"#;
-        assert_eq!(table_cells(quoted_gt), vec![vec![HtmlCell { text: "1500".into(), num: Some(1500.0) }]]);
+        assert_eq!(table_cells(quoted_gt)[0][0].num, Some(1500.0));
     }
 
     #[test]
@@ -319,5 +522,34 @@ mod tests {
         assert_eq!(format_for("10.000,00 €", 10000.0), None, "comma decimals don't render back in en-US");
         assert_eq!(format_for("-Rp5", -5.0).as_deref(), Some("\"Rp\"0"));
         assert_eq!(format_for("12 EUR", 12.0).as_deref(), Some("0\" EUR\""));
+    }
+
+    #[test]
+    fn rowspans_reserve_columns_and_hidden_rows_shrink_merges() {
+        let rows = table_cells("<table><tr><td rowspan=3 colspan=2>M</td><td>A</td></tr><tr hidden><td>hidden</td></tr><tr><td>B</td></tr></table>");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0][0].rowspan, 2);
+        assert_eq!(rows[0][0].colspan, 2);
+        assert_eq!(rows[0][2].text, "A");
+        assert_eq!(rows[1][2].text, "B");
+        assert!(rows[1][0].text.is_empty());
+    }
+
+    #[test]
+    fn hidden_cells_and_subtrees_do_not_contribute_values() {
+        let rows = table_cells(
+            "<style>.off {display:none}</style><table><tr class=off><td>row</td></tr><tr><td hidden>cell</td><td>A<span class=off>secret</span>B</td></tr></table>",
+        );
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].len(), 1);
+        assert_eq!(rows[0][0].text, "AB");
+    }
+
+    #[test]
+    fn sparse_tables_and_rowspan_allocations_are_bounded() {
+        let sparse = "<table><tr><td colspan=16384>x</td></tr><tr></tr></table>";
+        assert!(table_cells(sparse).is_empty());
+        assert!(table_cells("<table><tr><td rowspan=20000 colspan=2>x</td></tr></table>").is_empty());
+        assert!(table_cells("<table><tr><td rowspan=999999999999999999999999999999>x</td></tr></table>").is_empty());
     }
 }
