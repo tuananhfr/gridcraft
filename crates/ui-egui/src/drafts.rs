@@ -14,8 +14,8 @@ pub const CHECKPOINT_MS: f64 = 30_000.0;
 /// Drafts of a document are at least this many times its last encoding time apart, so a large
 /// workbook doesn't spend most frames encoding.
 pub const ADAPTIVE_FACTOR: f64 = 10.0;
-/// What draft bytes are.
-pub const FORMAT: &str = "xlsx";
+/// What draft bytes can be: the workbook kinds [`draft_format`] gives.
+pub const FORMATS: [&str; 3] = ["xlsx", "xlsm", "xltm"];
 
 /// One open document as the planner sees it this frame.
 #[derive(Clone, Debug)]
@@ -155,16 +155,23 @@ impl Planner {
     }
 }
 
-/// The name a draft of the workbook titled `title` is listed under: what web Save names it.
+/// The name a draft of the workbook titled `title` is listed under: what web Save names it, so a
+/// macro-enabled workbook stays `.xlsm` and its recovered draft still has the VBA project.
 pub fn draft_name(title: &str) -> String {
     let stem = std::path::Path::new(title).file_stem().and_then(|s| s.to_str()).filter(|s| !s.is_empty()).unwrap_or("Book");
-    format!("{stem}.{FORMAT}")
+    format!("{stem}.{}", gridcraft_engine::io::workbook_ext(title))
 }
 
-/// The draft bytes: the XLSX web Save writes, deflated fast. The JSON format would drop
-/// preserved parts; the usual deflate was half the encoding time of a large workbook.
-pub fn draft_bytes(wb: &Workbook) -> Result<Vec<u8>, String> {
-    gridcraft_engine::io::save_xlsx_fast(wb).map_err(|e| e.to_string())
+/// The format a draft listed as `name` (a [`draft_name`]) is put under.
+pub fn draft_format(name: &str) -> &'static str {
+    gridcraft_engine::io::workbook_ext(name)
+}
+
+/// The draft bytes of the workbook listed as `name`: the package web Save writes, deflated fast.
+/// The JSON format would drop preserved parts; the usual deflate was half the encoding time of a
+/// large workbook.
+pub fn draft_bytes(wb: &Workbook, name: &str) -> Result<Vec<u8>, String> {
+    gridcraft_engine::io::save_xlsx_fast(wb, name).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -371,6 +378,11 @@ mod tests {
     #[test]
     fn draft_names_use_the_xlsx_extension() {
         assert_eq!(draft_name("Book1"), "Book1.xlsx");
+        assert_eq!(draft_name("Macro.xlsm"), "Macro.xlsm", "a macro-enabled workbook keeps its kind");
+        assert_eq!(draft_name("Form.XLTM"), "Form.xltm");
+        assert_eq!(draft_format(&draft_name("Macro.xlsm")), "xlsm");
+        assert_eq!(draft_format(&draft_name("Report.xltx")), "xlsx");
+        assert!(FORMATS.contains(&draft_format("a.xlsm")) && FORMATS.contains(&draft_format("a.xltm")));
         assert_eq!(draft_name("Report.xlsx"), "Report.xlsx");
         assert_eq!(draft_name("data.csv"), "data.xlsx");
         assert_eq!(draft_name("Sales (imported).xlsx"), "Sales (imported).xlsx");
@@ -383,7 +395,7 @@ mod tests {
         if let Some(sh) = wb.sheet_mut(0) {
             sh.name = "Data".into();
         }
-        let bytes = draft_bytes(&wb).unwrap();
+        let bytes = draft_bytes(&wb, "Book1.xlsx").unwrap();
         let (back, _) = gridcraft_engine::io::open_bytes("Book1.xlsx", &bytes).unwrap();
         assert_eq!(back.sheets[0].name, "Data");
     }
@@ -396,7 +408,7 @@ mod tests {
         s.run("home.bold", serde_json::json!({"range": "A1:H1"})).unwrap();
         let wb = &s.active().unwrap().wb;
         let saved = gridcraft_engine::io::save_bytes(wb, "Sales.xlsx").unwrap();
-        let draft = draft_bytes(wb).unwrap();
+        let draft = draft_bytes(wb, "Sales.xlsx").unwrap();
         let open = |bytes: &[u8]| gridcraft_engine::io::open_bytes("Sales.xlsx", bytes).unwrap().0;
         assert_eq!(open(&draft), open(&saved));
     }

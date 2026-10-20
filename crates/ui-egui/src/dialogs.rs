@@ -784,6 +784,7 @@ impl Dialog {
                 Dialog::custom("saveChanges", "Save Changes?", json!({"title": p("title"), "uid": uid}))
             }
             "closeMany" => Dialog::custom("closeMany", "Save Changes?", params.clone()),
+            crate::save_as::DROP_MACROS => Dialog::custom(crate::save_as::DROP_MACROS, crate::save_as::DROP_MACROS_TITLE, params.clone()),
             "start" => Dialog::custom("start", "GridCraft", json!({})),
             "comments" => {
                 app.grid.pane = None;
@@ -1072,6 +1073,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                 "solverResults" => solver_results(app, ui, &mut d, &mut open),
                 "spelling" => spelling(app, ui, &mut d, &mut open),
                 "closeMany" => crate::close_many::dialog_body(app, ui, &d, &mut open),
+                crate::save_as::DROP_MACROS => crate::save_as::drop_macros_body(app, ui, &d, &mut open),
                 "agents" => {
                     ui.label(tr(ui, "GridCraft is fully drivable by agents. Every menu item, button and gesture is a command:"));
                     ui.add_space(4.0);

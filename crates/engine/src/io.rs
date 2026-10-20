@@ -225,11 +225,29 @@ pub fn save_bytes_as(wb: &Workbook, path: &str, kind: FileKind) -> Result<Vec<u8
     }
 }
 
-/// The `.xlsx` [`save_bytes`] writes, deflated fast: for a temporary copy only GridCraft reads
-/// back (a web draft), never a file the user saves. The package's parts are the same.
-pub fn save_xlsx_fast(wb: &Workbook) -> Result<Vec<u8>> {
-    gridcraft_xlsx::write_xlsx_packed(wb, gridcraft_xlsx::XlsxKind::Workbook, gridcraft_xlsx::Packing::Fast)
-        .map_err(|e| EngineError::Other(e.to_string()))
+/// The package [`save_bytes`] writes for a workbook named `name`, deflated fast: for a temporary
+/// copy only GridCraft reads back (a web draft), never a file the user saves. The package's parts
+/// are the same. A macro-enabled `name` keeps the VBA project; any other is a plain `.xlsx`.
+pub fn save_xlsx_fast(wb: &Workbook, name: &str) -> Result<Vec<u8>> {
+    let kind = gridcraft_xlsx::XlsxKind::from_path(name);
+    let kind = if kind.is_macro_enabled() { kind } else { gridcraft_xlsx::XlsxKind::Workbook };
+    gridcraft_xlsx::write_xlsx_packed(wb, kind, gridcraft_xlsx::Packing::Fast).map_err(|e| EngineError::Other(e.to_string()))
+}
+
+/// The workbook extension a document named `name` keeps when saved: a macro-enabled name
+/// (`.xlsm`, `.xltm`) stays one so its VBA project is written; anything else saves as `xlsx`.
+pub fn workbook_ext(name: &str) -> &'static str {
+    match gridcraft_xlsx::XlsxKind::from_path(name) {
+        gridcraft_xlsx::XlsxKind::MacroWorkbook => "xlsm",
+        gridcraft_xlsx::XlsxKind::MacroTemplate => "xltm",
+        _ => "xlsx",
+    }
+}
+
+/// Saving `wb` as the workbook file `name` would leave its VBA project out: an XLSX-family name
+/// that isn't macro-enabled. Exports (CSV, web page, PDF) are copies and don't count.
+pub fn drops_macros(wb: &Workbook, name: &str) -> bool {
+    wb.vba_project.is_some() && FileKind::from_path(name) == Some(FileKind::Xlsx) && !gridcraft_xlsx::XlsxKind::from_path(name).is_macro_enabled()
 }
 
 /// [`save_bytes`] for the file at `path`: relative paths to linked workbooks are rewritten for
@@ -797,7 +815,7 @@ mod tests {
             sh.set_value(CellRef::new(r, 1), gridcraft_core::Value::Number(f64::from(r) * 1.5));
         }
         let saved = save_bytes(&wb, "book.xlsx").unwrap();
-        let fast = save_xlsx_fast(&wb).unwrap();
+        let fast = save_xlsx_fast(&wb, "book.xlsx").unwrap();
         assert_ne!(saved, fast, "deflated differently");
         assert_eq!(parts(&fast), parts(&saved));
         assert_eq!(open_bytes("book.xlsx", &fast).unwrap().0, open_bytes("book.xlsx", &saved).unwrap().0);

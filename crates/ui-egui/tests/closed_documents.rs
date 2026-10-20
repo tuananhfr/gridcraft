@@ -18,7 +18,7 @@ fn xlsx() -> Vec<u8> {
     let mut s = Session::new();
     s.new_workbook();
     s.run("cell.set", json!({"cell": "A1", "input": "1"})).unwrap();
-    gridcraft_ui_egui::drafts::draft_bytes(&s.active().unwrap().wb).unwrap()
+    gridcraft_ui_egui::drafts::draft_bytes(&s.active().unwrap().wb, "Book1.xlsx").unwrap()
 }
 
 fn session(names: &[&str]) -> Session {

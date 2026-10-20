@@ -59,8 +59,8 @@ impl Drafts {
                     log::warn!("erpDrafts restore without a key or name");
                     return;
                 };
-                if format.as_string().as_deref() != Some(drafts::FORMAT) {
-                    log::warn!("erpDrafts restore of {name}: not an {} draft ({format:?})", drafts::FORMAT);
+                if !format.as_string().is_some_and(|f| drafts::FORMATS.contains(&f.as_str())) {
+                    log::warn!("erpDrafts restore of {name}: not a workbook draft ({format:?})");
                     return;
                 }
                 let Ok(bytes) = bytes.dyn_into::<js_sys::Uint8Array>() else {
@@ -151,13 +151,18 @@ fn call(store: &JsValue, method: &str, args: &[JsValue]) {
 /// Encodes `wb` and puts it under `key`; returns the encoding time in ms.
 fn put(store: &JsValue, key: &str, name: &str, wb: &Workbook) -> f64 {
     let start = js_sys::Date::now();
-    let encoded = drafts::draft_bytes(wb);
+    let encoded = drafts::draft_bytes(wb, name);
     let cost = js_sys::Date::now() - start;
     match encoded {
         Ok(bytes) => call(
             store,
             "put",
-            &[JsValue::from_str(key), JsValue::from_str(name), JsValue::from_str(drafts::FORMAT), js_sys::Uint8Array::from(&bytes[..]).into()],
+            &[
+                JsValue::from_str(key),
+                JsValue::from_str(name),
+                JsValue::from_str(drafts::draft_format(name)),
+                js_sys::Uint8Array::from(&bytes[..]).into(),
+            ],
         ),
         Err(e) => log::warn!("couldn't encode a draft of {name}: {e}"),
     }

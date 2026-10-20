@@ -296,6 +296,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "No workbook is open." => "Chưa mở sổ làm việc nào.",
         "Save as type" => "Lưu dưới dạng",
         "Excel Workbook (*.xlsx)" => "Sổ làm việc Excel (*.xlsx)",
+        "Excel Macro-Enabled Workbook (*.xlsm)" => "Sổ làm việc Excel có Macro (*.xlsm)",
         "CSV UTF-8 (Comma delimited) (*.csv)" => "CSV UTF-8 (Phân tách bằng dấu phẩy) (*.csv)",
         "Web Page (*.html)" => "Trang Web (*.html)",
         "PDF (*.pdf)" => "PDF (*.pdf)",
@@ -1200,9 +1201,17 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Couldn't decode the generated PDF." => "Không thể giải mã tệp PDF vừa tạo.",
         "A print job is already being submitted." => "Đang có một lệnh in được gửi đi.",
         "Printing is unavailable here; export a PDF instead." => "Không thể in ở đây; hãy xuất thành PDF.",
-        "This workbook contains VBA macros. GridCraft keeps them intact when you save, but does not run them." => {
-            "Sổ làm việc này chứa macro VBA. GridCraft giữ nguyên chúng khi bạn lưu nhưng không chạy chúng."
+        "This workbook contains VBA macros. GridCraft doesn't run them. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
+            "Sổ làm việc này chứa macro VBA. GridCraft không chạy macro. Lưu dạng .xlsm sẽ giữ lại macro; lưu dạng .xlsx sẽ xóa chúng."
         }
+        "macros (VBA project) were kept but not executed" => "Đã giữ lại macro (dự án VBA) nhưng không chạy",
+        "macros (VBA project) reference a missing part and were dropped" => "Macro (dự án VBA) trỏ tới một phần không có trong tệp nên đã bị bỏ",
+        "Save Without Macros?" => "Lưu mà không có macro?",
+        "This workbook contains VBA macros. An Excel Workbook (.xlsx) can't hold them, so the saved file won't have them. To keep them, save it as an Excel Macro-Enabled Workbook (.xlsm)." => {
+            "Sổ làm việc này chứa macro VBA. Sổ làm việc Excel (.xlsx) không chứa được macro, nên tệp được lưu sẽ không còn chúng. Để giữ macro, hãy lưu thành Sổ làm việc Excel có Macro (.xlsm)."
+        }
+        "Save as .xlsm instead" => "Lưu dạng .xlsm",
+        "Save anyway as .xlsx" => "Vẫn lưu dạng .xlsx",
         "What this means" => "Điều này có nghĩa là gì",
         "The cell or chart you're trying to change is on a protected sheet." => {
             "Ô hoặc biểu đồ bạn đang muốn thay đổi nằm trên trang tính được bảo vệ."

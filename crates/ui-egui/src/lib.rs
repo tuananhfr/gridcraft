@@ -36,6 +36,7 @@ pub mod pivot_pane;
 pub mod printing;
 pub mod region;
 pub mod ribbon;
+pub mod save_as;
 pub mod save_status;
 pub mod selection_glide;
 pub mod tabs;
@@ -175,6 +176,10 @@ pub enum NoticeKind {
     Info,
     Warning,
 }
+
+/// The info bar for a workbook opened with a VBA project.
+pub const VBA_NOTICE: &str =
+    "This workbook contains VBA macros. GridCraft doesn't run them. Saving as .xlsm keeps them; saving as .xlsx removes them.";
 
 /// A dismissible bar under the ribbon, in the spirit of Excel's message bar. Used to tell the
 /// user what an opened file carried that GridCraft handled differently (e.g. preserved macros).
@@ -894,28 +899,7 @@ impl SheetApp {
                     self.open_path(&path);
                 }
             }
-            "saveAs" => {
-                let suggested = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
-                if let Some(pick) = &self.services.pick_save {
-                    if let Some(path) = pick(&suggested) {
-                        let path = if std::path::Path::new(&path).extension().is_none() { format!("{path}.xlsx") } else { path };
-                        self.run_or_alert("file.save", json!({"path": path}));
-                    }
-                } else if self.services.download.is_some() {
-                    match self.run("file.saveBytes", json!({"format": "xlsx"})) {
-                        Ok(r) => {
-                            if let Some(b) = r.get("base64").and_then(Json::as_str).and_then(gridcraft_engine::io::base64_decode) {
-                                let name = r.get("name").and_then(Json::as_str).unwrap_or("Book.xlsx").to_string();
-                                self.download_workbook(&name, &b);
-                            }
-                        }
-                        Err(e) => {
-                            self.note_save_result(&Err(e.clone()));
-                            self.alert(e);
-                        }
-                    }
-                }
-            }
+            "saveAs" => self.save_workbook_as(&params),
             // File › Options (`file.options`) and the File tab itself open the Backstage view.
             "options" => self.open_backstage(backstage::Page::Options),
             "backstage" => {
@@ -934,7 +918,14 @@ impl SheetApp {
         }
         match &mut self.backstage {
             Some(b) => b.page = page,
-            None => self.backstage = Some(backstage::Backstage::new(page)),
+            None => {
+                let mut b = backstage::Backstage::new(page);
+                // Save As starts on the type that keeps the workbook's macros.
+                if self.offers_xlsm() {
+                    b.save_format = "xlsm";
+                }
+                self.backstage = Some(b);
+            }
         }
     }
 
@@ -977,11 +968,8 @@ impl SheetApp {
         }
         let vba: Vec<&str> = msgs.iter().copied().filter(|m| m.to_lowercase().contains("macro") || m.contains("VBA")).collect();
         if !vba.is_empty() {
-            self.notice = Some(Notice {
-                text: "This workbook contains VBA macros. GridCraft keeps them intact when you save, but does not run them.".into(),
-                kind: NoticeKind::Warning,
-                action: Some(("What this means".into(), "macros".into())),
-            });
+            self.notice =
+                Some(Notice { text: VBA_NOTICE.into(), kind: NoticeKind::Warning, action: Some(("What this means".into(), "macros".into())) });
         } else {
             let text = if msgs.len() == 1 {
                 msgs[0].to_string()

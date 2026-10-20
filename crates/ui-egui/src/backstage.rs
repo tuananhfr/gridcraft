@@ -118,10 +118,16 @@ pub struct Backstage {
     recent: RecentFiles,
 }
 
-/// Save As file types: (extension, label). The first is the workbook itself; the others are
-/// exports that leave the workbook's own file and unsaved state alone.
-pub const SAVE_TYPES: [(&str, &str); 4] =
-    [("xlsx", "Excel Workbook (*.xlsx)"), ("csv", "CSV UTF-8 (Comma delimited) (*.csv)"), ("html", "Web Page (*.html)"), ("pdf", "PDF (*.pdf)")];
+/// Save As file types: (extension, label). The first two are the workbook itself (`.xlsm` is
+/// offered for a workbook with macros only); the others are exports that leave the workbook's own
+/// file and unsaved state alone.
+pub const SAVE_TYPES: [(&str, &str); 5] = [
+    ("xlsx", "Excel Workbook (*.xlsx)"),
+    ("xlsm", "Excel Macro-Enabled Workbook (*.xlsm)"),
+    ("csv", "CSV UTF-8 (Comma delimited) (*.csv)"),
+    ("html", "Web Page (*.html)"),
+    ("pdf", "PDF (*.pdf)"),
+];
 
 impl Backstage {
     pub fn new(page: Page) -> Backstage {
@@ -692,12 +698,16 @@ fn save_as(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcom
     let lang = app.ui.language;
     dim(ui, lang.tr("Save the workbook under another name or in another folder."));
     ui.add_space(14.0);
+    let offers_xlsm = app.offers_xlsm();
+    if bs.save_format == "xlsm" && !offers_xlsm {
+        bs.save_format = "xlsx";
+    }
     let fmt = bs.save_format;
     let current = SAVE_TYPES.iter().find(|(ext, _)| *ext == fmt).map_or("Excel Workbook (*.xlsx)", |(_, label)| *label);
     ui.horizontal(|ui| {
         ui.label(lang.tr("Save as type"));
         egui::ComboBox::from_id_salt("backstage_save_type").width(280.0).selected_text(lang.tr(current)).show_ui(ui, |ui| {
-            for (ext, label) in SAVE_TYPES {
+            for (ext, label) in SAVE_TYPES.into_iter().filter(|(ext, _)| *ext != "xlsm" || offers_xlsm) {
                 if ui.selectable_label(fmt == ext, lang.tr(label)).clicked() {
                     bs.save_format = ext;
                 }
@@ -709,11 +719,14 @@ fn save_as(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcom
     let web = app.services.pick_save.is_none() && app.services.download.is_some();
     let label = if web { format!("{} (.{fmt})", lang.tr("Download")) } else { lang.tr("Browse…").to_string() };
     if square_button(ui, Icon::OpenFolder, &label).clicked() && app.commit_edit(0, 0, false, false) {
-        if fmt == "xlsx" {
+        if matches!(fmt, "xlsx" | "xlsm") {
+            let own = app.session.active().map(|d| gridcraft_engine::io::workbook_ext(&d.display_title()));
+            let params = if own == Some(fmt) { json!({}) } else { json!({"format": fmt}) };
             let before = app.session.active().map(|d| (d.path.clone(), d.is_dirty()));
-            app.open_dialog("saveAs", json!({}));
+            app.open_dialog("saveAs", params);
             let after = app.session.active().map(|d| (d.path.clone(), d.is_dirty()));
-            if after != before || app.services.pick_save.is_none() {
+            // A question about the macros shows over the sheet.
+            if after != before || app.services.pick_save.is_none() || app.dialog.is_some() {
                 out.close = true;
             }
         } else if export_as(app, fmt) {

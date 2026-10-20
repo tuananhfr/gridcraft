@@ -88,7 +88,7 @@ impl SheetApp {
         if (d.is_dirty() && !force) || self.decrypted.contains(&d.uid) {
             return None;
         }
-        let bytes = crate::drafts::draft_bytes(&d.wb).map_err(|e| log::warn!("closed document not kept: {e}")).ok()?;
+        let bytes = crate::drafts::draft_bytes(&d.wb, &d.display_title()).map_err(|e| log::warn!("closed document not kept: {e}")).ok()?;
         Some(ClosedDoc { title: d.display_title(), bytes, unsaved: d.is_dirty(), path: d.path.clone(), content_kind: d.content_kind })
     }
 

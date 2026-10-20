@@ -38,7 +38,7 @@ fn tick(h: &egui_kittest::Harness<'static, SheetApp>, p: &mut Planner, now: f64)
     let plan = p.plan(&docs, now, h.state().editing_in_place());
     for uid in &plan.put {
         let d = docs.iter().find(|d| d.uid == *uid).unwrap();
-        gridcraft_ui_egui::drafts::draft_bytes(&d.wb).unwrap();
+        gridcraft_ui_egui::drafts::draft_bytes(&d.wb, &d.name).unwrap();
         p.record_put(*uid, &d.wb, now, 1.0);
     }
     (plan.put, plan.remove)
@@ -108,7 +108,7 @@ fn a_restored_draft_opens_unsaved_under_its_name_and_replaces_the_blank_book() {
     let mut s = Session::new();
     s.new_workbook();
     s.run("cell.set", json!({"cell": "A1", "input": "42"})).unwrap();
-    let bytes = gridcraft_ui_egui::drafts::draft_bytes(&s.active().unwrap().wb).unwrap();
+    let bytes = gridcraft_ui_egui::drafts::draft_bytes(&s.active().unwrap().wb, "Book1.xlsx").unwrap();
 
     let uid = h.state_mut().open_draft("Budget.xlsx", &bytes).unwrap();
     h.run_steps(2);
