@@ -8,6 +8,7 @@
 
 use gridcraft_model::Style;
 
+use crate::clip_html_inline::WholeCellStyle;
 use crate::clip_html_style::{self, Rules};
 
 const MAX_CELLS: usize = 20_000;
@@ -25,6 +26,7 @@ pub(crate) struct HtmlCell {
     pub colspan: usize,
     preserve: bool,
     breaks: Vec<usize>,
+    inline: WholeCellStyle,
 }
 
 impl HtmlCell {
@@ -90,14 +92,10 @@ fn parse_table(html: &str) -> Option<Vec<Vec<HtmlCell>>> {
     let mut rest = html;
     while !rest.is_empty() {
         let Some(lt) = rest.find('<') else {
-            if let Some(c) = cell.as_mut().filter(|_| !stack.last().is_some_and(|s| s.2)) {
-                c.text.push_str(rest);
-            }
+            append_text(&mut cell, &stack, rest);
             break;
         };
-        if let Some(c) = cell.as_mut().filter(|_| !stack.last().is_some_and(|s| s.2)) {
-            c.text.push_str(rest.get(..lt).unwrap_or_default());
-        }
+        append_text(&mut cell, &stack, rest.get(..lt).unwrap_or_default());
         rest = rest.get(lt..).unwrap_or_default();
         if let Some(after) = rest.strip_prefix("<!--") {
             rest = after.find("-->").and_then(|e| after.get(e + 3..)).unwrap_or_default();
@@ -117,6 +115,9 @@ fn parse_table(html: &str) -> Option<Vec<Vec<HtmlCell>>> {
             }
             if let Some(i) = stack.iter().rposition(|s| s.0 == name) {
                 stack.truncate(i);
+                if let Some(c) = cell.as_mut() {
+                    c.inline.truncate(i);
+                }
             }
             if name == "table" && in_table {
                 break;
@@ -133,6 +134,7 @@ fn parse_table(html: &str) -> Option<Vec<Vec<HtmlCell>>> {
         let (mut style, parent_hidden) = stack.last().map(|s| (s.1.clone(), s.2)).unwrap_or_default();
         let mut preserve = stack.last().is_some_and(|s| s.3);
         let mut hidden = false;
+        clip_html_style::apply_tag(&name, attrs, &mut style);
         rules.apply(&name, attr(attrs, "class").unwrap_or_default(), &mut style, &mut hidden, &mut preserve);
         if let Some(css) = attr(attrs, "style") {
             if css.len() > clip_html_style::MAX_STYLE {
@@ -140,10 +142,13 @@ fn parse_table(html: &str) -> Option<Vec<Vec<HtmlCell>>> {
             }
             clip_html_style::apply(&decode_entities(css), &mut style, &mut hidden, &mut preserve);
         }
-        if matches!(name.as_str(), "td" | "th")
-            && let Some(code) = attr(attrs, "sdnum").and_then(|v| v.splitn(3, ';').nth(2)).and_then(clip_html_style::number_format)
-        {
-            style.num_fmt = gridcraft_model::NumFmt::new(&code);
+        let number_format = if matches!(name.as_str(), "td" | "th") {
+            attr(attrs, "sdnum").and_then(|v| v.splitn(3, ';').nth(2)).and_then(clip_html_style::number_format)
+        } else {
+            None
+        };
+        if let Some(code) = number_format.as_ref() {
+            style.num_fmt = gridcraft_model::NumFmt::new(code);
         }
         hidden |= parent_hidden || has_attr(attrs, "hidden");
         if !is_void(&name) && !tag.ends_with('/') {
@@ -153,7 +158,7 @@ fn parse_table(html: &str) -> Option<Vec<Vec<HtmlCell>>> {
             stack.push((name.clone(), style.clone(), hidden, preserve));
         }
         match (name.as_str(), closing) {
-            ("style" | "script", false) => {
+            ("style" | "script" | "caption", false) => {
                 let end = format!("</{name}");
                 let i = find_ci(rest, &end).unwrap_or(rest.len());
                 if name == "style" {
@@ -182,17 +187,12 @@ fn parse_table(html: &str) -> Option<Vec<Vec<HtmlCell>>> {
                 let num = attr(attrs, "x:num").or_else(|| attr(attrs, "sdval")).and_then(|v| v.trim().parse::<f64>().ok()).filter(|n| n.is_finite());
                 let colspan = span(attrs, "colspan", MAX_SPAN)?;
                 let rowspan = span(attrs, "rowspan", MAX_CELLS)?;
-                cell = Some(HtmlCell { num, string: has_attr(attrs, "x:str"), style, rowspan, colspan, preserve, ..Default::default() });
+                let inline = WholeCellStyle::new(attr(attrs, "style").map(decode_entities).unwrap_or_default(), number_format.is_some());
+                cell = Some(HtmlCell { num, string: has_attr(attrs, "x:str"), style, rowspan, colspan, preserve, inline, ..Default::default() });
             }
             ("br", _) => {
                 if let Some(c) = cell.as_mut().filter(|_| !hidden) {
                     c.breaks.push(c.text.len());
-                }
-            }
-            _ if !hidden => {
-                if let Some(c) = cell.as_mut() {
-                    c.style = style;
-                    c.preserve = preserve;
                 }
             }
             _ => {}
@@ -203,6 +203,19 @@ fn parse_table(html: &str) -> Option<Vec<Vec<HtmlCell>>> {
         grid.rows.push(Vec::new());
     }
     Some(grid.rows)
+}
+
+fn append_text(cell: &mut Option<HtmlCell>, stack: &[(String, Style, bool, bool)], text: &str) {
+    let Some(c) = cell.as_mut().filter(|_| !stack.last().is_some_and(|s| s.2)) else { return };
+    c.text.push_str(text);
+    if decode_entities(text).chars().any(|ch| !ch.is_whitespace()) {
+        let depth = c.inline.depth(stack.len());
+        if let Some((_, style, _, preserve)) = depth.checked_sub(1).and_then(|i| stack.get(i)) {
+            c.inline.observe(depth, style, *preserve);
+        } else {
+            c.inline.observe(0, &c.style, c.preserve);
+        }
+    }
 }
 
 #[derive(Default)]
@@ -275,6 +288,7 @@ impl Grid {
             }
         }
         self.width = width;
+        cell.inline.finish(&mut cell.style, &mut cell.preserve);
         let mut text = String::new();
         let mut start = 0;
         for (i, end) in cell.breaks.iter().copied().chain(std::iter::once(cell.text.len())).enumerate() {
@@ -374,7 +388,7 @@ fn has_attr(attrs: &str, name: &str) -> bool {
     attr(attrs, name).is_some()
 }
 
-fn decode_entities(raw: &str) -> String {
+pub(super) fn decode_entities(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     let mut rest = raw;
     while let Some(amp) = rest.find('&') {

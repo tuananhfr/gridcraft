@@ -6,6 +6,50 @@ use gridcraft_model::{BorderLine, BorderStyle, Color, Fill, HAlign, NumFmt, Styl
 
 pub(crate) const MAX_STYLE: usize = 8 * 1024;
 
+pub(super) fn apply_tag(tag: &str, attrs: &str, style: &mut Style) {
+    use crate::clip_html::{attr, decode_entities};
+
+    match tag {
+        "b" | "strong" => style.font.bold = true,
+        "i" | "em" => style.font.italic = true,
+        "u" => style.font.underline = Underline::Single,
+        "s" | "strike" | "del" => style.font.strike = true,
+        "th" => {
+            style.font.bold = true;
+            style.align.h = HAlign::Center;
+        }
+        "font" => {
+            if let Some(c) = attr(attrs, "color").and_then(|value| color(&decode_entities(value))) {
+                style.font.color = c;
+            }
+            if let Some(name) = attr(attrs, "face").map(|value| first_family(&decode_entities(value))).filter(|s| !s.is_empty() && s.len() <= 256) {
+                style.font.name = name;
+            }
+            if let Some(size) = attr(attrs, "size").and_then(|value| legacy_font_size(&decode_entities(value))) {
+                style.font.size = size;
+            }
+        }
+        _ => {}
+    }
+}
+
+fn legacy_font_size(value: &str) -> Option<f32> {
+    let value = value.trim();
+    let size = value.parse::<i32>().ok()?;
+    // HTML relative sizes use the default base size 3; the model stores points rather than pixels.
+    let size = if value.starts_with(['+', '-']) { 3i32.saturating_add(size) } else { size };
+    let pixels = match size.clamp(1, 7) {
+        1 => 10.0,
+        2 => 13.0,
+        3 => 16.0,
+        4 => 18.0,
+        5 => 24.0,
+        6 => 32.0,
+        _ => 48.0,
+    };
+    Some(pixels * 0.75)
+}
+
 #[derive(Default)]
 pub(crate) struct Rules(Vec<(String, String)>);
 
@@ -404,6 +448,30 @@ pub(crate) fn to_css(s: &Style, theme: &Theme) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_font_sizes_use_bounded_html_steps() {
+        for (value, points) in [
+            ("1", 7.5),
+            ("2", 9.75),
+            ("3", 12.0),
+            ("4", 13.5),
+            ("5", 18.0),
+            ("6", 24.0),
+            ("7", 36.0),
+            ("+1", 13.5),
+            ("-1", 9.75),
+            ("0", 7.5),
+            ("2147483647", 36.0),
+            ("+2147483647", 36.0),
+            ("-2147483648", 7.5),
+        ] {
+            assert_eq!(legacy_font_size(value), Some(points), "{value}");
+        }
+        for value in ["", "large", "1.5", "99999999999999999999999"] {
+            assert_eq!(legacy_font_size(value), None, "{value}");
+        }
+    }
 
     #[test]
     fn class_specificity_and_inline_overrides_are_deterministic() {
