@@ -40,6 +40,17 @@ fn page(h: &egui_kittest::Harness<'static, SheetApp>) -> Option<&'static str> {
 }
 
 #[test]
+fn csv_utf8_format_labels_explain_the_bom_in_vietnamese() {
+    use gridcraft_ui_egui::{backstage::SAVE_TYPES, i18n::Language};
+
+    let csv: Vec<_> = SAVE_TYPES.iter().filter(|(ext, _)| *ext == "csv").collect();
+    assert_eq!(csv.len(), 1);
+    assert_eq!(csv[0].1, "CSV UTF-8 (with BOM) (*.csv)");
+    assert_eq!(Language::Vi.tr(csv[0].1), "CSV UTF-8 (có BOM) (*.csv)");
+    assert_eq!(Language::Vi.tr("CSV UTF-8 (with BOM)"), "CSV UTF-8 (có BOM)");
+}
+
+#[test]
 fn new_and_open_from_the_file_tab_keep_the_ribbon_as_it_was() {
     let opened = Arc::new(Mutex::new(0));
     let capture = opened.clone();
@@ -91,7 +102,7 @@ fn save_actions_include_the_cell_draft_and_close_keeps_the_unsaved_prompt() {
     choose(&mut h, "Save As");
     click(&mut h, "Download (.xlsx)");
     choose(&mut h, "Export");
-    click(&mut h, "CSV (Comma delimited)");
+    click(&mut h, "CSV UTF-8 (with BOM)");
     let saved = downloads.lock().unwrap();
     assert_eq!(saved.len(), 3);
     for (_, bytes) in saved.iter().take(2) {
@@ -99,6 +110,7 @@ fn save_actions_include_the_cell_draft_and_close_keeps_the_unsaved_prompt() {
         assert_eq!(wb.active().unwrap().value(CellRef::new(0, 0)), Value::Number(123.0));
     }
     assert!(saved[2].0.ends_with(".csv"));
+    assert!(saved[2].1.starts_with(&[0xEF, 0xBB, 0xBF]));
     assert!(String::from_utf8_lossy(&saved[2].1).contains("123"));
     drop(saved);
     choose(&mut h, "Close");

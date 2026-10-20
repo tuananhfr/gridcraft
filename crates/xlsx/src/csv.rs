@@ -160,7 +160,8 @@ pub fn read_csv(bytes: &[u8], opts: &CsvOptions) -> Result<Workbook, IoError> {
                 continue;
             }
             let pos = CellRef::new(row, col as u32);
-            let cell = if opts.parse_values {
+            // CSV apostrophes are literal data; stripping them would undo export safety.
+            let cell = if opts.parse_values && !f.starts_with('\'') {
                 let p = parse_input(&f, opts.date_system);
                 let style = match p.format {
                     Some(code) => match fmt_cache.iter().find(|(c, _)| *c == code) {
@@ -221,7 +222,8 @@ pub fn write_csv_limited(sheet: &Sheet, delimiter: u8, limit: usize, mut cell_te
                 out.push(delim);
             }
             let t = cell_text(CellRef::new(row, col));
-            if t.contains(delim) || t.contains('"') || t.contains('\n') || t.contains('\r') {
+            // Quoted tabs cannot be mistaken for the separator when a CSV is reopened.
+            if t.contains(delim) || t.contains(['"', '\n', '\r', '\t']) {
                 out.push('"');
                 out.push_str(&t.replace('"', "\"\""));
                 out.push('"');

@@ -218,8 +218,8 @@ pub fn save_bytes_as(wb: &Workbook, path: &str, kind: FileKind) -> Result<Vec<u8
         FileKind::Xlsb => Err(EngineError::Other("XLSB is supported for data import only. Save as .xlsx or another supported export format.".into())),
         FileKind::Ods => Err(EngineError::Other("ODS is supported for data import only. Save as .xlsx or another supported export format.".into())),
         // A workbook read from CSV keeps the separator it was read with (a `;` file stays `;`).
-        FileKind::Csv => wb.sheet(sheet).map(|sh| csv(wb, sh, wb.csv_delimiter.unwrap_or(b','))).transpose().map(Option::unwrap_or_default),
-        FileKind::Tsv => wb.sheet(sheet).map(|sh| csv(wb, sh, b'\t')).transpose().map(Option::unwrap_or_default),
+        FileKind::Csv => crate::io_csv::write(wb, wb.csv_delimiter.unwrap_or(b','), true),
+        FileKind::Tsv => crate::io_csv::write(wb, b'\t', false),
         FileKind::Json => serde_json::to_vec_pretty(wb).map_err(|e| EngineError::Other(e.to_string())),
         FileKind::Html => to_html(wb, sheet).map(String::into_bytes),
     }
@@ -262,28 +262,6 @@ pub fn save_file_bytes(wb: &Workbook, path: &str) -> Result<Vec<u8>> {
 /// The folder of the file at `path`, which relative paths to linked workbooks are relative to.
 pub fn source_dir(path: &str) -> Option<std::path::PathBuf> {
     std::path::absolute(path).ok()?.parent().map(std::path::Path::to_path_buf)
-}
-
-/// Save As CSV/Text writes "the text and values as they are displayed in cells" with "all
-/// characters in each cell" (Microsoft Support, *Excel formatting and features that are not
-/// transferred to other file formats*): number formats applied, never column-width `#####`.
-fn csv(wb: &Workbook, sh: &Sheet, delimiter: u8) -> Result<Vec<u8>> {
-    gridcraft_xlsx::write_csv(sh, delimiter, |c| {
-        if delimiter == b'\t' && sh.merges.iter().any(|m| m.contains(c) && m.start != c) {
-            return String::new();
-        }
-        // General's grid-width formatting rounds large identifiers to scientific notation.
-        // Delimited files have no column width, so preserve the whole numeric value instead.
-        if wb.styles.get(sh.style_id(c)).num_fmt.as_str().eq_ignore_ascii_case("General")
-            && let gridcraft_core::Value::Number(number) = sh.value(c)
-            && number.is_finite()
-        {
-            number.to_string()
-        } else {
-            crate::display::value_text(wb, sh, c)
-        }
-    })
-    .map_err(|e| EngineError::Other(e.to_string()))
 }
 
 fn esc(s: &str) -> String {
@@ -643,17 +621,17 @@ mod tests {
     fn csv_save_keeps_the_separator_it_was_opened_with() {
         let (wb, _) = open_bytes("cut list.csv", CUT_LIST.as_bytes()).unwrap();
         assert_eq!(wb.csv_delimiter, Some(b';'));
-        assert_eq!(String::from_utf8(save_bytes(&wb, "cut list.csv").unwrap()).unwrap(), CUT_LIST);
+        assert_eq!(String::from_utf8(save_bytes(&wb, "cut list.csv").unwrap()).unwrap(), format!("\u{feff}{CUT_LIST}"));
         // Save As another .csv name keeps it too; a comma file stays a comma file (quoting only
         // fields that contain the separator in use).
-        assert_eq!(String::from_utf8(save_bytes(&wb, "copy.CSV").unwrap()).unwrap(), CUT_LIST);
+        assert_eq!(String::from_utf8(save_bytes(&wb, "copy.CSV").unwrap()).unwrap(), format!("\u{feff}{CUT_LIST}"));
         let commas = "\"Komoda, lijevo\",b\r\n1,x;y\r\n";
         let (wb, _) = open_bytes("plain.csv", commas.as_bytes()).unwrap();
-        assert_eq!(String::from_utf8(save_bytes(&wb, "plain.csv").unwrap()).unwrap(), commas);
+        assert_eq!(String::from_utf8(save_bytes(&wb, "plain.csv").unwrap()).unwrap(), format!("\u{feff}{commas}"));
         // A tab-separated file named .csv round-trips with tabs.
         let tabs = "a\tb\r\n1\t2\r\n";
         let (wb, _) = open_bytes("tabs.csv", tabs.as_bytes()).unwrap();
-        assert_eq!(String::from_utf8(save_bytes(&wb, "tabs.csv").unwrap()).unwrap(), tabs);
+        assert_eq!(String::from_utf8(save_bytes(&wb, "tabs.csv").unwrap()).unwrap(), format!("\u{feff}{tabs}"));
     }
 
     #[test]
@@ -663,15 +641,15 @@ mod tests {
             sh.set_value(CellRef::new(0, 0), gridcraft_core::Value::text("a"));
             sh.set_value(CellRef::new(0, 1), gridcraft_core::Value::Number(1.0));
         }
-        assert_eq!(save_bytes(&wb, "new.csv").unwrap(), b"a,1\r\n");
+        assert_eq!(save_bytes(&wb, "new.csv").unwrap(), b"\xEF\xBB\xBFa,1\r\n");
         // Through .xlsx the CSV origin is gone, as in Excel.
         let (from_csv, _) = open_bytes("cut list.csv", CUT_LIST.as_bytes()).unwrap();
         let (reopened, _) = open_bytes("book.xlsx", &save_bytes(&from_csv, "book.xlsx").unwrap()).unwrap();
         assert_eq!(reopened.csv_delimiter, None);
-        assert!(String::from_utf8(save_bytes(&reopened, "again.csv").unwrap()).unwrap().starts_with("1,511,184,"));
+        assert!(String::from_utf8(save_bytes(&reopened, "again.csv").unwrap()).unwrap().starts_with("\u{feff}1,511,184,"));
         // A .tsv/.txt saved as .csv gets commas; as .tsv it keeps tabs.
         let (tsv, _) = open_bytes("list.txt", b"a\tb\r\n").unwrap();
-        assert_eq!(save_bytes(&tsv, "list.csv").unwrap(), b"a,b\r\n");
+        assert_eq!(save_bytes(&tsv, "list.csv").unwrap(), b"\xEF\xBB\xBFa,b\r\n");
         assert_eq!(save_bytes(&tsv, "list.tsv").unwrap(), b"a\tb\r\n");
     }
 
@@ -740,7 +718,7 @@ mod tests {
         sh.cols.insert(1, LineInfo { size: Some(1.0), ..Default::default() });
         sh.show_formulas = true;
         let csv = String::from_utf8(save_bytes(&wb, "out.csv").unwrap()).unwrap();
-        assert_eq!(csv, "2026-01-01,\"$1,234.50\",12.5%,1 1/2,007,#N/A,TRUE\r\n2026-01-02,12345678.90,-0.25,\"1,234,567\",,,\r\n");
+        assert_eq!(csv, "\u{feff}2026-01-01,\"$1,234.50\",12.5%,1 1/2,007,#N/A,TRUE\r\n2026-01-02,12345678.90,-0.25,\"1,234,567\",,,\r\n");
         let tsv = String::from_utf8(save_bytes(&wb, "out.tsv").unwrap()).unwrap();
         assert!(tsv.starts_with("2026-01-01\t$1,234.50\t12.5%\t"), "{tsv}");
     }
@@ -755,9 +733,9 @@ mod tests {
         sheet.set_cell(CellRef::new(0, 0), Cell { value: Value::Number(124412140710.0), ..Default::default() });
         sheet.set_cell(CellRef::new(0, 1), Cell { value: Value::Number(1.23456789012345), ..Default::default() });
         sheet.set_cell(CellRef::new(0, 2), Cell { value: Value::Number(124412140710.0), style: scientific, ..Default::default() });
-        for (path, separator) in [("data.csv", ","), ("data.tsv", "\t")] {
+        for (path, separator, bom) in [("data.csv", ",", "\u{feff}"), ("data.tsv", "\t", "")] {
             let output = String::from_utf8(save_bytes(&workbook, path).unwrap()).unwrap();
-            assert_eq!(output, format!("124412140710{separator}1.23456789012345{separator}1.24E+11\r\n"));
+            assert_eq!(output, format!("{bom}124412140710{separator}1.23456789012345{separator}1.24E+11\r\n"));
         }
     }
 

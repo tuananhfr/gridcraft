@@ -16,6 +16,7 @@ pub mod cmd;
 pub mod display;
 pub mod fill;
 pub mod io;
+mod io_csv;
 pub mod links;
 pub mod outline;
 pub mod paper;

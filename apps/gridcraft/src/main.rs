@@ -186,7 +186,7 @@ fn services() -> Services {
             const TYPES: [(&str, &str); 5] = [
                 ("Excel Workbook (.xlsx)", "xlsx"),
                 ("Excel Macro-Enabled Workbook (.xlsm)", "xlsm"),
-                ("CSV UTF-8 (.csv)", "csv"),
+                ("CSV UTF-8 (with BOM) (*.csv)", "csv"),
                 ("Web Page (.html)", "html"),
                 ("PDF (.pdf)", "pdf"),
             ];
@@ -195,7 +195,8 @@ fn services() -> Services {
             let mut dialog = rfd::FileDialog::new().set_file_name(format!("{stem}.{ext}"));
             let offered = TYPES.iter().filter(|(_, x)| *x != "xlsm" || ext == "xlsm");
             for (label, x) in offered.clone().filter(|(_, x)| *x == ext).chain(offered.filter(|(_, x)| *x != ext)) {
-                dialog = dialog.add_filter(*label, &[*x]);
+                let label = if *x == "csv" { gridcraft_ui_egui::i18n::Language::system().tr(label) } else { *label };
+                dialog = dialog.add_filter(label, &[*x]);
             }
             dialog.save_file().and_then(|p| p.to_str().map(str::to_string))
         })),

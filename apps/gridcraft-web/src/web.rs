@@ -327,7 +327,7 @@ fn download(name: &str, bytes: &[u8], report: DeliveryReport, ctx: egui::Context
             "xlsm" => "Excel Macro-Enabled Workbook (*.xlsm)",
             "xlsb" => "Excel Binary Workbook (*.xlsb)",
             "ods" => "OpenDocument Spreadsheet (*.ods)",
-            "csv" => "CSV (Comma delimited) (*.csv)",
+            "csv" => "CSV UTF-8 (with BOM) (*.csv)",
             "tsv" => "Tab Delimited Text (*.tsv)",
             "txt" => "Plain Text (*.txt)",
             "pdf" => "PDF Document (*.pdf)",
@@ -338,6 +338,7 @@ fn download(name: &str, bytes: &[u8], report: DeliveryReport, ctx: egui::Context
             _ => "Spreadsheet",
         };
 
+        let type_desc = if ext == "csv" { gridcraft_ui_egui::i18n::current(&ctx).tr(type_desc) } else { type_desc };
         let type_obj = js_sys::Object::new();
         let _ = js_sys::Reflect::set(&type_obj, &JsValue::from_str("description"), &JsValue::from_str(type_desc));
         let _ = js_sys::Reflect::set(&type_obj, &JsValue::from_str("accept"), &accept_obj);

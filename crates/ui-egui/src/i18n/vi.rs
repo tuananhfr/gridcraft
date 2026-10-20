@@ -5,6 +5,8 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "CSV UTF-8 (with BOM) (*.csv)" => "CSV UTF-8 (có BOM) (*.csv)",
+        "CSV UTF-8 (with BOM)" => "CSV UTF-8 (có BOM)",
         "The browser cannot read the clipboard — use Ctrl+V" => "Trình duyệt không cho đọc bảng tạm — hãy dùng Ctrl+V",
         "Could not write to the clipboard" => "Không ghi được vào bảng tạm",
         "Some clipboard content was too large and was skipped." => "Một phần nội dung bảng tạm quá lớn nên đã được bỏ qua.",

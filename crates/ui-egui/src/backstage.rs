@@ -124,7 +124,7 @@ pub struct Backstage {
 pub const SAVE_TYPES: [(&str, &str); 5] = [
     ("xlsx", "Excel Workbook (*.xlsx)"),
     ("xlsm", "Excel Macro-Enabled Workbook (*.xlsm)"),
-    ("csv", "CSV UTF-8 (Comma delimited) (*.csv)"),
+    ("csv", "CSV UTF-8 (with BOM) (*.csv)"),
     ("html", "Web Page (*.html)"),
     ("pdf", "PDF (*.pdf)"),
 ];
@@ -907,7 +907,7 @@ fn export(app: &mut SheetApp, ui: &mut Ui, out: &mut Outcome) {
     ui.add_space(14.0);
     section(ui, lang, "Change File Type");
     for (fmt, icon, title, detail) in [
-        ("csv", Icon::TextColumns, "CSV (Comma delimited)", "Save the active sheet as comma-separated text."),
+        ("csv", Icon::TextColumns, "CSV UTF-8 (with BOM)", "Save the active sheet as comma-separated text."),
         ("html", Icon::Link, "Web Page (.html)", "Save the workbook as a web page."),
     ] {
         if action_row(ui, icon, lang.tr(title), lang.tr(detail)).clicked() && export_as(app, fmt) {

@@ -37,7 +37,7 @@ fn values_and_formats() {
     let s = wb.sheet(0).unwrap();
     let st = wb.styles.get(s.cell(CellRef::new(0, 6)).unwrap().style);
     assert_ne!(st.num_fmt.as_str(), "General");
-    assert_eq!(v(&wb, 0, 8), Value::text("007"));
+    assert_eq!(v(&wb, 0, 8), Value::text("'007"));
     // 1904 dates differ from 1900 dates.
     let wb2 = read_csv(b"2026-03-04", &CsvOptions { date_system: DateSystem::D1904, ..Default::default() }).unwrap();
     assert_eq!(wb2.date_system, DateSystem::D1904);
@@ -45,6 +45,16 @@ fn values_and_formats() {
     // parse_values off keeps text.
     let wb3 = read_csv(b"1,TRUE", &CsvOptions { parse_values: false, ..Default::default() }).unwrap();
     assert_eq!(v(&wb3, 0, 0), Value::text("1"));
+}
+
+#[test]
+fn csv_import_preserves_literal_apostrophes() {
+    for parse_values in [true, false] {
+        let wb = read_csv(b"'=1+1,'+SUM(A1),'-cmd,'@x,'007,'\n", &CsvOptions { parse_values, ..Default::default() }).unwrap();
+        for (col, expected) in ["'=1+1", "'+SUM(A1)", "'-cmd", "'@x", "'007", "'"].iter().enumerate() {
+            assert_eq!(v(&wb, 0, col as u32), Value::text(*expected));
+        }
+    }
 }
 
 #[test]
@@ -118,6 +128,18 @@ fn writing() {
     let back = read_csv(out.as_bytes(), &CsvOptions::default()).unwrap();
     assert_eq!(v(&back, 0, 0), Value::text("a,b"));
     assert_eq!(v(&back, 2, 2), Value::text("x\ny"));
+}
+
+#[test]
+fn tabs_are_quoted_even_with_comma_or_semicolon_delimiters() {
+    let mut sheet = Sheet::new("S");
+    sheet.set_value(CellRef::new(0, 0), Value::text("'\tx"));
+    for delimiter in [b',', b';', b'\t'] {
+        let bytes = write_csv(&sheet, delimiter, |_| "'\tx".into()).unwrap();
+        assert_eq!(bytes, b"\"'\tx\"\r\n");
+        let back = read_csv(&bytes, &CsvOptions { delimiter: 0, ..Default::default() }).unwrap();
+        assert_eq!(v(&back, 0, 0), Value::text("'\tx"));
+    }
 }
 
 #[test]

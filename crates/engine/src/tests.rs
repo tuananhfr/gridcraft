@@ -1726,14 +1726,14 @@ fn saving_an_opened_semicolon_csv_keeps_semicolons() {
     s.execute("file.save", json!({})).unwrap();
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),
-        "1;511;184;P3_L1_led;2162PE;16;;1244121406FB\r\n1;600;510;P3_pod;2162PE;19;;124412140710\r\n"
+        "\u{feff}1;511;184;P3_L1_led;2162PE;16;;1244121406FB\r\n1;600;510;P3_pod;2162PE;19;;124412140710\r\n"
     );
     let exported = dir.join("export.csv");
     s.execute("file.exportCsv", json!({"path": exported})).unwrap();
-    assert!(std::fs::read_to_string(&exported).unwrap().starts_with("1;511;184;"));
+    assert!(std::fs::read_to_string(&exported).unwrap().starts_with("\u{feff}1;511;184;"));
     let saved = s.execute("file.saveBytes", json!({"format": "csv"})).unwrap();
     let bytes = crate::io::base64_decode(saved["base64"].as_str().unwrap()).unwrap();
-    assert!(bytes.starts_with(b"1;511;184;"));
+    assert!(bytes.starts_with(b"\xEF\xBB\xBF1;511;184;"));
     std::fs::remove_dir_all(dir).unwrap();
 }
 
