@@ -89,10 +89,14 @@ fn text_outside_a_date_grouped_pivot_is_left_alone() {
 
 #[test]
 fn fixed_pivot_captions_follow_ui_language_and_keep_english_xlsx_text() {
-    let english = harness(pivot_session(), Language::En);
+    let mut english = harness(pivot_session(), Language::En);
     let mut vi = harness(pivot_session(), Language::Vi);
     vi.state_mut().run("app.region.set", json!({"region": "en-US"})).unwrap();
-    vi.run_steps(3);
+    // The formula bar must show raw cell content; keep its active cell outside the pivot.
+    for h in [&mut english, &mut vi] {
+        h.state_mut().run("selection.set", json!({"range": "D1"})).unwrap();
+        h.run_steps(3);
+    }
     for (source, translated) in [("Row Labels", "Nhãn hàng"), ("Grand Total", "Tổng cộng")] {
         assert!(painted(&english).iter().any(|text| text == source));
         assert!(painted(&vi).iter().any(|text| text == translated), "{:?}", painted(&vi));
