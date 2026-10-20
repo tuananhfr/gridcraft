@@ -2,6 +2,9 @@
 
 This branch (`erpcons`) is the ERPCons Văn phòng fork of [GridCraft](https://github.com/storytold/gridcraft), based on GridCraft by the ArtCraft team, licensed MIT OR Apache-2.0 (see `LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`). Changes from upstream `main` (Apache-2.0 §4b):
 
+- Both: G5-debt shows a translated, dismissible circular-reference notice after an edit creates #CIRC! or a workbook containing it opens, without changing cell errors or saved formats or repeating during recalculation.
+- Both: G5-debt translates generated PivotTable Row Labels, Column Labels, Grand Total, Values and Total captions at grid display time; Vietnamese uses Nhãn hàng, Nhãn cột, Tổng cộng and Giá trị while source items, stored cells and XLSX retain their original text.
+- Both: G5-debt replaces the English product name with Bảng tính in Vietnamese catalog values, updates exact-message regressions and guards the entire Vietnamese catalog against leftover GridCraft values; English keys and other languages retain their names.
 - Both: G4-legacy identifies .xls names and OLE2 content independently of the extension, shows one translated import or refusal dialog, and keeps legacy imports on the existing .xlsx Save/Save As path so the original .xls cannot be overwritten with OOXML bytes.
 - Both: G4-legacy reuses the dismissible open notice bar for substituted workbook fonts after discovery and binding, lists at most three distinct names plus the remaining count, preserves other open warnings, and notifies only once per opened workbook; all interface catalogs include the new messages.
 - Both: L-G CSV/TSV file exports prefix executable text (including text formula results) with an apostrophe while preserving typed numbers/dates and clipboard copy; the single CSV UTF-8 format includes a BOM for Vietnamese in Excel and is labelled accordingly. Import strips the BOM but keeps literal apostrophes, including export safety prefixes.

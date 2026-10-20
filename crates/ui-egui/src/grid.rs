@@ -533,6 +533,7 @@ fn display_text(
     width_px: f32,
     char_w: f32,
     region: crate::region::Region,
+    language: crate::i18n::Language,
 ) -> (String, Option<Color32>, bool, Option<(char, usize)>) {
     if sh.show_formulas
         && let Some(f) = sh.cell(c).and_then(|x| x.formula.as_ref())
@@ -557,6 +558,11 @@ fn display_text(
         };
     }
     let f = gridcraft_engine::display::format_in(v, code, wb, region);
+    if matches!(v, Value::Text(_))
+        && let Some(label) = crate::pivot_captions::translate(sh, c, &f.text, language)
+    {
+        return (label.to_string(), f.color.map(numfmt_color), f.numeric, f.fill);
+    }
     if matches!(v, Value::Text(_))
         && region == crate::region::Region::ViVn
         && crate::pivot_labels::in_date_grouped_pivot(sh, c)
@@ -1189,7 +1195,8 @@ pub(crate) fn paint_quadrant(
         let char_w = p.layout_no_wrap("0".to_string(), font.clone(), Color32::PLACEHOLDER).size().x.max(1.0);
         let avail_w = rect.right() - text_left;
         let region = crate::region::current(p.ctx());
-        let (mut text, ncolor, numeric, fill_char) = display_text(wb, sh, c, &v, st, avail_w / z.max(0.1) * z, char_w, region);
+        let (mut text, ncolor, numeric, fill_char) =
+            display_text(wb, sh, c, &v, st, avail_w / z.max(0.1) * z, char_w, region, crate::i18n::current(p.ctx()));
         if sh.show_formulas && sh.cell(c).is_some_and(|cell| cell.formula.is_some()) {
             text = crate::formula_locale::display(&text, crate::region::formula_locale(region), wb, si);
         }

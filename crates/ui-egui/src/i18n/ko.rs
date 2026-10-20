@@ -2,6 +2,7 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself." => "이 수식은 순환 참조를 생성하므로 셀에 #CIRC!이 표시됩니다. 자신을 참조하지 않도록 수식을 수정하세요.",
         "Could not open the legacy .xls format" => "이전 .xls 형식을 열 수 없습니다",
         "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "이전 Excel 파일(.xls)을 열 수 없습니다. Excel 또는 LibreOffice에서 열고 .xlsx로 저장한 다음 다시 시도하세요.",
         "The legacy .xls file has been opened. When saved, it will be saved as .xlsx." => "이전 .xls 파일을 열었습니다. 저장하면 .xlsx 형식으로 저장됩니다.",

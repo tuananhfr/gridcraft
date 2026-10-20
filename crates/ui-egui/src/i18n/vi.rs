@@ -5,6 +5,11 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself." => "Công thức này tạo ra tham chiếu vòng tròn nên ô hiển thị #CIRC!. Hãy sửa công thức để không tự tham chiếu đến chính nó.",
+        "Row Labels" => "Nhãn hàng",
+        "Column Labels" => "Nhãn cột",
+        "Grand Total" => "Tổng cộng",
+        "Total" => "Tổng cộng",
         "Could not open the legacy .xls format" => "Không mở được định dạng .xls cũ",
         "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "Không mở được tệp Excel cũ (.xls) này. Hãy mở nó bằng Excel hoặc LibreOffice, lưu thành .xlsx rồi mở lại.",
         "The legacy .xls file has been opened. When saved, it will be saved as .xlsx." => "Tệp .xls cũ đã được mở. Khi lưu, tệp sẽ được lưu thành .xlsx",
@@ -369,7 +374,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Command\nPalette" => "Bảng\nLệnh",
         "Agent\nControl" => "Điều khiển\nTác tử",
         "Action\nJournal" => "Nhật ký\nThao tác",
-        "About\nGridCraft" => "Giới thiệu\nGridCraft",
+        "About\nGridCraft" => "Giới thiệu\nBảng tính",
         "Share" => "Chia sẻ",
         "Add Chart\nElement" => "Thêm Thành phần\nBiểu đồ",
         "Change\nChart Type" => "Thay đổi\nKiểu Biểu đồ",
@@ -484,7 +489,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Hide Sheet" => "Ẩn Trang tính",
         "Hierarchy & more" => "Phân cấp & khác",
         "Highlighter" => "Bút tô sáng",
-        "How agents drive GridCraft (MCP / control channel)" => "Cách tác tử điều khiển GridCraft (MCP / kênh điều khiển)",
+        "How agents drive GridCraft (MCP / control channel)" => "Cách tác tử điều khiển Bảng tính (MCP / kênh điều khiển)",
         "Import a text or CSV file" => "Nhập tệp văn bản hoặc CSV",
         "Insert\nSlicer" => "Chèn\nBộ cắt lát",
         "Insert Function (⇧F3)" => "Chèn Hàm (⇧F3)",
@@ -630,7 +635,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Conditional Formatting Rules Manager" => "Trình quản lý Quy tắc Định dạng có Điều kiện",
         "Search Commands" => "Tìm Lệnh",
         "Agent Control" => "Điều khiển Tác tử",
-        "About GridCraft" => "Giới thiệu GridCraft",
+        "About GridCraft" => "Giới thiệu Bảng tính",
         "Insert Chart" => "Chèn Biểu đồ",
         "Select Data Source" => "Chọn Nguồn Dữ liệu",
         "Action Journal" => "Nhật ký Thao tác",
@@ -1078,7 +1083,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Minimum:" => "Tối thiểu:",
         "Value:" => "Giá trị:",
         "GridCraft is fully drivable by agents. Every menu item, button and gesture is a command:" => {
-            "GridCraft có thể được tác tử điều khiển hoàn toàn. Mọi mục menu, nút bấm và thao tác đều là một lệnh:"
+            "Bảng tính có thể được tác tử điều khiển hoàn toàn. Mọi mục menu, nút bấm và thao tác đều là một lệnh:"
         }
         "{count} engine commands are available. See docs/mcp.md and docs/control-protocol.md." => {
             "Có sẵn {count} lệnh của bộ máy. Xem docs/mcp.md và docs/control-protocol.md."
@@ -1090,7 +1095,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "A clean-room, open-source, Rust-native spreadsheet." => "Bảng tính mã nguồn mở, viết thuần bằng Rust, phát triển độc lập (clean-room).",
         "Source on GitHub" => "Mã nguồn trên GitHub",
         "Automation in this workbook. GridCraft runs its own scripts; a file's VBA project is preserved but not executed." => {
-            "Tự động hóa trong sổ làm việc này. GridCraft chạy tập lệnh của riêng nó; dự án VBA trong tệp được giữ nguyên nhưng không chạy."
+            "Tự động hóa trong sổ làm việc này. Bảng tính chạy tập lệnh của riêng nó; dự án VBA trong tệp được giữ nguyên nhưng không chạy."
         }
         "VBA project (preserved, not run)" => "Dự án VBA (được giữ nguyên, không chạy)",
         "{count} step" => "{count} bước",
@@ -1217,7 +1222,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "A print job is already being submitted." => "Đang có một lệnh in được gửi đi.",
         "Printing is unavailable here; export a PDF instead." => "Không thể in ở đây; hãy xuất thành PDF.",
         "This workbook contains VBA macros. GridCraft doesn't run them. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
-            "Sổ làm việc này chứa macro VBA. GridCraft không chạy macro. Lưu dạng .xlsm sẽ giữ lại macro; lưu dạng .xlsx sẽ xóa chúng."
+            "Sổ làm việc này chứa macro VBA. Bảng tính không chạy macro. Lưu dạng .xlsm sẽ giữ lại macro; lưu dạng .xlsx sẽ xóa chúng."
         }
         "macros (VBA project) were kept but not executed" => "Đã giữ lại macro (dự án VBA) nhưng không chạy",
         "macros (VBA project) reference a missing part and were dropped" => "Macro (dự án VBA) trỏ tới một phần không có trong tệp nên đã bị bỏ",
@@ -1276,17 +1281,17 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "We can't open '{name}': {reason}" => "Không mở được '{name}': {reason}",
         "We can't import '{name}': {reason}" => "Không nhập được '{name}': {reason}",
         "'{name}' uses {scheme} encryption, which GridCraft can't open yet. Remove the password in Excel and try again." => {
-            "'{name}' dùng kiểu mã hóa {scheme}, GridCraft chưa mở được. Hãy gỡ mật khẩu trong Excel rồi thử lại."
+            "'{name}' dùng kiểu mã hóa {scheme}, Bảng tính chưa mở được. Hãy gỡ mật khẩu trong Excel rồi thử lại."
         }
         "'{name}' is a legacy binary file but not an Excel workbook (no workbook stream). GridCraft can't open it." => {
-            "'{name}' là tệp nhị phân cũ nhưng không phải sổ làm việc Excel (không có luồng Workbook). GridCraft không mở được tệp này."
+            "'{name}' là tệp nhị phân cũ nhưng không phải sổ làm việc Excel (không có luồng Workbook). Bảng tính không mở được tệp này."
         }
         "the file is not a valid zip package: {detail}" => "tệp không phải là gói zip hợp lệ: {detail}",
         "the file contains invalid XML: {detail}" => "tệp chứa XML không hợp lệ: {detail}",
         "the file is not a valid spreadsheet: {detail}" => "tệp không phải là bảng tính hợp lệ: {detail}",
         "the encrypted file is damaged ({detail})." => "tệp mã hóa bị hỏng ({detail}).",
         "the encrypted file is damaged (it holds another encrypted file)." => "tệp mã hóa bị hỏng (bên trong lại là một tệp mã hóa khác).",
-        "not a GridCraft JSON workbook: {detail}" => "không phải sổ làm việc JSON của GridCraft: {detail}",
+        "not a GridCraft JSON workbook: {detail}" => "không phải sổ làm việc JSON của Bảng tính: {detail}",
         "missing part {part}" => "thiếu phần {part}",
         "unexpected root element <{element}> in workbook part" => "phần sổ làm việc có phần tử gốc <{element}> không hợp lệ",
         "XLS: {detail}" => "XLS: {detail}",
@@ -1298,7 +1303,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "ODS contains no worksheets" => "tệp ODS không có trang tính nào",
         "encrypted ODS files are not supported" => "chưa hỗ trợ tệp ODS được mã hóa",
         "this .xls workbook is password-protected (encrypted). GridCraft can't open encrypted .xls files; remove the password in Excel and try again." => {
-            "sổ làm việc .xls này được bảo vệ bằng mật khẩu (đã mã hóa). GridCraft không mở được tệp .xls mã hóa; hãy gỡ mật khẩu trong Excel rồi thử lại."
+            "sổ làm việc .xls này được bảo vệ bằng mật khẩu (đã mã hóa). Bảng tính không mở được tệp .xls mã hóa; hãy gỡ mật khẩu trong Excel rồi thử lại."
         }
         "The password is incorrect. Check that Caps Lock is off and try again." => {
             "Mật khẩu không đúng. Hãy kiểm tra phím Caps Lock đã tắt chưa rồi thử lại."

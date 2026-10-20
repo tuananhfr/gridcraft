@@ -186,6 +186,7 @@ pub fn set_current(ctx: &egui::Context, language: Language) {
 /// English label → Japanese. Keys are the exact interface strings (command ids, file names and
 /// document text are never translated); anything absent falls back to English.
 const JAPANESE: &[(&str, &str)] = &[
+    ("This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself.", "この数式は循環参照を作成するため、セルに #CIRC! が表示されます。自分自身を参照しないように数式を修正してください。"),
     ("Could not open the legacy .xls format", "旧形式の .xls ファイルを開けません"),
     ("This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again.", "この旧形式の Excel ファイル (.xls) を開けません。Excel または LibreOffice で開き、.xlsx として保存してから、もう一度開いてください。"),
     ("The legacy .xls file has been opened. When saved, it will be saved as .xlsx.", "旧形式の .xls ファイルを開きました。保存時には .xlsx 形式で保存されます。"),
@@ -741,6 +742,16 @@ mod tests {
         assert_eq!(Language::Vi.tr("Data"), "Dữ liệu");
         assert_eq!(Language::Vi.tr("Sheet1!A1"), "Sheet1!A1");
         assert_eq!(Language::Vi.name(), "Tiếng Việt");
+    }
+
+    #[test]
+    fn vietnamese_catalog_values_do_not_contain_the_english_product_name() {
+        let keys = catalog_keys(include_str!("i18n/vi.rs"));
+        assert!(keys.len() > 1000);
+        for key in keys {
+            let value = vi::translate(&key).unwrap();
+            assert!(!value.contains("GridCraft"), "{key}: {value}");
+        }
     }
 
     #[test]

@@ -164,7 +164,7 @@ fn the_question_and_the_notice_are_in_vietnamese() {
     let notice = h.state().notice.clone().unwrap();
     assert_eq!(notice.text, gridcraft_ui_egui::VBA_NOTICE);
     let shown = Language::Vi.tr(&notice.text);
-    assert!(shown.contains("GridCraft không chạy macro") && shown.contains(".xlsm"), "{shown}");
+    assert!(shown.contains("Bảng tính không chạy macro") && shown.contains(".xlsm"), "{shown}");
     assert!(h.query_by_label(shown).is_some(), "the info bar shows the Vietnamese text");
     h.state_mut().open_dialog("saveAs", json!({"format": "xlsx"}));
     h.run_steps(3);

@@ -88,6 +88,25 @@ fn text_outside_a_date_grouped_pivot_is_left_alone() {
 }
 
 #[test]
+fn fixed_pivot_captions_follow_ui_language_and_keep_english_xlsx_text() {
+    let english = harness(pivot_session(), Language::En);
+    let mut vi = harness(pivot_session(), Language::Vi);
+    vi.state_mut().run("app.region.set", json!({"region": "en-US"})).unwrap();
+    vi.run_steps(3);
+    for (source, translated) in [("Row Labels", "Nhãn hàng"), ("Grand Total", "Tổng cộng")] {
+        assert!(painted(&english).iter().any(|text| text == source));
+        assert!(painted(&vi).iter().any(|text| text == translated), "{:?}", painted(&vi));
+        assert!(!painted(&vi).iter().any(|text| text == source));
+    }
+    let saved = xlsx(&vi);
+    assert_eq!(saved, xlsx(&english));
+    let reopened = gridcraft_engine::io::open_bytes("pivot.xlsx", &saved).unwrap().0;
+    let sheet = reopened.active().unwrap();
+    assert_eq!(sheet.value(CellRef::parse("A3").unwrap()), Value::text("Row Labels"));
+    assert!(sheet.cells.iter().any(|(_, cell)| cell.value == Value::text("Grand Total")));
+}
+
+#[test]
 fn times_show_sa_ch_in_vi_vn_and_save_unchanged() {
     let first_sheet = || {
         let mut s = pivot_session();

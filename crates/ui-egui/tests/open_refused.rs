@@ -97,7 +97,7 @@ fn open_errors_for_broken_files_translate_whole() {
         (refusal(open_bytes("d.ods", &ods)), "Không nhập được 'd.ods': tệp không phải là bảng tính hợp lệ: tệp ODS không có trang tính nào"),
         (
             refusal(open_bytes("e.xls", &compound_file(&[("Data", b"x")]))),
-            "'e.xls' là tệp nhị phân cũ nhưng không phải sổ làm việc Excel (không có luồng Workbook). GridCraft không mở được tệp này.",
+            "'e.xls' là tệp nhị phân cũ nhưng không phải sổ làm việc Excel (không có luồng Workbook). Bảng tính không mở được tệp này.",
         ),
         (
             refusal(open_bytes_with_password("f.xlsx", &twice, Some("pw"))),
@@ -107,7 +107,7 @@ fn open_errors_for_broken_files_translate_whole() {
             refusal(open_bytes_with_password("g.xlsx", &encrypt_workbook(&no_workbook_part(), "pw"), Some("nope"))),
             "Mật khẩu không đúng. Hãy kiểm tra phím Caps Lock đã tắt chưa rồi thử lại.",
         ),
-        (refusal(open_bytes("h.json", b"{")), "không phải sổ làm việc JSON của GridCraft: "),
+        (refusal(open_bytes("h.json", b"{")), "không phải sổ làm việc JSON của Bảng tính: "),
     ];
     for (english, vietnamese) in cases {
         assert!(!english.is_empty(), "the file was refused ({vietnamese})");

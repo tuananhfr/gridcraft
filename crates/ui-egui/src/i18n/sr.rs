@@ -2,6 +2,7 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself." => "Ova formula stvara kružnu referencu, pa ćelija prikazuje #CIRC!. Izmenite formulu tako da ne upućuje sama na sebe.",
         "Could not open the legacy .xls format" => "Није могуће отворити стари формат .xls",
         "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "Није могуће отворити ову датотеку у старом Excel формату (.xls). Отворите је у Excel-у или LibreOffice-у, сачувајте као .xlsx и покушајте поново.",
         "The legacy .xls file has been opened. When saved, it will be saved as .xlsx." => "Стара .xls датотека је отворена. При чувању ће бити сачувана као .xlsx.",

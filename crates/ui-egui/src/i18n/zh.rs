@@ -2,6 +2,7 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself." => "此公式产生循环引用，因此单元格显示 #CIRC!。请修改公式，使其不再引用自身。",
         "Could not open the legacy .xls format" => "无法打开旧版 .xls 格式",
         "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "无法打开此旧版 Excel 文件 (.xls)。请用 Excel 或 LibreOffice 打开，将其另存为 .xlsx 后重试。",
         "The legacy .xls file has been opened. When saved, it will be saved as .xlsx." => "已打开旧版 .xls 文件。保存时将保存为 .xlsx 格式。",

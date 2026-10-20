@@ -10,6 +10,7 @@ pub mod backstage;
 mod border_preview;
 mod cell_pictures;
 pub mod chartview;
+mod circular_notice;
 mod clipboard;
 mod close_after_save;
 pub mod close_many;
@@ -34,6 +35,7 @@ pub mod narrow;
 pub mod outline;
 pub mod panes;
 pub mod paper_view;
+mod pivot_captions;
 pub mod pivot_labels;
 pub mod pivot_pane;
 pub mod printing;
@@ -308,6 +310,7 @@ pub struct SheetApp {
     /// Dismissible info bar under the ribbon (open-time notices).
     pub notice: Option<Notice>,
     font_notice_pending: std::collections::HashSet<u64>,
+    circular_notice_pending: std::collections::HashSet<u64>,
     pub services: Services,
     pending_saves: Vec<PendingSave>,
     pub(crate) save_failures: save_status::SaveFailures,
@@ -372,6 +375,7 @@ pub struct SheetApp {
 impl SheetApp {
     pub fn new(session: Session, services: Services) -> SheetApp {
         craft_fonts::register_print_fonts();
+        let circular_notice_pending = session.documents().iter().map(|doc| doc.uid).collect();
         SheetApp {
             session,
             ui: UiState::default(),
@@ -384,6 +388,7 @@ impl SheetApp {
             toast: None,
             notice: None,
             font_notice_pending: Default::default(),
+            circular_notice_pending,
             services,
             pending_saves: Vec::new(),
             save_failures: Default::default(),
@@ -459,7 +464,11 @@ impl SheetApp {
 
     /// Runs an engine command (or a UI command) and handles UI requests it makes.
     pub fn run(&mut self, id: &str, params: Json) -> Result<Json, String> {
+        let before = self.session.active().map(|doc| (doc.uid, doc.wb.clone()));
         let r = self.run_command(id, params);
+        if r.is_ok() {
+            self.circular_notice_after_edit(before);
+        }
         if id == "file.open"
             && let Ok(result) = &r
             && result.get("index").is_some()
@@ -467,6 +476,7 @@ impl SheetApp {
             && let Some(doc) = self.session.active()
         {
             self.font_notice_pending.insert(doc.uid);
+            self.circular_notice_pending.insert(doc.uid);
             self.notice = None;
         }
         if id == "file.open"
@@ -1084,9 +1094,11 @@ impl SheetApp {
         if ed.region != region::Region::EnUs {
             params["region"] = json!(ed.region.code());
         }
+        let before = self.session.active().map(|doc| (doc.uid, doc.wb.clone()));
         let r = self.session.run(if fill_selection { "range.fill" } else { "cell.set" }, params);
         match r {
             Ok(_) => {
+                self.circular_notice_after_edit(before);
                 if dr != 0 || dc != 0 {
                     self.move_after_enter(dr, dc);
                 }
@@ -1186,6 +1198,7 @@ impl SheetApp {
                 }
             }
         }
+        self.show_circular_open_notice();
         self.show_font_notice();
         if let Some(answer) = self.desktop_theme.take_change() {
             self.desktop_dark = Some(answer);

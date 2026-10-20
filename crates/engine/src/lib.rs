@@ -8,6 +8,7 @@
 
 pub mod catalog;
 pub mod cf;
+pub mod circular;
 mod clip_html;
 mod clip_html_inline;
 mod clip_html_style;
