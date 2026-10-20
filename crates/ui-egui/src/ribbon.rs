@@ -558,6 +558,8 @@ fn menu_items(app: &mut SheetApp, ui: &mut Ui, items: &[(&str, &str, serde_json:
                 app.open_dialog(d, p.clone());
             } else if *id == "edit.paste" {
                 app.paste_from_clipboard();
+            } else if *id == "edit.pasteSpecial" && p.get("what").and_then(serde_json::Value::as_str) == Some("values") {
+                app.paste_special_from_clipboard("values");
             } else {
                 act(app, id, p.clone());
             }
@@ -605,6 +607,13 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
         paste_popup = paste_popup.open_memory(egui::SetOpenCommand::Bool(true));
     }
     paste_popup.show(|ui| {
+        for &(what, label) in crate::clipboard::EXTERNAL_CHOICES {
+            if ui.add(egui::Button::new(app.ui.language.tr(label)).frame(false).min_size(vec2(220.0, 22.0))).clicked() {
+                app.paste_special_from_clipboard(what);
+                ui.close();
+            }
+        }
+        ui.separator();
         menu_items(
             app,
             ui,

@@ -8,6 +8,8 @@ use super::*;
 use crate::selection::{current_region, jump};
 use crate::{Clipboard, Session};
 
+mod external_paste;
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -74,8 +76,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste Special…",
             ["Home", "Clipboard"],
             Some("Ctrl+Cmd+V"),
-            "{what: all|formulas|values|formats|comments|validation|allExceptBorders|columnWidths|formulasAndNumberFormats|valuesAndNumberFormats, operation?: none|add|subtract|multiply|divide, skipBlanks?, transpose?, link?}",
-            has_clipboard,
+            "{source?: external (requires text? or html?), what: all|keepSource|matchDestination|formulas|values|formats|comments|validation|allExceptBorders|columnWidths|formulasAndNumberFormats|valuesAndNumberFormats, at?, sheet?, region?, operation?: none|add|subtract|multiply|divide, skipBlanks?, transpose?, link?}; external keepSource keeps HTML formatting, matchDestination and values keep destination styles and omit source formatting/merges",
+            has_doc,
             paste_special
         ),
         cmd!(noundo "edit.clearClipboard", "Cancel Copy", [], Some("Escape"), "{}", has_doc, clear_clipboard),
@@ -928,51 +930,7 @@ fn paste(s: &mut Session, p: &Json) -> Result<Json> {
 }
 
 fn paste_text(s: &mut Session, p: &Json, text: &str) -> Result<Json> {
-    let sheet = target_sheet(s, p)?;
-    let region = display_region(s, p, "edit.paste")?;
-    let at = cell_param_on(s, p, "at", sheet)?.unwrap_or(s.doc()?.selection.current().start);
-    let html = str_param(p, "html").map(crate::clip_html::table_cells).unwrap_or_default();
-    let rows: Vec<Vec<String>> =
-        if !html.is_empty() { html.iter().map(|row| row.iter().map(|cell| cell.text.clone()).collect()).collect() } else { parse_tsv(text) };
-    let h = rows.len();
-    let w = rows.iter().map(Vec::len).max().unwrap_or(0);
-    edit(s, |cx| {
-        if !html.is_empty() && h > 0 && w > 0 {
-            let end = at.offset_clamped(h as i64 - 1, w as i64 - 1);
-            let pasted = RangeRef::new(at, end);
-            cx.sheet_mut(sheet)?.merges.retain(|m| !m.intersects(&pasted));
-        }
-        for (ri, row) in rows.iter().enumerate() {
-            for (ci, v) in row.iter().enumerate() {
-                let Some(c) = at.offset(ri as i64, ci as i64) else { continue };
-                let hc = html.get(ri).and_then(|r| r.get(ci));
-                let cell = if let Some(hc) = hc {
-                    Some(hc.to_cell(cx.wb.date_system, region, &mut cx.wb.styles))
-                } else {
-                    input_to_cell_in(v, sheet, c, &mut cx.wb, region).unwrap_or_else(|_| Some(Cell::value(Value::text(v.as_str()))))
-                };
-                let sh = cx.sheet_mut(sheet)?;
-                if let Some(hc) = hc.filter(|hc| hc.rowspan > 1 || hc.colspan > 1)
-                    && let Some(end) = c.offset(hc.rowspan.saturating_sub(1) as i64, hc.colspan.saturating_sub(1) as i64)
-                {
-                    sh.merges.push(RangeRef::new(c, end));
-                }
-                match cell {
-                    Some(cell) => sh.set_cell(c, cell),
-                    None => {
-                        sh.remove_cell(c);
-                    }
-                }
-                cx.touch(sheet, c);
-            }
-        }
-        if h > 0 && w > 0 {
-            let end = at.offset_clamped(h as i64 - 1, w as i64 - 1);
-            *cx.sel = crate::Selection { active: at, anchor: at, ranges: vec![RangeRef::new(at, end)] };
-        }
-        Ok(())
-    })?;
-    Ok(json!({"rows": h, "cols": w}))
+    external_paste::paste(s, p, text, true)
 }
 
 /// Tab-separated text with Excel-style quoting.
@@ -1026,6 +984,9 @@ pub(crate) fn parse_tsv(text: &str) -> Vec<Vec<String>> {
 }
 
 fn paste_special(s: &mut Session, p: &Json) -> Result<Json> {
+    if str_param(p, "source") == Some("external") {
+        return external_paste::special(s, p);
+    }
     let Some(clip) = s.clipboard.clone() else { return Err(EngineError::Other("Nothing to paste.".into())) };
     let what = match str_param(p, "what").unwrap_or("all") {
         "all" => What::All,

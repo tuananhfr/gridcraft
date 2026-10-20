@@ -287,6 +287,17 @@ impl Dialog {
                 d.values.insert("sheet".into(), json!(first));
                 d
             }
+            "pasteSpecial" if p("source").as_str() == Some("external") => {
+                let mut values = params.clone();
+                values["what"] = json!("keepSource");
+                Dialog::form(
+                    "pasteSpecial",
+                    "Paste Special",
+                    "edit.pasteSpecial",
+                    vec![Choice { key: "what", label: "Paste", options: crate::clipboard::EXTERNAL_CHOICES.to_vec() }],
+                    values,
+                )
+            }
             "pasteSpecial" => Dialog::form(
                 "pasteSpecial",
                 "Paste Special",
@@ -1321,6 +1332,9 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
 
 /// Paste Special's legacy mnemonics select options; Enter still performs the paste.
 fn paste_special_shortcuts(d: &mut Dialog, ctx: &egui::Context) {
+    if d.values.get("source").and_then(Json::as_str) == Some("external") {
+        return;
+    }
     if ctx.text_edit_focused() {
         return;
     }
