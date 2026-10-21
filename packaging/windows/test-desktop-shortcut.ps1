@@ -103,7 +103,7 @@ function Assert-Desktop([bool] $Enabled) {
   $shortcut = $null
   try {
     $shortcut = $shell.CreateShortcut($DesktopLink)
-    Assert-That ($shortcut.TargetPath -ieq (Join-Path $InstallDir 'gridcraft.exe')) 'Desktop shortcut targets the wrong executable'
+    Assert-That ($shortcut.TargetPath -ieq (Join-Path $InstallDir 'gridcraft.exe')) "Desktop shortcut targets the wrong executable: $($shortcut.TargetPath)"
     Assert-That ($shortcut.WorkingDirectory.TrimEnd('\') -ieq $InstallDir.TrimEnd('\')) 'Desktop shortcut has the wrong working directory'
     Assert-That ($shortcut.IconLocation -match '^(.*),\s*0$') 'Desktop shortcut must use icon index zero'
     $iconPath = [Environment]::ExpandEnvironmentVariables($Matches[1].Trim('"'))
