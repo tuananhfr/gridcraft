@@ -1386,7 +1386,7 @@ impl SheetApp {
             && self.editor.is_none()
             && self.text_box_editor.is_none()
             && now - self.grid.last_autosave > 2000.0
-            && self.session.active().is_some_and(|d| d.is_dirty() && d.path.as_deref().is_some_and(|p| p.ends_with(".xlsx")))
+            && self.session.active().is_some_and(|d| d.is_dirty() && d.path.as_deref().is_some_and(autosave_path))
         {
             self.grid.last_autosave = now;
             self.store_view_state();
@@ -1395,7 +1395,7 @@ impl SheetApp {
         }
         // Window title.
         if let Some(d) = self.session.active() {
-            let title = format!("{}{}", d.display_title(), if d.is_dirty() { " — Edited" } else { "" });
+            let title = format!("{}{}", d.display_title(), if d.is_dirty() { self.ui.language.tr(" — Edited") } else { "" });
             if self.grid.last_title.as_deref() != Some(title.as_str()) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
                 self.grid.last_title = Some(title);
@@ -1488,4 +1488,21 @@ pub fn now_ms() -> f64 {
 
 pub fn cell(r: u32, c: u32) -> CellRef {
     CellRef::new(r, c)
+}
+
+fn autosave_path(path: &str) -> bool {
+    std::path::Path::new(path)
+        .extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("xlsx") || ext.eq_ignore_ascii_case("xlsm"))
+}
+
+#[test]
+fn autosave_extensions() {
+    for path in ["a.xlsx", "a.XLSX", "a.xlsm", "a.XlSm"] {
+        assert!(autosave_path(path));
+    }
+    for path in ["Untitled", "a.csv", "a.xlsx.bak", "a.xltm"] {
+        assert!(!autosave_path(path));
+    }
 }

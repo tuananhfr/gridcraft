@@ -5,6 +5,19 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Recovery" => "Khôi phục",
+        " — Edited" => " — Đã chỉnh sửa",
+        "Recovered" => "Đã khôi phục",
+        "Could not restore draft" => "Không thể khôi phục bản nháp",
+        "Could not save recovery draft" => "Không thể lưu bản nháp khôi phục",
+        "Spreadsheets" => "Bảng tính",
+        "Excel Workbook" => "Sổ làm việc Excel",
+        "Excel 97-2003 Workbook (import)" => "Sổ làm việc Excel 97-2003 (nhập)",
+        "Excel Binary Workbook (data import)" => "Sổ làm việc nhị phân Excel (nhập dữ liệu)",
+        "OpenDocument Spreadsheet (data import)" => "Bảng tính OpenDocument (nhập dữ liệu)",
+        "CSV" => "CSV",
+        "Excel Macro-Enabled Template (*.xltm)" => "Mẫu Excel có Macro (*.xltm)",
+        "PDF (.pdf)" => "PDF (.pdf)",
         "This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself." => "Công thức này tạo ra tham chiếu vòng tròn nên ô hiển thị #CIRC!. Hãy sửa công thức để không tự tham chiếu đến chính nó.",
         "Row Labels" => "Nhãn hàng",
         "Column Labels" => "Nhãn cột",

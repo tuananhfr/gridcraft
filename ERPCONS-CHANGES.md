@@ -1,5 +1,9 @@
 # ERPCons changes
 
+- Desktop recovery: atomically store unsaved workbook drafts in per-instance directories with separate lifetime lock files, recover only after their owner exits (10 documents, 64 MiB), restore them unsaved with recovery labels, preserve macros, and AutoSave .xlsx/.xlsm case-insensitively.
+- Desktop file filters follow the current UI language; translate the edited window title suffix.
+- Desktop Save As offers macro-enabled templates (.xltm) first when suggested.
+
 This branch (`erpcons`) is the ERPCons Văn phòng fork of [GridCraft](https://github.com/storytold/gridcraft), based on GridCraft by the ArtCraft team, licensed MIT OR Apache-2.0 (see `LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`). Changes from upstream `main` (Apache-2.0 §4b):
 
 - Desktop: default to Vietnamese when no UI language is saved, respect saved languages, and atomically save language changes immediately with logged write errors.

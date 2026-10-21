@@ -11,6 +11,7 @@
 #[cfg(target_os = "macos")]
 mod apple_events;
 mod control_server;
+mod drafts;
 #[cfg(any(target_os = "windows", test))]
 mod graphics;
 mod logging;
@@ -25,45 +26,61 @@ use gridcraft_engine::Session;
 use gridcraft_ui_egui::{Services, SheetApp};
 use serde_json::json;
 
-struct App(SheetApp, #[cfg(target_os = "macos")] Option<native_menu::NativeMenu>, #[cfg(target_os = "macos")] fmv_macos_events::Inbox);
+struct App {
+    sheet: SheetApp,
+    drafts: Option<drafts::Drafts>,
+    language: Rc<std::cell::Cell<gridcraft_ui_egui::i18n::Language>>,
+    #[cfg(target_os = "macos")]
+    menu: Option<native_menu::NativeMenu>,
+    #[cfg(target_os = "macos")]
+    inbox: fmv_macos_events::Inbox,
+}
 
 impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let language = self.0.ui.language;
+        let language = self.sheet.ui.language;
+        self.language.set(language);
         #[cfg(target_os = "macos")]
         {
-            if self.1.is_none() && std::env::var_os("GRIDCRAFT_NO_NATIVE_MENU").is_none() {
-                self.1 = Some(native_menu::NativeMenu::install(ctx));
+            if self.menu.is_none() && std::env::var_os("GRIDCRAFT_NO_NATIVE_MENU").is_none() {
+                self.menu = Some(native_menu::NativeMenu::install(ctx));
             }
-            if let Some(m) = &self.1 {
-                m.poll(&mut self.0, ctx);
+            if let Some(m) = &self.menu {
+                m.poll(&mut self.sheet, ctx);
             }
-            apple_events::poll(&self.2, &mut self.0, ctx);
+            apple_events::poll(&self.inbox, &mut self.sheet, ctx);
         }
-        self.0.logic(ctx);
-        save_language_change(&self.0, language);
-        self.0.poll_printing(ctx);
-        if ctx.input(|input| input.viewport().close_requested()) && (self.0.printing.busy() || !self.0.confirm_quit()) {
+        self.sheet.logic(ctx);
+        save_language_change(&self.sheet, language);
+        self.sheet.poll_printing(ctx);
+        if let Some(drafts) = &mut self.drafts {
+            drafts.after_frame(&mut self.sheet, ctx);
+        }
+        if ctx.input(|input| input.viewport().close_requested()) && (self.sheet.printing.busy() || !self.sheet.confirm_quit()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
     }
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
-        self.0.raw_input_hook(raw);
+        self.sheet.raw_input_hook(raw);
         // Files dropped on the window open as workbooks.
         for f in std::mem::take(&mut raw.dropped_files) {
             if let Some(p) = f.path().to_str().map(str::to_string).filter(|p| !p.is_empty()) {
-                self.0.open_path(&p);
+                self.sheet.open_path(&p);
             }
         }
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let language = self.0.ui.language;
-        self.0.ui(ui);
-        save_language_change(&self.0, language);
+        let language = self.sheet.ui.language;
+        self.language.set(language);
+        self.sheet.ui(ui);
+        save_language_change(&self.sheet, language);
     }
     fn on_exit(&mut self) {
+        if let Some(drafts) = &mut self.drafts {
+            drafts.discard_on_exit();
+        }
         print::finish_pending_jobs();
-        save_prefs(&self.0);
+        save_prefs(&self.sheet);
         // macOS (#117): end the process here, before eframe tears the window down. AccessKit's
         // macOS adapter subclasses the window's content view and restores its class on teardown;
         // AppKit's Touch Bar support observes that view (KVO), so in the next display cycle
@@ -186,7 +203,8 @@ fn read_clipboard<T>(
     read(clipboard.as_mut()?).ok()
 }
 
-fn services() -> Services {
+fn services(language: Rc<std::cell::Cell<gridcraft_ui_egui::i18n::Language>>) -> Services {
+    let open_language = language.clone();
     // Keep the owner alive: X11/Wayland serve clipboard data from this handle.
     let clipboard: Rc<RefCell<Option<arboard::Clipboard>>> = Rc::default();
     let (html_clipboard, text_clipboard) = (clipboard.clone(), clipboard.clone());
@@ -200,14 +218,15 @@ fn services() -> Services {
         })),
         paste_html: Some(Box::new(move || read_clipboard(&html_clipboard, |clipboard| clipboard.get().html()))),
         paste_text: Some(Box::new(move || read_clipboard(&text_clipboard, |clipboard| clipboard.get_text()))),
-        pick_open: Some(Box::new(|| {
+        pick_open: Some(Box::new(move || {
+            let language = open_language.get();
             rfd::FileDialog::new()
-                .add_filter("Spreadsheets", &["xlsx", "xlsm", "xls", "xlsb", "ods", "csv", "tsv", "txt", "json"])
-                .add_filter("Excel Workbook", &["xlsx", "xlsm"])
-                .add_filter("Excel 97-2003 Workbook (import)", &["xls"])
-                .add_filter("Excel Binary Workbook (data import)", &["xlsb"])
-                .add_filter("OpenDocument Spreadsheet (data import)", &["ods"])
-                .add_filter("CSV", &["csv"])
+                .add_filter(language.tr("Spreadsheets"), &["xlsx", "xlsm", "xls", "xlsb", "ods", "csv", "tsv", "txt", "json"])
+                .add_filter(language.tr("Excel Workbook"), &["xlsx", "xlsm"])
+                .add_filter(language.tr("Excel 97-2003 Workbook (import)"), &["xls"])
+                .add_filter(language.tr("Excel Binary Workbook (data import)"), &["xlsb"])
+                .add_filter(language.tr("OpenDocument Spreadsheet (data import)"), &["ods"])
+                .add_filter(language.tr("CSV"), &["csv"])
                 .pick_file()
                 .and_then(|p| p.to_str().map(str::to_string))
         })),
@@ -217,14 +236,15 @@ fn services() -> Services {
                 .pick_file()
                 .and_then(|p| p.to_str().map(str::to_string))
         })),
-        pick_save: Some(Box::new(|suggested: &str| {
+        pick_save: Some(Box::new(move |suggested: &str| {
             let path = std::path::Path::new(suggested);
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Book1").to_string();
             // The suggested name's type (an export asks for .pdf, .csv or .html) comes first.
             // .xlsm is offered only for a workbook with macros, which is suggested as one.
-            const TYPES: [(&str, &str); 5] = [
-                ("Excel Workbook (.xlsx)", "xlsx"),
-                ("Excel Macro-Enabled Workbook (.xlsm)", "xlsm"),
+            const TYPES: [(&str, &str); 6] = [
+                ("Excel Workbook (*.xlsx)", "xlsx"),
+                ("Excel Macro-Enabled Workbook (*.xlsm)", "xlsm"),
+                ("Excel Macro-Enabled Template (*.xltm)", "xltm"),
                 ("CSV UTF-8 (with BOM) (*.csv)", "csv"),
                 ("Web Page (.html)", "html"),
                 ("PDF (.pdf)", "pdf"),
@@ -232,9 +252,9 @@ fn services() -> Services {
             let ext = path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).filter(|e| TYPES.iter().any(|(_, x)| x == e));
             let ext = ext.unwrap_or_else(|| "xlsx".to_string());
             let mut dialog = rfd::FileDialog::new().set_file_name(format!("{stem}.{ext}"));
-            let offered = TYPES.iter().filter(|(_, x)| *x != "xlsm" || ext == "xlsm");
+            let offered = TYPES.iter().filter(|(_, x)| !matches!(*x, "xlsm" | "xltm") || matches!(ext.as_str(), "xlsm" | "xltm"));
             for (label, x) in offered.clone().filter(|(_, x)| *x == ext).chain(offered.filter(|(_, x)| *x != ext)) {
-                let label = if *x == "csv" { gridcraft_ui_egui::i18n::Language::system().tr(label) } else { *label };
+                let label = language.get().tr(label);
                 dialog = dialog.add_filter(label, &[*x]);
             }
             dialog.save_file().and_then(|p| p.to_str().map(str::to_string))
@@ -344,11 +364,28 @@ fn main() -> eframe::Result<()> {
     if session.documents().is_empty() {
         session.new_workbook();
     }
-    let mut app = SheetApp::new(session, services());
+    let language = Rc::new(std::cell::Cell::new(desktop_language(None, None)));
+    let mut app = SheetApp::new(session, services(language.clone()));
     app.watch_desktop_theme();
     app.after_engine(); // Show warnings from the sample.
     let control_port = control_port;
     load_prefs(&mut app);
+    language.set(app.ui.language);
+    let mut drafts = if prefs_enabled() {
+        config_dir().and_then(|dir| match drafts::Drafts::new(dir.join("drafts")) {
+            Ok(store) => Some(store),
+            Err(e) => {
+                app.message =
+                    Some((app.ui.language.tr("Recovery").to_string(), format!("{}: {e}", app.ui.language.tr("Could not save recovery draft"))));
+                None
+            }
+        })
+    } else {
+        None
+    };
+    if let Some(drafts) = &mut drafts {
+        drafts.restore(&mut app);
+    }
     // Files named on the command line (a double-click on Windows and Linux) open as File › Open
     // opens them: a password-protected one asks for its password, and errors are shown, not
     // only logged. Each replaces the untouched blank Book1, as a file opened from Finder does.
@@ -389,6 +426,7 @@ fn main() -> eframe::Result<()> {
     // The app waits here until a start gets as far as creating it; a start that fails before
     // (no graphics adapter, device or surface) leaves it here for the next attempt.
     let pending = std::cell::Cell::new(Some(app));
+    let pending_drafts = std::cell::Cell::new(drafts);
     let run = |options: eframe::NativeOptions| {
         eframe::run_native(
             "GridCraft",
@@ -404,13 +442,15 @@ fn main() -> eframe::Result<()> {
                         Err(e) => log::error!("control channel on port {port}: {e}"),
                     }
                 }
-                Ok(Box::new(App(
-                    app,
+                Ok(Box::new(App {
+                    sheet: app,
+                    drafts: pending_drafts.take(),
+                    language: language.clone(),
                     #[cfg(target_os = "macos")]
-                    None,
+                    menu: None,
                     #[cfg(target_os = "macos")]
-                    apple_events.connect(&cc.egui_ctx),
-                )))
+                    inbox: apple_events.connect(&cc.egui_ctx),
+                }))
             }),
         )
     };
