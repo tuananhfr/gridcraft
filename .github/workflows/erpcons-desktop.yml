@@ -3,6 +3,8 @@ name: ERPCons desktop installers
 on:
   push:
     tags: ["erpcons-v*"]
+    # Dry runs without a release: workflow_dispatch needs the file on the default branch (upstream's main).
+    branches: ["installers/**"]
   workflow_dispatch:
 
 permissions:
