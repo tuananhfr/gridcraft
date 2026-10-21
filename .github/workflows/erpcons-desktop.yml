@@ -36,11 +36,11 @@ jobs:
       - name: Read package version and validate tag
         id: version
         env:
-          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
           TAG: ${{ github.ref_name }}
         run: |
           version=$(cargo metadata --no-deps --format-version 1 | python -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "gridcraft"))')
-          if [ "$EVENT_NAME" = push ] && [ "$TAG" != "erpcons-v$version" ]; then
+          if [ "$REF_TYPE" = tag ] && [ "$TAG" != "erpcons-v$version" ]; then
             echo "::error::Tag $TAG must be exactly erpcons-v$version"
             exit 1
           fi
@@ -101,11 +101,11 @@ jobs:
       - name: Read package version and validate tag
         id: version
         env:
-          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
           TAG: ${{ github.ref_name }}
         run: |
           version=$(cargo metadata --no-deps --format-version 1 | python -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "gridcraft"))')
-          if [ "$EVENT_NAME" = push ] && [ "$TAG" != "erpcons-v$version" ]; then
+          if [ "$REF_TYPE" = tag ] && [ "$TAG" != "erpcons-v$version" ]; then
             echo "::error::Tag $TAG must be exactly erpcons-v$version"
             exit 1
           fi
@@ -172,11 +172,11 @@ jobs:
       - name: Read package version and validate tag
         id: version
         env:
-          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
           TAG: ${{ github.ref_name }}
         run: |
           version=$(cargo metadata --no-deps --format-version 1 | python -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "gridcraft"))')
-          if [ "$EVENT_NAME" = push ] && [ "$TAG" != "erpcons-v$version" ]; then
+          if [ "$REF_TYPE" = tag ] && [ "$TAG" != "erpcons-v$version" ]; then
             echo "::error::Tag $TAG must be exactly erpcons-v$version"
             exit 1
           fi
