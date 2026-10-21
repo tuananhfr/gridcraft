@@ -101,8 +101,11 @@ function Assert-Desktop([bool] $Enabled) {
   if (-not $Enabled) { return }
   $shell = New-Object -ComObject WScript.Shell
   $shortcut = $null
+  # WScript.Shell opens .lnk paths through the ANSI code page, so a Vietnamese name reads back empty.
+  $asciiLink = Join-Path $WorkDir 'desktop-shortcut-check.lnk'
+  Copy-Item -LiteralPath $DesktopLink -Destination $asciiLink -Force
   try {
-    $shortcut = $shell.CreateShortcut($DesktopLink)
+    $shortcut = $shell.CreateShortcut($asciiLink)
     Assert-That ($shortcut.TargetPath -ieq (Join-Path $InstallDir 'gridcraft.exe')) "Desktop shortcut targets the wrong executable: $($shortcut.TargetPath)"
     Assert-That ($shortcut.WorkingDirectory.TrimEnd('\') -ieq $InstallDir.TrimEnd('\')) 'Desktop shortcut has the wrong working directory'
     Assert-That ($shortcut.IconLocation -match '^(.*),\s*0$') 'Desktop shortcut must use icon index zero'
