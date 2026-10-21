@@ -17,6 +17,7 @@ eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "
 egui = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
+tempfile = "3"
 image = { workspace = true }
 
 [build-dependencies]

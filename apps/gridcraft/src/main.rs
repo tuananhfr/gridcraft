@@ -29,6 +29,7 @@ struct App(SheetApp, #[cfg(target_os = "macos")] Option<native_menu::NativeMenu>
 
 impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let language = self.0.ui.language;
         #[cfg(target_os = "macos")]
         {
             if self.1.is_none() && std::env::var_os("GRIDCRAFT_NO_NATIVE_MENU").is_none() {
@@ -40,6 +41,7 @@ impl eframe::App for App {
             apple_events::poll(&self.2, &mut self.0, ctx);
         }
         self.0.logic(ctx);
+        save_language_change(&self.0, language);
         self.0.poll_printing(ctx);
         if ctx.input(|input| input.viewport().close_requested()) && (self.0.printing.busy() || !self.0.confirm_quit()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -55,7 +57,9 @@ impl eframe::App for App {
         }
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let language = self.0.ui.language;
         self.0.ui(ui);
+        save_language_change(&self.0, language);
     }
     fn on_exit(&mut self) {
         print::finish_pending_jobs();
@@ -101,16 +105,15 @@ fn load_prefs(app: &mut SheetApp) {
     if !prefs_enabled() {
         return;
     }
-    // First run (or a ui.json without a usable language): follow the desktop's language.
-    app.ui.language = gridcraft_ui_egui::i18n::Language::system();
-    // ...and its light or dark appearance (#239), until a theme is chosen and saved in ui.json.
+    app.ui.language = desktop_language(None, None);
+    // Follow the system appearance until a theme is chosen and saved in ui.json.
     app.ui.system_theme = true;
     let Some(dir) = config_dir() else { return };
     if let Ok(b) = std::fs::read(dir.join("ui.json"))
         && let Ok(ui) = serde_json::from_slice::<gridcraft_ui_egui::UiState>(&b)
     {
         let saved = serde_json::from_slice(&b).ok().and_then(|v| gridcraft_ui_egui::i18n::saved_language(&v));
-        let language = saved.unwrap_or(app.ui.language);
+        let language = desktop_language(saved, None);
         app.ui = ui;
         app.ui.language = language;
     }
@@ -121,14 +124,50 @@ fn load_prefs(app: &mut SheetApp) {
     }
 }
 
+fn desktop_language(
+    saved: Option<gridcraft_ui_egui::i18n::Language>,
+    override_language: Option<gridcraft_ui_egui::i18n::Language>,
+) -> gridcraft_ui_egui::i18n::Language {
+    override_language.or(saved).unwrap_or(gridcraft_ui_egui::i18n::Language::Vi)
+}
+
+fn save_ui(app: &SheetApp, dir: &std::path::Path) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let bytes = serde_json::to_vec_pretty(&app.saved_ui())?;
+    std::fs::create_dir_all(dir)?;
+    let mut file = tempfile::NamedTempFile::new_in(dir)?;
+    file.write_all(&bytes)?;
+    file.as_file().sync_all()?;
+    file.persist(dir.join("ui.json")).map_err(|error| error.error)?;
+    Ok(())
+}
+
+fn save_language_change(app: &SheetApp, previous: gridcraft_ui_egui::i18n::Language) {
+    if app.ui.language == previous || !prefs_enabled() {
+        return;
+    }
+    if let Some(dir) = config_dir()
+        && let Err(error) = save_language_change_in(app, previous, &dir)
+    {
+        log::warn!("could not save UI language: {error}");
+    }
+}
+
+fn save_language_change_in(app: &SheetApp, previous: gridcraft_ui_egui::i18n::Language, dir: &std::path::Path) -> std::io::Result<()> {
+    if app.ui.language != previous {
+        save_ui(app, dir)?;
+    }
+    Ok(())
+}
+
 fn save_prefs(app: &SheetApp) {
     if !prefs_enabled() {
         return;
     }
     let Some(dir) = config_dir() else { return };
-    let _ = std::fs::create_dir_all(&dir);
-    if let Ok(b) = serde_json::to_vec_pretty(&app.saved_ui()) {
-        let _ = std::fs::write(dir.join("ui.json"), b);
+    if let Err(error) = save_ui(app, &dir) {
+        log::warn!("could not save UI settings: {error}");
     }
     if let Ok(b) = serde_json::to_vec_pretty(&app.session.prefs) {
         let _ = std::fs::write(dir.join("prefs.json"), b);
@@ -418,5 +457,62 @@ mod packaging_tests {
         for ext in &mac {
             assert!(FileKind::from_path(&format!("book.{ext}")).is_some(), "GridCraft doesn't open .{ext}");
         }
+    }
+}
+
+#[cfg(test)]
+mod language_tests {
+    use super::*;
+    use gridcraft_ui_egui::i18n::Language;
+
+    #[test]
+    fn desktop_language_defaults_to_vietnamese() {
+        assert_eq!(desktop_language(None, None), Language::Vi);
+    }
+
+    #[test]
+    fn desktop_language_respects_every_saved_language() {
+        for language in Language::ALL {
+            assert_eq!(desktop_language(Some(language), None), language);
+        }
+    }
+
+    #[test]
+    fn desktop_language_override_wins() {
+        assert_eq!(desktop_language(Some(Language::En), Some(Language::Ja)), Language::Ja);
+        assert_eq!(desktop_language(None, Some(Language::En)), Language::En);
+    }
+
+    #[test]
+    fn language_save_replaces_existing_settings_before_exit() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let mut app = SheetApp::new(Session::new(), Services::default());
+        app.ui.language = Language::En;
+        save_ui(&app, dir.path())?;
+        app.run("app.language.set", json!({"language": "vi"}))?;
+        save_language_change_in(&app, Language::En, dir.path())?;
+        let saved: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.path().join("ui.json"))?)?;
+        assert_eq!(saved.get("language").and_then(serde_json::Value::as_str), Some("vi"));
+        assert_eq!(std::fs::read_dir(dir.path())?.count(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn unchanged_language_does_not_write_settings() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let app = SheetApp::new(Session::new(), Services::default());
+        save_language_change_in(&app, app.ui.language, dir.path())?;
+        assert!(!dir.path().join("ui.json").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn language_save_returns_write_errors() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let blocked = dir.path().join("file");
+        std::fs::write(&blocked, b"occupied")?;
+        let app = SheetApp::new(Session::new(), Services::default());
+        assert!(save_ui(&app, &blocked).is_err());
+        Ok(())
     }
 }

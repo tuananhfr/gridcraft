@@ -2,6 +2,7 @@
 
 This branch (`erpcons`) is the ERPCons Văn phòng fork of [GridCraft](https://github.com/storytold/gridcraft), based on GridCraft by the ArtCraft team, licensed MIT OR Apache-2.0 (see `LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`). Changes from upstream `main` (Apache-2.0 §4b):
 
+- Desktop: default to Vietnamese when no UI language is saved, respect saved languages, and atomically save language changes immediately with logged write errors.
 - Both: G5-debt shows a translated, dismissible circular-reference notice after an edit creates #CIRC! or a workbook containing it opens, without changing cell errors or saved formats or repeating during recalculation.
 - Both: G5-debt translates generated PivotTable Row Labels, Column Labels, Grand Total, Values and Total captions at grid display time; Vietnamese uses Nhãn hàng, Nhãn cột, Tổng cộng and Giá trị while source items, stored cells and XLSX retain their original text.
 - Both: G5-debt replaces the English product name with Bảng tính in Vietnamese catalog values, updates exact-message regressions and guards the entire Vietnamese catalog against leftover GridCraft values; English keys and other languages retain their names.
