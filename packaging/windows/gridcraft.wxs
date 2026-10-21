@@ -208,6 +208,8 @@
         <RegistryValue Root="HKLM" Key="Software\ERPCons\BangTinh\Capabilities" Name="ApplicationDescription" Value="Open-source spreadsheet for .xlsx, CSV and TSV files" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\ERPCons\BangTinh\Capabilities\FileAssociations" Name=".xlsx" Value="ERPCons.BangTinh.xlsx" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\ERPCons\BangTinh\Capabilities\FileAssociations" Name=".xlsm" Value="ERPCons.BangTinh.xlsm" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\ERPCons\BangTinh\Capabilities\FileAssociations" Name=".xlsb" Value="ERPCons.BangTinh.xlsb" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\ERPCons\BangTinh\Capabilities\FileAssociations" Name=".ods" Value="ERPCons.BangTinh.ods" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\ERPCons\BangTinh\Capabilities\FileAssociations" Name=".csv" Value="ERPCons.BangTinh.csv" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\ERPCons\BangTinh\Capabilities\FileAssociations" Name=".tsv" Value="ERPCons.BangTinh.tsv" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\RegisteredApplications" Name="Bảng tính – ERPCons" Value="Software\ERPCons\BangTinh\Capabilities" Type="string" />

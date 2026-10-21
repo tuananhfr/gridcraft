@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- (desktop) Use the ERPCons app icon for macOS document types and offer XLSB/ODS imports in Windows Default apps alongside the existing file associations.
+
 - (desktop) Add tag-validated GitHub Actions builds for unsigned Windows, Linux and ad-hoc signed universal macOS installers, fixed download names, SHA-256 checksums and Vietnamese release notes.
 
 - (desktop) Brand the app and installers as Bảng tính – ERPCons, isolate settings under ERPCons/BangTinh, and ship contributor-original ERPCons icons while preserving web identity.

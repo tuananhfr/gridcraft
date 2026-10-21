@@ -89,6 +89,16 @@ function Assert-Package($Package) {
     Assert-That (Test-Path (Join-Path $InstallDir $exe)) "$exe missing after installation"
   }
   Assert-That (Test-Path $StartLink) 'The existing Start Menu shortcut is missing'
+  foreach ($ext in 'xlsx', 'xlsm', 'xlsb', 'ods', 'csv', 'tsv') {
+    $progId = "ERPCons.BangTinh.$ext"
+    $capabilities = 'HKLM:\Software\ERPCons\BangTinh\Capabilities\FileAssociations'
+    Assert-That ((Get-OptionalRegistryValue $capabilities ".$ext") -eq $progId) "Default apps candidate missing for .$ext"
+    $openWith = "HKLM:\Software\Classes\.$ext\OpenWithProgids"
+    Assert-That ($null -ne (Get-OptionalRegistryValue $openWith $progId)) "Open With candidate missing for .$ext"
+    $iconKey = "HKLM:\Software\Classes\$progId\DefaultIcon"
+    $expectedIcon = '"' + (Join-Path $InstallDir 'gridcraft.exe') + '",0'
+    Assert-That ((Get-OptionalRegistryValue $iconKey '') -eq $expectedIcon) "Wrong document icon for .$ext"
+  }
 }
 
 function Assert-Desktop([bool] $Enabled) {

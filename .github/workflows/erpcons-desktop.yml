@@ -111,6 +111,8 @@ jobs:
           fi
           echo "value=$version" >> "$GITHUB_OUTPUT"
           echo "GRIDCRAFT_VERSION=$version" >> "$GITHUB_ENV"
+      - name: Check file associations and document icons
+        run: python3 packaging/test-document-associations.py -v
       - name: Check out craft-fonts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
