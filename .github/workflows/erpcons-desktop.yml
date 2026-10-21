@@ -1,0 +1,250 @@
+name: ERPCons desktop installers
+
+on:
+  push:
+    tags: ["erpcons-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: erpcons-desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: never
+  CARGO_INCREMENTAL: "0"
+  CRAFT_FONTS_REF: 43913056ce82a3fdad0ef69f6b88d1dc922a8104
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+      CRAFT_FONTS_REQUIRED: "1"
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read package version and validate tag
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | python -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "gridcraft"))')
+          if [ "$EVENT_NAME" = push ] && [ "$TAG" != "erpcons-v$version" ]; then
+            echo "::error::Tag $TAG must be exactly erpcons-v$version"
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "GRIDCRAFT_VERSION=$version" >> "$GITHUB_ENV"
+      - name: Check out craft-fonts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tuananhfr/craft-fonts
+          ref: ${{ env.CRAFT_FONTS_REF }}
+          path: craft-fonts
+      - name: Install Rust (stable)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install WiX 5.0.2
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          if ($LASTEXITCODE -ne 0) { throw 'WiX installation failed' }
+          wix extension add -g WixToolset.UI.wixext/5.0.2
+          if ($LASTEXITCODE -ne 0) { throw 'WiX UI extension installation failed' }
+          wix extension add -g WixToolset.Util.wixext/5.0.2
+          if ($LASTEXITCODE -ne 0) { throw 'WiX Util extension installation failed' }
+      - name: Build unsigned Windows packages
+        shell: pwsh
+        run: pwsh packaging/windows/package.ps1 -Arch x64
+      - name: Validate MSI desktop-shortcut lifecycle
+        shell: pwsh
+        run: pwsh packaging/windows/test-desktop-shortcut.ps1
+      - name: Stage fixed download names
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release-assets | Out-Null
+          Move-Item "dist/release/ERPCons-BangTinh-$env:GRIDCRAFT_VERSION-x64.msi" release-assets/ERPCons-BangTinh-windows-x64.msi
+          Move-Item "dist/release/ERPCons-BangTinh-$env:GRIDCRAFT_VERSION-x64.zip" release-assets/ERPCons-BangTinh-windows-x64-portable.zip
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-windows
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+      CRAFT_FONTS_REQUIRED: "1"
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read package version and validate tag
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | python -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "gridcraft"))')
+          if [ "$EVENT_NAME" = push ] && [ "$TAG" != "erpcons-v$version" ]; then
+            echo "::error::Tag $TAG must be exactly erpcons-v$version"
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "GRIDCRAFT_VERSION=$version" >> "$GITHUB_ENV"
+      - name: Check out craft-fonts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tuananhfr/craft-fonts
+          ref: ${{ env.CRAFT_FONTS_REF }}
+          path: craft-fonts
+      - name: Install Rust (stable)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install Linux build dependencies (winit, wgpu, rfd) and zsync
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libasound2-dev libgl1-mesa-dev libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev \
+            libxi-dev libgtk-3-dev libfontconfig1-dev libfreetype-dev mesa-vulkan-drivers zsync
+      - name: Install pinned packaging tools
+        run: |
+          tools="$RUNNER_TEMP/desktop-tools"
+          mkdir -p "$tools"
+          curl --fail --location --retry 3 -o "$tools/nfpm.tar.gz" \
+            https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_x86_64.tar.gz
+          echo "0660ca602b2d2d2ae4781a06c692b3eeb9d437ffea05b831d76e41f4a3188783  $tools/nfpm.tar.gz" | sha256sum --check
+          tar -xzf "$tools/nfpm.tar.gz" -C "$tools" nfpm
+          echo "$tools" >> "$GITHUB_PATH"
+          curl --fail --location --retry 3 -o "$tools/appimagetool" \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          chmod +x "$tools/appimagetool"
+          echo "APPIMAGETOOL=$tools/appimagetool" >> "$GITHUB_ENV"
+      - name: Build Linux packages
+        run: bash packaging/linux/package.sh --formats "appimage deb rpm"
+      - name: Stage fixed download names
+        run: |
+          mkdir release-assets
+          mv "dist/release/ERPCons-BangTinh-$GRIDCRAFT_VERSION-linux-x86_64.AppImage" release-assets/ERPCons-BangTinh-linux-x86_64.AppImage
+          mv "dist/release/ERPCons-BangTinh-$GRIDCRAFT_VERSION-linux-x86_64.deb" release-assets/erpcons-bangtinh_amd64.deb
+          mv "dist/release/ERPCons-BangTinh-$GRIDCRAFT_VERSION-linux-x86_64.rpm" release-assets/erpcons-bangtinh.x86_64.rpm
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-linux
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  macos:
+    runs-on: macos-14
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+      CRAFT_FONTS_REQUIRED: "1"
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read package version and validate tag
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | python -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "gridcraft"))')
+          if [ "$EVENT_NAME" = push ] && [ "$TAG" != "erpcons-v$version" ]; then
+            echo "::error::Tag $TAG must be exactly erpcons-v$version"
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "GRIDCRAFT_VERSION=$version" >> "$GITHUB_ENV"
+      - name: Check out craft-fonts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tuananhfr/craft-fonts
+          ref: ${{ env.CRAFT_FONTS_REF }}
+          path: craft-fonts
+      - name: Install Rust (stable)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install universal macOS targets
+        run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
+      - name: Build ad-hoc signed macOS package
+        run: bash packaging/macos/package.sh --arch universal
+      - name: Stage fixed download name
+        run: |
+          mkdir release-assets
+          mv "dist/release/ERPCons-BangTinh-$GRIDCRAFT_VERSION-macos-universal.dmg" release-assets/ERPCons-BangTinh-macos-universal.dmg
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-macos
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/erpcons-v')
+    needs: [windows, linux, macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: release-assets
+      - name: Publish installers and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.windows.outputs.version }}
+        run: |
+          cd release-assets
+          sha256sum -- * > SHA256SUMS.txt
+          cat > "$RUNNER_TEMP/release-notes.md" <<'NOTES'
+          Tải Bảng tính – ERPCons cho máy tính:
+
+          - Windows x64: tải `ERPCons-BangTinh-windows-x64.msi` để cài đặt, hoặc giải nén `ERPCons-BangTinh-windows-x64-portable.zip` và chạy `gridcraft.exe`.
+          - Linux x86_64: tải `ERPCons-BangTinh-linux-x86_64.AppImage`, cấp quyền thực thi rồi mở; Ubuntu/Debian dùng `erpcons-bangtinh_amd64.deb`, Fedora/openSUSE dùng `erpcons-bangtinh.x86_64.rpm`.
+          - macOS (Apple Silicon và Intel): tải `ERPCons-BangTinh-macos-universal.dmg`, mở và kéo ứng dụng vào Applications.
+
+          Bản dựng chưa có chứng chỉ ký mã: Windows không được ký; macOS chỉ ký ad-hoc, chưa được Apple công chứng.
+          Windows SmartScreen: chọn "More info" → "Run anyway".
+          macOS: nhấp chuột phải vào ứng dụng → Open. Nếu vẫn bị chặn, chạy:
+
+          ```sh
+          xattr -dr com.apple.quarantine "/Applications/Bảng tính – ERPCons.app"
+          ```
+
+          Đối chiếu mã SHA-256 của tệp tải về với `SHA256SUMS.txt`.
+          Dùng bản web tại https://office.erpcons.vn.
+          NOTES
+          gh release create "$TAG" --verify-tag --latest --title "Bảng tính – ERPCons $VERSION" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" ./*

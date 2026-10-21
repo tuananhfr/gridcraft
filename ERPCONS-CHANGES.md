@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- (desktop) Add tag-validated GitHub Actions builds for unsigned Windows, Linux and ad-hoc signed universal macOS installers, fixed download names, SHA-256 checksums and Vietnamese release notes.
+
 - (desktop) Brand the app and installers as Bảng tính – ERPCons, isolate settings under ERPCons/BangTinh, and ship contributor-original ERPCons icons while preserving web identity.
 
 - Desktop recovery: atomically store unsaved workbook drafts in per-instance directories with separate lifetime lock files, recover only after their owner exits (10 documents, 64 MiB), restore them unsaved with recovery labels, preserve macros, and AutoSave .xlsx/.xlsm case-insensitively.
