@@ -94,17 +94,23 @@ impl eframe::App for App {
     }
 }
 
+const PRODUCT_NAME: &str = "Bảng tính – ERPCons";
+
+fn settings_dir(root: &std::path::Path) -> std::path::PathBuf {
+    root.join("ERPCons").join("BangTinh")
+}
+
 fn config_dir() -> Option<std::path::PathBuf> {
-    if cfg!(target_os = "macos") {
-        std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Library/Application Support/GridCraft"))
+    let root = if cfg!(target_os = "macos") {
+        std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Library/Application Support"))
     } else if cfg!(windows) {
-        std::env::var_os("APPDATA").map(|a| std::path::PathBuf::from(a).join("GridCraft"))
+        std::env::var_os("APPDATA").map(std::path::PathBuf::from)
     } else {
         std::env::var_os("XDG_CONFIG_HOME")
             .map(std::path::PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
-            .map(|c| c.join("gridcraft"))
-    }
+    };
+    root.map(|root| settings_dir(&root))
 }
 
 /// Runs without preferences (`GRIDCRAFT_NO_PREFS`, agents' test runs) neither read nor write
@@ -289,9 +295,9 @@ fn open_with_system(target: &str) {
 
 fn icon() -> Option<egui::IconData> {
     #[cfg(target_os = "macos")]
-    let bytes = include_bytes!("../../../assets/app-icon/gridcraft-macos-512.png");
+    let bytes = include_bytes!("../../../assets/app-icon/gridcraft-1024.png");
     #[cfg(not(target_os = "macos"))]
-    let bytes = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.gridcraft.png");
+    let bytes = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/vn.erpcons.bangtinh.png");
     let img = image::load_from_memory(bytes).ok()?.to_rgba8();
     Some(egui::IconData { width: img.width(), height: img.height(), rgba: img.into_raw() })
 }
@@ -348,7 +354,7 @@ fn main() -> eframe::Result<()> {
     if let Some(logger) = logger {
         match log_dir().filter(|_| prefs_enabled()) {
             Some(dir) => match logger.attach_dir(&dir) {
-                Ok(path) => log::info!("GridCraft {}, log file {}", env!("CARGO_PKG_VERSION"), path.display()),
+                Ok(path) => log::info!("{PRODUCT_NAME} {}, log file {}", env!("CARGO_PKG_VERSION"), path.display()),
                 // Standard error only by now (`attach_dir` gave up on the file); unlike `eprintln!`, never panics.
                 Err(e) => log::warn!("no log file: {e}"),
             },
@@ -356,6 +362,8 @@ fn main() -> eframe::Result<()> {
         }
     }
     let mut session = Session::new();
+    session.prefs.user_name = "ERPCons".into();
+    session.product_name = Some(PRODUCT_NAME);
     if let Some(s) = &sample
         && let Err(e) = session.execute("file.new", json!({"sample": s}))
     {
@@ -366,6 +374,7 @@ fn main() -> eframe::Result<()> {
     }
     let language = Rc::new(std::cell::Cell::new(desktop_language(None, None)));
     let mut app = SheetApp::new(session, services(language.clone()));
+    app.product_name = PRODUCT_NAME;
     app.watch_desktop_theme();
     app.after_engine(); // Show warnings from the sample.
     let control_port = control_port;
@@ -393,10 +402,10 @@ fn main() -> eframe::Result<()> {
         app.open_path(f);
     }
     let mut viewport = egui::ViewportBuilder::default()
-        .with_title("GridCraft")
+        .with_title(PRODUCT_NAME)
         .with_inner_size([1440.0, 900.0])
         .with_min_inner_size([640.0, 420.0])
-        .with_app_id("ai.storyteller.gridcraft")
+        .with_app_id("vn.erpcons.bangtinh")
         .with_drag_and_drop(true);
     if cfg!(target_os = "macos") {
         viewport = viewport.with_fullsize_content_view(true).with_titlebar_shown(false).with_title_shown(false);
@@ -429,7 +438,7 @@ fn main() -> eframe::Result<()> {
     let pending_drafts = std::cell::Cell::new(drafts);
     let run = |options: eframe::NativeOptions| {
         eframe::run_native(
-            "GridCraft",
+            PRODUCT_NAME,
             options,
             Box::new(|cc| {
                 let Some(mut app) = pending.take() else {
@@ -554,5 +563,31 @@ mod language_tests {
         let app = SheetApp::new(Session::new(), Services::default());
         assert!(save_ui(&app, &blocked).is_err());
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod branding_tests {
+    use super::*;
+
+    #[test]
+    fn desktop_branding_preserves_shared_web_default() {
+        let mut app = SheetApp::new(Session::new(), Services::default());
+        assert_eq!(app.product_name, "GridCraft");
+        assert_eq!(app.product_text("About GridCraft"), "About GridCraft");
+        assert_eq!(app.window_title("Book1", false), "Book1");
+        app.product_name = PRODUCT_NAME;
+        for language in gridcraft_ui_egui::i18n::Language::ALL {
+            app.ui.language = language;
+            assert!(app.product_text("About GridCraft").contains(PRODUCT_NAME));
+            assert_eq!(app.product_text("GridCraft"), PRODUCT_NAME);
+            assert!(app.window_title("Book1", true).contains(PRODUCT_NAME));
+        }
+    }
+
+    #[test]
+    fn settings_path_uses_erpcons_bangtinh_under_platform_root() {
+        let root = std::path::Path::new("config-root");
+        assert_eq!(settings_dir(root), root.join("ERPCons").join("BangTinh"));
     }
 }

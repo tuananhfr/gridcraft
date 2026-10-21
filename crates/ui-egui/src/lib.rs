@@ -297,6 +297,8 @@ pub struct Perf {
 }
 
 pub struct SheetApp {
+    /// Product identity supplied by the host; web retains the upstream default.
+    pub product_name: &'static str,
     pub session: Session,
     pub ui: UiState,
     pub views: HashMap<(u64, usize), SheetView>,
@@ -373,10 +375,44 @@ pub struct SheetApp {
 }
 
 impl SheetApp {
+    pub fn product_text(&self, text: &str) -> String {
+        let translated = self.ui.language.tr(text);
+        if self.product_name == "GridCraft" || !text.contains("GridCraft") {
+            return translated.to_string();
+        }
+        if text == "GridCraft" {
+            self.product_name.to_string()
+        } else {
+            translated.replace("Bảng tính", "GridCraft").replace("GridCraft", self.product_name)
+        }
+    }
+
+    pub fn product_message(&self, text: &str) -> String {
+        let translated = self.ui.language.tr_message(text);
+        if self.product_name == "GridCraft" {
+            return translated.into_owned();
+        }
+        let mut message = translated.into_owned();
+        // Match system phrases so a workbook named GridCraft.xlsx keeps its name.
+        for phrase in ["GridCraft can't", "GridCraft doesn't", "GridCraft saves", "GridCraft uses", "not a GridCraft JSON workbook"] {
+            message = message.replace(phrase, &phrase.replace("GridCraft", self.product_name));
+        }
+        for phrase in ["Bảng tính không", "Bảng tính chưa", "Bảng tính sẽ", "Bảng tính lưu", "JSON của Bảng tính"] {
+            message = message.replace(phrase, &phrase.replace("Bảng tính", self.product_name));
+        }
+        message
+    }
+
+    pub fn window_title(&self, document: &str, dirty: bool) -> String {
+        let title = format!("{document}{}", if dirty { self.ui.language.tr(" — Edited") } else { "" });
+        if self.product_name == "GridCraft" { title } else { format!("{title} — {}", self.product_name) }
+    }
+
     pub fn new(session: Session, services: Services) -> SheetApp {
         craft_fonts::register_print_fonts();
         let circular_notice_pending = session.documents().iter().map(|doc| doc.uid).collect();
         SheetApp {
+            product_name: "GridCraft",
             session,
             ui: UiState::default(),
             views: HashMap::new(),
@@ -628,7 +664,7 @@ impl SheetApp {
             self.cancel_close_after_save(uid);
         }
         if let Some(m) = failed.pop() {
-            self.message = Some(("GridCraft".into(), m));
+            self.message = Some((self.product_name.into(), m));
         }
     }
 
@@ -688,7 +724,7 @@ impl SheetApp {
         } else if e.contains("is not available right now") {
             self.toast = Some((e, now_ms()));
         } else {
-            self.message = Some(("GridCraft".into(), clean_error(&e)));
+            self.message = Some((self.product_name.into(), clean_error(&e)));
         }
     }
 
@@ -851,7 +887,7 @@ impl SheetApp {
         for req in self.session.take_ui_requests() {
             match req {
                 UiRequest::Dialog(name, params) => self.open_dialog(&name, params),
-                UiRequest::Message(m) => self.message = Some(("GridCraft".into(), m)),
+                UiRequest::Message(m) => self.message = Some((self.product_name.into(), m)),
                 UiRequest::EditCell(text) => {
                     let text = text.map(|text| {
                         self.session
@@ -1070,7 +1106,7 @@ impl SheetApp {
         let text = match self.session.active().map(|d| formula_locale::canonical(&text, ed.locale, &d.wb, ed.sheet, ed.cell)) {
             Some(Ok(text)) => text,
             Some(Err(error)) => {
-                self.message = Some(("GridCraft".into(), error.to_string()));
+                self.message = Some((self.product_name.into(), error.to_string()));
                 self.editor = Some(ed);
                 self.session.mode = gridcraft_engine::Mode::Edit;
                 return false;
@@ -1082,7 +1118,7 @@ impl SheetApp {
             && let Some((dv, msg)) = gridcraft_engine::cmd::data::check_validation_in(&d.wb, ed.sheet, ed.cell, &text, ed.region)
         {
             if dv.error_style == gridcraft_engine::model::ErrorStyle::Stop {
-                let title = if dv.error_title.is_empty() { "GridCraft".to_string() } else { dv.error_title.clone() };
+                let title = if dv.error_title.is_empty() { self.product_name.to_string() } else { dv.error_title.clone() };
                 self.message = Some((title, msg));
                 self.editor = Some(ed);
                 self.session.mode = gridcraft_engine::Mode::Edit;
@@ -1106,7 +1142,7 @@ impl SheetApp {
                 true
             }
             Err(e) => {
-                self.message = Some(("GridCraft".into(), clean_error(&e)));
+                self.message = Some((self.product_name.into(), clean_error(&e)));
                 self.editor = Some(ed);
                 self.session.mode = gridcraft_engine::Mode::Edit;
                 false
@@ -1395,7 +1431,7 @@ impl SheetApp {
         }
         // Window title.
         if let Some(d) = self.session.active() {
-            let title = format!("{}{}", d.display_title(), if d.is_dirty() { self.ui.language.tr(" — Edited") } else { "" });
+            let title = self.window_title(&d.display_title(), d.is_dirty());
             if self.grid.last_title.as_deref() != Some(title.as_str()) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
                 self.grid.last_title = Some(title);

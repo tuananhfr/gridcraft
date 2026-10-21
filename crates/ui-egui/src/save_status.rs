@@ -75,7 +75,7 @@ pub(crate) fn status_label(app: &mut SheetApp, ui: &mut egui::Ui, t: &crate::the
         }
         SaveState::Failed(reason) => {
             ui.add_space(12.0);
-            let reason = lang.tr_message(&reason).into_owned();
+            let reason = app.product_message(&reason);
             let label = egui::Label::new(egui::RichText::new(lang.tr("Save failed")).font(crate::theme::ui_font(12.5)).color(t.danger))
                 .sense(egui::Sense::click());
             if ui.add(label).on_hover_text(&reason).clicked() {

@@ -1532,7 +1532,7 @@ fn insert(app: &mut SheetApp, ui: &mut Ui) {
             // in dialogs.rs) — otherwise the prior cell/range selection is left in place, and
             // Del right after inserting deletes the source data instead of the chart.
             Ok(r) => app.selected_chart = r.get("chart").and_then(serde_json::Value::as_u64).and_then(|id| u32::try_from(id).ok()),
-            Err(e) => app.message = Some(("GridCraft".into(), crate::clean_error(&e))),
+            Err(e) => app.message = Some((app.product_name.into(), crate::clean_error(&e))),
         }
     }
     ui.vertical(|ui| {
@@ -2341,7 +2341,7 @@ fn automate(app: &mut SheetApp, ui: &mut Ui) {
     if __k.clicked() {
         app.open_dialog("commandSearch", json!({}));
     }
-    let __k = big_button(ui, Icon::Script, "Agent\nControl", "How agents drive GridCraft (MCP / control channel)", false);
+    let __k = big_button(ui, Icon::Script, "Agent\nControl", &app.product_text("How agents drive GridCraft (MCP / control channel)"), false);
     control_keytip(app, ui, &__k, "agents");
     if __k.clicked() {
         app.open_dialog("agents", json!({}));
@@ -2351,7 +2351,7 @@ fn automate(app: &mut SheetApp, ui: &mut Ui) {
     if __k.clicked() {
         app.open_dialog("journal", json!({}));
     }
-    let __k = big_button(ui, Icon::Script, "About\nGridCraft", "Version, contributors and the AI models that helped", false);
+    let __k = big_button(ui, Icon::Script, &app.product_text("About\nGridCraft"), "Version, contributors and the AI models that helped", false);
     control_keytip(app, ui, &__k, "about");
     if __k.clicked() {
         app.open_dialog("about", json!({}));

@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- (desktop) Brand the app and installers as Bảng tính – ERPCons, isolate settings under ERPCons/BangTinh, and ship contributor-original ERPCons icons while preserving web identity.
+
 - Desktop recovery: atomically store unsaved workbook drafts in per-instance directories with separate lifetime lock files, recover only after their owner exits (10 documents, 64 MiB), restore them unsaved with recovery labels, preserve macros, and AutoSave .xlsx/.xlsm case-insensitively.
 - Desktop file filters follow the current UI language; translate the edited window title suffix.
 - Desktop Save As offers macro-enabled templates (.xltm) first when suggested.

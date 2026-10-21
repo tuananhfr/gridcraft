@@ -1691,6 +1691,7 @@ fn table(out: &mut Lines, row: u32, headers: &[&str], rows: Vec<Vec<Value>>) -> 
 
 /// Everything a report describes: the model, its starting and final values, and the result.
 struct ReportInput<'a> {
+    product_name: &'static str,
     model: &'a Model,
     prob: &'a Problem,
     original: Vec<f64>,
@@ -1699,8 +1700,8 @@ struct ReportInput<'a> {
     budget: u64,
 }
 
-fn title(out: &mut Lines, kind: ReportKind, sheet: &str) -> u32 {
-    out.push((0, 0, Value::text(format!("GridCraft {} Report", kind.title())), true));
+fn title(out: &mut Lines, kind: ReportKind, sheet: &str, product_name: &str) -> u32 {
+    out.push((0, 0, Value::text(format!("{product_name} {} Report", kind.title())), true));
     out.push((1, 0, Value::text(format!("Worksheet: {sheet}")), false));
     3
 }
@@ -1727,7 +1728,7 @@ fn answer_report(d: &DocState, sh: &Sheet, inp: &ReportInput) -> Lines {
     let f1 = at.next().unwrap_or(f64::NAN);
     let num = |v: f64| if v.is_finite() { Value::number(v) } else { Value::Error(gridcraft_core::CellError::Value) };
     let mut out = Lines::new();
-    let mut r = title(&mut out, ReportKind::Answer, &sh.name);
+    let mut r = title(&mut out, ReportKind::Answer, &sh.name, inp.product_name);
     out.push((r, 0, Value::text(format!("Result: {}", inp.message)), false));
     out.push((r + 1, 0, Value::text(format!("Engine: {}", method_name(m.method))), false));
     r += 3;
@@ -1856,7 +1857,7 @@ fn limits_report(d: &DocState, sh: &Sheet, inp: &ReportInput) -> Result<Lines> {
         rows.push(row);
     }
     let mut out = Lines::new();
-    let r = title(&mut out, ReportKind::Limits, &sh.name);
+    let r = title(&mut out, ReportKind::Limits, &sh.name, inp.product_name);
     let obj = vec![vec![Value::text(abs_ref(m.objective)), Value::text(cell_name(sh, m.objective)), num(f)]];
     let r = table(&mut out, r, &["Objective Cell", "Name", "Value"], obj);
     table(&mut out, r, &["Variable Cell", "Name", "Value", "Lower Limit", "Objective Result", "Upper Limit", "Objective Result"], rows);
@@ -1972,7 +1973,7 @@ fn report(s: &mut Session, p: &Json) -> Result<Json> {
         .filter(|v| v.is_finite() && *v >= 1.0)
         .map_or(DEFAULT_EVALS, |v| (v as u64).min(MAX_EVALS));
     let message = str_param(p, "message").unwrap_or("").chars().take(500).collect();
-    let inp = ReportInput { model: &model, prob: &prob, original, solution, message, budget };
+    let inp = ReportInput { product_name: s.product_name.unwrap_or("GridCraft"), model: &model, prob: &prob, original, solution, message, budget };
     let sheets = write_reports(s, &kinds, &inp)?;
     Ok(json!({"sheets": sheets}))
 }
@@ -2101,7 +2102,15 @@ fn run(s: &mut Session, p: &Json) -> Result<Json> {
     });
     // Reports describe a solution; they are part of the solve's undo step.
     if let (Some(kinds), Some(x)) = (reports, solution) {
-        let inp = ReportInput { model: &model, prob: &prob, original: x0, solution: x, message: message.to_string(), budget };
+        let inp = ReportInput {
+            product_name: s.product_name.unwrap_or("GridCraft"),
+            model: &model,
+            prob: &prob,
+            original: x0,
+            solution: x,
+            message: message.to_string(),
+            budget,
+        };
         out["reports"] = json!(write_reports(s, &kinds, &inp)?);
     }
     Ok(out)
@@ -2304,6 +2313,23 @@ mod tests {
         let d = s.doc().unwrap();
         let sh = d.wb.sheet(d.wb.sheet_index(name).unwrap()).unwrap();
         (0..60).find(|r| (0..8).any(|c| sh.value(CellRef::new(*r, c)) == Value::text(text))).unwrap()
+    }
+
+    #[test]
+    fn report_branding_uses_host_identity_and_preserves_shared_default() {
+        for product_name in [None, Some("Bảng tính – ERPCons")] {
+            let mut s = s();
+            s.product_name = product_name;
+            set(&mut s, &[("A1", "0"), ("B1", "=3*A1")]);
+            s.execute(
+                "data.solver",
+                json!({"objective": "B1", "goal": "max", "variables": "A1", "constraints": ["A1 <= 4"], "method": "simplex", "reports": ["answer", "limits"]}),
+            )
+            .unwrap();
+            let product = product_name.unwrap_or("GridCraft");
+            assert_eq!(at(&s, "Answer Report 1", "A1"), Value::text(format!("{product} Answer Report")));
+            assert_eq!(at(&s, "Limits Report 1", "A1"), Value::text(format!("{product} Limits Report")));
+        }
     }
 
     #[test]

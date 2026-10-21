@@ -1055,7 +1055,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
         "solver" => 460.0,
         _ => 380.0,
     };
-    let window = egui::Window::new(app.ui.language.tr(&d.title))
+    let window = egui::Window::new(app.product_text(&d.title))
         .id(egui::Id::new("dialog").with(&d.name))
         .collapsible(false)
         .resizable(false)
@@ -1086,13 +1086,13 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                 "closeMany" => crate::close_many::dialog_body(app, ui, &d, &mut open),
                 crate::save_as::DROP_MACROS => crate::save_as::drop_macros_body(app, ui, &d, &mut open),
                 "agents" => {
-                    ui.label(tr(ui, "GridCraft is fully drivable by agents. Every menu item, button and gesture is a command:"));
+                    ui.label(app.product_text("GridCraft is fully drivable by agents. Every menu item, button and gesture is a command:"));
                     ui.add_space(4.0);
                     ui.monospace("gridcraft --control 7979        # JSON-lines control channel\ngridcraft-cli mcp --connect 7979   # MCP bridged to this window\ngridcraft-cli mcp                   # headless MCP server");
                     ui.add_space(4.0);
                     ui.label(tr(ui, "{count} engine commands are available. See docs/mcp.md and docs/control-protocol.md.").replace("{count}", &gridcraft_engine::command_specs().len().to_string()));
                 }
-                "about" => about(ui, &mut d),
+                "about" => about(ui, &mut d, app),
                 "journal" => {
                     egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
                         for (id, p) in app.session.journal.iter().rev().take(500) {
@@ -1100,7 +1100,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                         }
                     });
                 }
-                "macros" => macros(ui, &mut d),
+                "macros" => macros(ui, &mut d, app),
                 "statistics" | "accessibility" | "errorChecking" | "evaluateFormula" | "comments" => {
                     let r = if d.name == "comments" {
                         app.session.active().and_then(|doc| doc.wb.active().map(|s| json!(s.comments.iter().map(|(c, m)| json!({"cell": c.a1(), "author": m.author, "text": m.text})).collect::<Vec<_>>())))
@@ -1498,7 +1498,7 @@ fn form_fields(ui: &mut egui::Ui, d: &mut Dialog) {
 
 /// Help ▸ About GridCraft: the app, its contributors and the AI models that helped. The credits
 /// are compiled in (`crate::credits`, docs/contributors.md).
-fn about(ui: &mut egui::Ui, d: &mut Dialog) {
+fn about(ui: &mut egui::Ui, d: &mut Dialog, app: &SheetApp) {
     ui.horizontal(|ui| {
         for tab in ["About", "Contributors", "Models"] {
             if ui.selectable_label(d.tab == tab, tr(ui, tab)).clicked() {
@@ -1511,7 +1511,11 @@ fn about(ui: &mut egui::Ui, d: &mut Dialog) {
         "Contributors" => crate::credits::contributors_ui(ui),
         "Models" => crate::credits::models_ui(ui),
         _ => {
-            ui.heading("GridCraft");
+            ui.heading(app.product_name);
+            if app.product_name != "GridCraft" {
+                ui.label("ERPCons");
+                ui.hyperlink_to("https://office.erpcons.vn", "https://office.erpcons.vn");
+            }
             ui.label(tr(ui, "Version {version}").replace("{version}", env!("CARGO_PKG_VERSION")));
             ui.add_space(4.0);
             ui.label(tr(ui, "A clean-room, open-source, Rust-native spreadsheet."));
@@ -1524,8 +1528,8 @@ fn about(ui: &mut egui::Ui, d: &mut Dialog) {
 /// The Macros dialog: lists GridCraft's own recorded scripts and (if the file carries one) the
 /// preserved VBA project. Mirrors Excel's Developer ▸ Macros list, but is honest that VBA is
 /// preserved and not executed.
-fn macros(ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.label(tr(ui, "Automation in this workbook. GridCraft runs its own scripts; a file's VBA project is preserved but not executed."));
+fn macros(ui: &mut egui::Ui, d: &mut Dialog, app: &SheetApp) {
+    ui.label(app.product_text("Automation in this workbook. GridCraft runs its own scripts; a file's VBA project is preserved but not executed."));
     ui.add_space(6.0);
     let items: Vec<Json> = d.result.as_ref().and_then(Json::as_array).cloned().unwrap_or_default();
     if items.is_empty() {

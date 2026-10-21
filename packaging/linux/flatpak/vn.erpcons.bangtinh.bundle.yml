@@ -1,7 +1,7 @@
 # Flatpak manifest for the single-file bundle attached to every GitHub release
-# (gridcraft-<version>-linux-<arch>.flatpak). Build it with packaging/linux/flatpak-bundle.sh.
+# (ERPCons-BangTinh-<version>-linux-<arch>.flatpak). Build it with packaging/linux/flatpak-bundle.sh.
 #
-# It repackages the release's own Linux tarball (gridcraft-<version>-linux-<arch>.tar.gz,
+# It repackages the release's own Linux tarball (ERPCons-BangTinh-<version>-linux-<arch>.tar.gz,
 # built on Ubuntu 22.04 by package.sh) instead of compiling Rust inside flatpak-builder: no
 # network and no vendored crate sources during the build, a few seconds instead of 20+ minutes,
 # and byte-for-byte the same binaries as the AppImage/deb/rpm. The script unpacks the tarball
@@ -9,9 +9,9 @@
 # Wayland, xkbcommon and Vulkan/GL at runtime; the freedesktop runtime has all of them, and the
 # GPU driver comes from its org.freedesktop.Platform.GL extension.
 #
-# ai.storyteller.gridcraft.yml (same directory) is the from-source manifest for Flathub. Keep
+# vn.erpcons.bangtinh.yml (same directory) is the from-source manifest for Flathub. Keep
 # runtime, runtime-version, sdk and finish-args identical in both (packaging-lint checks this).
-id: ai.storyteller.gridcraft
+id: vn.erpcons.bangtinh
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
@@ -30,20 +30,20 @@ finish-args:
   - --filesystem=xdg-documents
   - --filesystem=xdg-download
   # Deliberately not granted: network (the optional --control channel listens on 127.0.0.1 in
-  # the sandbox; `flatpak override --user --share=network ai.storyteller.gridcraft` exposes it to
+  # the sandbox; `flatpak override --user --share=network vn.erpcons.bangtinh` exposes it to
   # host agents) and home/host filesystem access.
 modules:
   - name: gridcraft
     buildsystem: simple
     build-commands:
       - install -Dm755 bin/gridcraft /app/bin/gridcraft
-      # Headless CLI and MCP server: `flatpak run --command=gridcraft-cli ai.storyteller.gridcraft`.
+      # Headless CLI and MCP server: `flatpak run --command=gridcraft-cli vn.erpcons.bangtinh`.
       - install -Dm755 bin/gridcraft-cli /app/bin/gridcraft-cli
-      - install -Dm644 share/applications/ai.storyteller.gridcraft.desktop /app/share/applications/ai.storyteller.gridcraft.desktop
-      - install -Dm644 share/mime/packages/ai.storyteller.gridcraft.xml /app/share/mime/packages/ai.storyteller.gridcraft.xml
+      - install -Dm644 share/applications/vn.erpcons.bangtinh.desktop /app/share/applications/vn.erpcons.bangtinh.desktop
+      - install -Dm644 share/mime/packages/vn.erpcons.bangtinh.xml /app/share/mime/packages/vn.erpcons.bangtinh.xml
       # Already has the release's version and date substituted by package.sh.
-      - install -Dm644 share/metainfo/ai.storyteller.gridcraft.metainfo.xml /app/share/metainfo/ai.storyteller.gridcraft.metainfo.xml
-      - mkdir -p /app/share/icons /app/share/doc && cp -R share/icons/hicolor /app/share/icons/ && cp -R share/doc/gridcraft /app/share/doc/
+      - install -Dm644 share/metainfo/vn.erpcons.bangtinh.metainfo.xml /app/share/metainfo/vn.erpcons.bangtinh.metainfo.xml
+      - mkdir -p /app/share/icons /app/share/doc && cp -R share/icons/hicolor /app/share/icons/ && cp -R share/doc/erpcons-bangtinh /app/share/doc/
     sources:
       - type: dir
         path: stage

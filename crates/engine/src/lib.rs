@@ -240,6 +240,8 @@ pub enum UiRequest {
 
 #[derive(Default)]
 pub struct Session {
+    /// Host product identity for generated report headings; None retains the shared default.
+    pub product_name: Option<&'static str>,
     docs: Vec<DocState>,
     active: usize,
     pub clipboard: Option<Clipboard>,

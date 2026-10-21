@@ -280,8 +280,8 @@ pub fn message_box(app: &mut SheetApp, ctx: &egui::Context) {
             ui.painter().circle_filled(r.center(), 16.0, Color32::from_rgb(0xF2, 0xC3, 0x2E));
             ui.painter().text(r.center(), Align2::CENTER_CENTER, "!", theme::ui_bold(20.0), Color32::WHITE);
             ui.vertical(|ui| {
-                ui.label(egui::RichText::new(tr(ui, &title)).strong());
-                ui.add(egui::Label::new(i18n::current(ui.ctx()).tr_message(&msg)).wrap());
+                ui.label(egui::RichText::new(app.product_text(&title)).strong());
+                ui.add(egui::Label::new(app.product_message(&msg)).wrap());
             });
         });
         ui.add_space(8.0);
@@ -344,7 +344,7 @@ pub fn notice_bar(app: &mut SheetApp, ui: &mut Ui) {
                 border,
             );
             ui.add_space(6.0);
-            ui.label(egui::RichText::new(tr(ui, &notice.text)).font(theme::ui_font(12.5)).color(t.text));
+            ui.label(egui::RichText::new(app.product_text(&notice.text)).font(theme::ui_font(12.5)).color(t.text));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if icon_button(ui, Icon::Close, t.text_dim, "Dismiss", vec2(20.0, 20.0)).clicked() {
                     dismiss = true;

@@ -7,13 +7,13 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>GridCraft</string>
+  <string>Bảng tính – ERPCons</string>
   <key>CFBundleName</key>
-  <string>GridCraft</string>
+  <string>Bảng tính – ERPCons</string>
   <key>CFBundleExecutable</key>
-  <string>GridCraft</string>
+  <string>gridcraft</string>
   <key>CFBundleIdentifier</key>
-  <string>ai.storyteller.gridcraft</string>
+  <string>vn.erpcons.bangtinh</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundlePackageType</key>
@@ -29,7 +29,7 @@
   <key>GridCraftBuildCommit</key>
   <string>@BUILD_SHA@</string>
   <key>CFBundleIconFile</key>
-  <string>GridCraft</string>
+  <string>gridcraft</string>
   <key>LSApplicationCategoryType</key>
   <string>public.app-category.productivity</string>
   <!-- Must match MACOSX_DEPLOYMENT_TARGET in package.sh. Big Sur is the first release on
@@ -45,7 +45,7 @@
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © the GridCraft authors. MIT OR Apache-2.0.</string>
 
-  <!-- Files GridCraft opens. Rank Alternate: it's offered under "Open With" without taking
+  <!-- Files Bảng tính – ERPCons opens. Rank Alternate: it's offered under "Open With" without taking
        over the default app (Numbers, another spreadsheet) for these types. -->
   <key>CFBundleDocumentTypes</key>
   <array>
