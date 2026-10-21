@@ -39,7 +39,7 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           TAG: ${{ github.ref_name }}
         run: |
-          version=$(cargo metadata --no-deps --format-version 1 | python -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "gridcraft"))')
+          version=$(cargo pkgid -p gridcraft | sed 's/.*[#@]//')
           if [ "$REF_TYPE" = tag ] && [ "$TAG" != "erpcons-v$version" ]; then
             echo "::error::Tag $TAG must be exactly erpcons-v$version"
             exit 1
@@ -104,7 +104,7 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           TAG: ${{ github.ref_name }}
         run: |
-          version=$(cargo metadata --no-deps --format-version 1 | python -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "gridcraft"))')
+          version=$(cargo pkgid -p gridcraft | sed 's/.*[#@]//')
           if [ "$REF_TYPE" = tag ] && [ "$TAG" != "erpcons-v$version" ]; then
             echo "::error::Tag $TAG must be exactly erpcons-v$version"
             exit 1
@@ -175,7 +175,7 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           TAG: ${{ github.ref_name }}
         run: |
-          version=$(cargo metadata --no-deps --format-version 1 | python -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "gridcraft"))')
+          version=$(cargo pkgid -p gridcraft | sed 's/.*[#@]//')
           if [ "$REF_TYPE" = tag ] && [ "$TAG" != "erpcons-v$version" ]; then
             echo "::error::Tag $TAG must be exactly erpcons-v$version"
             exit 1
