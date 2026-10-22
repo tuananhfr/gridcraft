@@ -101,6 +101,8 @@ pub struct Interpreter<'a, H: Host, C: Clock> {
     statics: BTreeMap<String, Place>,
     frames: Vec<Frame>,
     steps: u64,
+    quantum: usize,
+    remaining: usize,
     expression_depth: usize,
     pub(crate) rng: u32,
     pub(crate) last_random: f64,
@@ -119,6 +121,8 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
             statics: BTreeMap::new(),
             frames: Vec::new(),
             steps: 0,
+            quantum: usize::MAX,
+            remaining: usize::MAX,
             expression_depth: 0,
             rng: 0x50000,
             last_random: 0.0,
@@ -127,11 +131,29 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
             initialized: false,
         }
     }
+    pub fn steps(&self) -> u64 {
+        self.steps
+    }
+    /// Maximum instructions before returning control to the embedding frame loop.
+    pub fn set_quantum(&mut self, instructions: usize) {
+        self.quantum = instructions.clamp(1, 10_000);
+        self.remaining = self.quantum;
+    }
     pub fn run(&mut self, module: &str, procedure: &str, args: &[Argument]) -> Result<Value> {
+        let mut future = Box::pin(self.run_async(module, procedure, args));
+        let waker = std::task::Waker::noop();
+        let mut context = std::task::Context::from_waker(waker);
+        loop {
+            if let std::task::Poll::Ready(result) = future.as_mut().poll(&mut context) {
+                return result;
+            }
+        }
+    }
+    pub async fn run_async(&mut self, module: &str, procedure: &str, args: &[Argument]) -> Result<Value> {
         self.frames.clear();
         self.with.clear();
         self.expression_depth = 0;
-        self.run_inner(module, procedure, args).map_err(|mut error| {
+        self.run_inner(module, procedure, args).await.map_err(|mut error| {
             if error.module.is_empty() {
                 error.module = module.into();
                 error.procedure = procedure.to_ascii_lowercase();
@@ -139,7 +161,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
             error
         })
     }
-    fn run_inner(&mut self, module: &str, procedure: &str, args: &[Argument]) -> Result<Value> {
+    async fn run_inner(&mut self, module: &str, procedure: &str, args: &[Argument]) -> Result<Value> {
         self.steps = 0;
         self.tick()?;
         let mut argument_memory = 0usize;
@@ -156,7 +178,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                 self.frames.push(frame);
                 for d in &m.declarations {
                     self.frame_mut()?.line = d.line;
-                    self.declare(d, true).map_err(|e| self.annotate(e))?;
+                    self.declare(d, true).await.map_err(|e| self.annotate(e))?;
                 }
                 self.frames.pop();
             }
@@ -165,7 +187,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
         let i =
             self.program.modules.iter().position(|m| m.name.eq_ignore_ascii_case(module)).ok_or_else(|| Error::runtime(35, "Module not found"))?;
         let supplied = args.iter().map(|a| (a.clone(), None)).collect();
-        self.invoke(i, &procedure.to_ascii_lowercase(), supplied)
+        Box::pin(self.invoke(i, &procedure.to_ascii_lowercase(), supplied)).await
     }
     pub fn global_value(&self, module: &str, name: &str) -> Option<Value> {
         let i = self.program.modules.iter().position(|m| m.name.eq_ignore_ascii_case(module))?;
@@ -240,11 +262,13 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
         }
         e
     }
-    fn invoke(&mut self, module: usize, name: &str, args: Vec<(Argument, Option<Place>)>) -> Result<Value> {
+    async fn invoke(&mut self, module: usize, name: &str, args: Vec<(Argument, Option<Place>)>) -> Result<Value> {
         self.tick()?;
         if self.frames.len() >= self.limits.max_call_depth.min(128) {
             return Err(self.annotate(Error::limit("call depth")));
         }
+        let module_name = self.program.modules.get(module).map(|m| m.name.as_str()).unwrap_or_default();
+        self.host.enter_procedure(module_name, name)?;
         let proc = self
             .program
             .modules
@@ -257,13 +281,18 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
         frame.with_base = self.with.len();
         self.frames.push(frame);
         let with_len = self.with.len();
-        let result = self.bind(&proc, args).and_then(|()| self.execute()).and_then(|()| self.lookup(&proc.name)?.read());
+        let result = async {
+            self.bind(&proc, args).await?;
+            self.execute().await?;
+            self.lookup(&proc.name)?.read()
+        }
+        .await;
         let result = result.map_err(|e| self.annotate(e));
         self.frames.pop();
         self.with.truncate(with_len);
         result
     }
-    fn bind(&mut self, proc: &Procedure, args: Vec<(Argument, Option<Place>)>) -> Result<()> {
+    async fn bind(&mut self, proc: &Procedure, args: Vec<(Argument, Option<Place>)>) -> Result<()> {
         let mut used = vec![false; args.len()];
         for (index, param) in proc.params.iter().enumerate() {
             let supplied = args
@@ -305,7 +334,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                 }
             } else if param.optional {
                 let v = if let Some(e) = &param.default {
-                    self.eval(e)?
+                    Box::pin(self.eval(e)).await?
                 } else if param.decl.ty == "variant" {
                     Value::Missing
                 } else {
@@ -353,13 +382,13 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
             _ => false,
         }
     }
-    fn location(&mut self, e: &Expr) -> Result<Place> {
+    async fn location(&mut self, e: &Expr) -> Result<Place> {
         match e {
             Expr::Name(n) => self.variable(n),
             Expr::Invoke(base, args) => {
-                let mut p = self.location(base)?;
+                let mut p = Box::pin(self.location(base)).await?;
                 for a in args {
-                    p.indices.push(i32::try_from(self.eval(&a.expr)?.integer()?).map_err(|_| overflow())?);
+                    p.indices.push(i32::try_from(Box::pin(self.eval_scalar(&a.expr)).await?.integer()?).map_err(|_| overflow())?);
                 }
                 p.read()?;
                 Ok(p)
@@ -367,28 +396,28 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
             _ => Err(mismatch()),
         }
     }
-    fn bounds(&mut self, d: &Decl) -> Result<Vec<(i32, i32)>> {
+    async fn bounds(&mut self, d: &Decl) -> Result<Vec<(i32, i32)>> {
         let mut bounds = Vec::new();
         for (lo, hi) in d.bounds.as_deref().unwrap_or_default() {
             let lo = if let Some(e) = lo {
-                i32::try_from(self.eval(e)?.integer()?).map_err(|_| overflow())?
+                i32::try_from(Box::pin(self.eval_scalar(e)).await?.integer()?).map_err(|_| overflow())?
             } else {
                 self.program.modules.get(self.frame()?.module).map_or(0, |m| m.option_base)
             };
-            let hi = i32::try_from(self.eval(hi)?.integer()?).map_err(|_| overflow())?;
+            let hi = i32::try_from(Box::pin(self.eval_scalar(hi)).await?.integer()?).map_err(|_| overflow())?;
             bounds.push((lo, hi));
         }
         Ok(bounds)
     }
-    fn declare(&mut self, d: &Decl, global: bool) -> Result<()> {
+    async fn declare(&mut self, d: &Decl, global: bool) -> Result<()> {
         let key = format!("{}:{}:{}", self.frame()?.module, self.frame()?.procedure, d.name);
         let p = if d.persistent && self.statics.contains_key(&key) {
             self.statics.get(&key).cloned().ok_or_else(mismatch)?
         } else {
             let value = if d.bounds.is_some() {
-                Value::Array(Array::new(self.bounds(d)?, d.ty.clone(), d.bounds.as_ref().is_some_and(Vec::is_empty), self.array_cap())?)
+                Value::Array(Array::new(self.bounds(d).await?, d.ty.clone(), d.bounds.as_ref().is_some_and(Vec::is_empty), self.array_cap())?)
             } else if let Some(e) = &d.initial {
-                self.eval(e)?.coerce(&d.ty)?
+                Box::pin(self.eval_scalar(e)).await?.coerce(&d.ty)?
             } else {
                 default_value(&d.ty)
             };
@@ -418,7 +447,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
     pub(crate) fn array_cap(&self) -> usize {
         self.limits.max_array_elements.min(self.limits.max_memory_bytes / 32)
     }
-    fn assign(&mut self, target: &Expr, value: Value) -> Result<()> {
+    async fn assign(&mut self, target: &Expr, value: Value) -> Result<()> {
         self.validate(&value)?;
         match target {
             Expr::Member(base, name) => {
@@ -438,15 +467,15 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                     self.module_variable(module, name)?.write(value)?;
                     return self.memory();
                 }
-                let object = self.eval(base)?;
+                let object = Box::pin(self.eval(base)).await?;
                 let id = object_id(object)?;
-                self.host.set_member(id, name, &[], value)?;
+                self.host.set_member_async(id, name, &[], value).await?;
             }
             Expr::Invoke(base, args) if matches!(base.as_ref(), Expr::Member(_, _)) => {
                 if let Expr::Member(obj, name) = base.as_ref() {
-                    let id = object_id(self.eval(obj)?)?;
-                    let args = self.arguments(args)?;
-                    self.host.set_member(id, name, &args, value)?;
+                    let id = object_id(Box::pin(self.eval(obj)).await?)?;
+                    let args = self.arguments(args).await?;
+                    self.host.set_member_async(id, name, &args, value).await?;
                 }
             }
             Expr::Invoke(base, args) => {
@@ -455,20 +484,20 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                     let setter = format!("{name}.{kind}");
                     let module = self.frame()?.module;
                     if self.program.modules.get(module).is_some_and(|m| m.procedures.contains_key(&setter)) {
-                        let mut supplied: Vec<_> = self.arguments(args)?.into_iter().map(|arg| (arg, None)).collect();
+                        let mut supplied: Vec<_> = self.arguments(args).await?.into_iter().map(|arg| (arg, None)).collect();
                         supplied.push((Argument::positional(value), None));
-                        self.invoke(module, &setter, supplied)?;
+                        Box::pin(self.invoke(module, &setter, supplied)).await?;
                         return self.memory();
                     }
                     let object = self.lookup(name).ok().map(|p| p.read()).transpose()?.or_else(|| self.host.global(name));
                     if let Some(Value::Object(id)) = object {
                         let id = object_id(Value::Object(id))?;
-                        let args = self.arguments(args)?;
-                        self.host.set_member(id, "", &args, value)?;
+                        let args = self.arguments(args).await?;
+                        self.host.set_member_async(id, "", &args, value).await?;
                         return self.memory();
                     }
                 }
-                self.location(target)?.write(value)?;
+                Box::pin(self.location(target)).await?.write(value)?;
             }
             Expr::Name(n)
                 if self.lookup(n).is_err()
@@ -479,17 +508,24 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                         .is_some_and(|m| m.procedures.contains_key(&format!("{n}.let")) || m.procedures.contains_key(&format!("{n}.set"))) =>
             {
                 let kind = if matches!(value, Value::Object(_)) { "set" } else { "let" };
-                self.invoke(self.frame()?.module, &format!("{n}.{kind}"), vec![(Argument::positional(value), None)])?;
+                Box::pin(self.invoke(self.frame()?.module, &format!("{n}.{kind}"), vec![(Argument::positional(value), None)])).await?;
             }
-            _ => self.location(target)?.write(value)?,
+            _ => Box::pin(self.location(target)).await?.write(value)?,
         }
         self.memory()
     }
-    fn arguments(&mut self, args: &[Arg]) -> Result<Vec<Argument>> {
+    async fn indices(&mut self, args: &[Arg]) -> Result<Vec<i32>> {
+        let mut values = Vec::new();
+        for a in args {
+            values.push(i32::try_from(Box::pin(self.eval_scalar(&a.expr)).await?.integer()?).map_err(|_| overflow())?);
+        }
+        Ok(values)
+    }
+    async fn arguments(&mut self, args: &[Arg]) -> Result<Vec<Argument>> {
         let mut arguments = Vec::new();
         let mut memory = 0usize;
         for arg in args {
-            let value = self.eval(&arg.expr)?;
+            let value = Box::pin(self.eval(&arg.expr)).await?;
             memory = memory.saturating_add(value.memory());
             if memory > self.limits.max_memory_bytes {
                 return Err(Error::limit("argument memory"));
@@ -498,7 +534,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
         }
         Ok(arguments)
     }
-    fn supplied_arguments(&mut self, args: &[Arg]) -> Result<Vec<(Argument, Option<Place>)>> {
+    async fn supplied_arguments(&mut self, args: &[Arg]) -> Result<Vec<(Argument, Option<Place>)>> {
         let mut supplied = Vec::new();
         let mut argument_memory = 0usize;
         for a in args {
@@ -510,8 +546,8 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
             } else {
                 false
             };
-            let p = if self.is_location(&a.expr) || implicit_variable { Some(self.location(&a.expr)?) } else { None };
-            let value = if let Some(p) = &p { p.read()? } else { self.eval(&a.expr)? };
+            let p = if self.is_location(&a.expr) || implicit_variable { Some(Box::pin(self.location(&a.expr)).await?) } else { None };
+            let value = if let Some(p) = &p { p.read()? } else { Box::pin(self.eval(&a.expr)).await? };
             argument_memory = argument_memory.saturating_add(value.memory());
             if argument_memory > self.limits.max_memory_bytes {
                 return Err(Error::limit("argument memory"));
@@ -528,18 +564,17 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
         }
         self.globals.get(module).and_then(|g| g.get(name)).cloned().ok_or_else(|| Error::runtime(35, format!("Variable {name} not found")))
     }
-    fn call(&mut self, target: &Expr, args: &[Arg], method: bool) -> Result<Value> {
+    async fn call(&mut self, target: &Expr, args: &[Arg], method: bool) -> Result<Value> {
         if let Expr::Name(name) = target {
             if let Ok(p) = self.lookup(name) {
                 match p.read()? {
                     Value::Array(a) => {
-                        let indices =
-                            args.iter().map(|a| i32::try_from(self.eval(&a.expr)?.integer()?).map_err(|_| overflow())).collect::<Result<Vec<_>>>()?;
+                        let indices = self.indices(args).await?;
                         return a.values.get(a.offset(&indices)?).cloned().ok_or_else(|| Error::runtime(9, "Subscript out of range"));
                     }
                     Value::Object(id) => {
                         let id = object_id(Value::Object(id))?;
-                        let args = self.arguments(args)?;
+                        let args = self.arguments(args).await?;
                         return self.host.get_member(id, "", &args);
                     }
                     _ => {}
@@ -552,10 +587,10 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                 self.program.modules.iter().position(|m| m.procedures.get(name).is_some_and(|p| p.public))
             };
             if let Some(i) = proc_module {
-                let supplied = self.supplied_arguments(args)?;
-                return self.invoke(i, name, supplied);
+                let supplied = self.supplied_arguments(args).await?;
+                return Box::pin(self.invoke(i, name, supplied)).await;
             }
-            let args = self.arguments(args)?;
+            let args = self.arguments(args).await?;
             if let Some(value) = self.host.global(name) {
                 self.validate(&value)?;
                 return self.host.get_member(object_id(value)?, "", &args);
@@ -566,11 +601,18 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                 "createobject" | "getobject" => return self.host.create_object(name == "getobject", &args),
                 _ => {}
             }
+            let args = args
+                .into_iter()
+                .map(|mut a| {
+                    a.value = self.host.scalar(a.value)?;
+                    Ok(a)
+                })
+                .collect::<Result<Vec<_>>>()?;
             return intrinsic::call(self, name.trim_end_matches('$'), &args);
         }
         if let Expr::Member(obj, name) = target {
             if matches!(obj.as_ref(), Expr::Name(n) if n == "err") {
-                let args = self.arguments(args)?;
+                let args = self.arguments(args).await?;
                 return match name.as_str() {
                     "clear" => {
                         self.err = Error::runtime(0, "");
@@ -599,44 +641,47 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                         return Ok(value);
                     }
                     if let Value::Array(array) = value {
-                        let indices =
-                            args.iter().map(|a| i32::try_from(self.eval(&a.expr)?.integer()?).map_err(|_| overflow())).collect::<Result<Vec<_>>>()?;
+                        let indices = self.indices(args).await?;
                         return array.values.get(array.offset(&indices)?).cloned().ok_or_else(|| Error::runtime(9, "Subscript out of range"));
                     }
-                    let args = self.arguments(args)?;
+                    let args = self.arguments(args).await?;
                     return self.host.get_member(object_id(value)?, "", &args);
                 }
                 let visible = i == self.frame()?.module || self.program.modules.get(i).and_then(|m| m.procedures.get(name)).is_some_and(|p| p.public);
                 if !visible {
                     return Err(Error::runtime(35, format!("Procedure {name} is private")));
                 }
-                let args = self.supplied_arguments(args)?;
-                return self.invoke(i, name, args);
+                let args = self.supplied_arguments(args).await?;
+                return Box::pin(self.invoke(i, name, args)).await;
             }
-            let id = object_id(self.eval(obj)?)?;
-            let args = self.arguments(args)?;
+            let id = object_id(Box::pin(self.eval(obj)).await?)?;
+            let args = self.arguments(args).await?;
             return if method { self.host.call_method(id, name, &args) } else { self.host.get_member(id, name, &args) };
         }
-        let value = self.eval(target)?;
+        let value = Box::pin(self.eval(target)).await?;
         if let Value::Array(array) = value {
-            let indices = args.iter().map(|a| i32::try_from(self.eval(&a.expr)?.integer()?).map_err(|_| overflow())).collect::<Result<Vec<_>>>()?;
+            let indices = self.indices(args).await?;
             return array.values.get(array.offset(&indices)?).cloned().ok_or_else(|| Error::runtime(9, "Subscript out of range"));
         }
         let id = object_id(value)?;
-        let args = self.arguments(args)?;
+        let args = self.arguments(args).await?;
         self.host.get_member(id, "", &args)
     }
-    fn eval(&mut self, e: &Expr) -> Result<Value> {
+    async fn eval_scalar(&mut self, expression: &Expr) -> Result<Value> {
+        let value = Box::pin(self.eval(expression)).await?;
+        self.host.scalar(value)
+    }
+    async fn eval(&mut self, e: &Expr) -> Result<Value> {
         self.tick()?;
         if self.expression_depth >= 128 {
             return Err(Error::limit("expression depth"));
         }
         self.expression_depth += 1;
-        let result = self.eval_inner(e);
+        let result = self.eval_inner(e).await;
         self.expression_depth -= 1;
         result
     }
-    fn eval_inner(&mut self, e: &Expr) -> Result<Value> {
+    async fn eval_inner(&mut self, e: &Expr) -> Result<Value> {
         let value = match e {
             Expr::Literal(v) => v.clone(),
             Expr::With => {
@@ -653,15 +698,16 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                 } else if let Some(v) = self.host.global(n) {
                     v
                 } else if intrinsic::exists(n) || self.program.modules.iter().any(|m| m.procedures.contains_key(n)) {
-                    self.call(e, &[], false)?
+                    self.call(e, &[], false).await?
                 } else {
                     self.variable(n)?.read()?
                 }
             }
-            Expr::Member(_, _) => self.call(e, &[], false)?,
-            Expr::Invoke(target, args) => self.call(target, args, false)?,
+            Expr::Member(_, _) => self.call(e, &[], false).await?,
+            Expr::Invoke(target, args) => self.call(target, args, false).await?,
             Expr::Unary(op, e) => {
-                let v = self.eval(e)?;
+                let v = Box::pin(self.eval(e)).await?;
+                let v = self.host.scalar(v)?;
                 if v == Value::Null {
                     Value::Null
                 } else {
@@ -680,8 +726,10 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                 }
             }
             Expr::Binary(op, a, b) => {
-                let left = self.eval(a)?;
-                let right = self.eval(b)?;
+                let left = Box::pin(self.eval(a)).await?;
+                let right = Box::pin(self.eval(b)).await?;
+                let left = self.host.scalar(left)?;
+                let right = self.host.scalar(right)?;
                 let promote = self.variant_expression(a) || self.variant_expression(b);
                 self.binary(op, left, right, promote)?
             }
@@ -841,11 +889,17 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
             result => result,
         }
     }
-    fn execute(&mut self) -> Result<()> {
+    async fn execute(&mut self) -> Result<()> {
         let mut loops: BTreeMap<String, LoopState> = BTreeMap::new();
         let mut each: BTreeMap<String, EachState> = BTreeMap::new();
         loop {
             self.tick().map_err(|e| self.annotate(e))?;
+            if self.remaining == 0 {
+                YieldOnce(false).await;
+                self.remaining = self.quantum;
+                self.tick().map_err(|e| self.annotate(e))?;
+            }
+            self.remaining = self.remaining.saturating_sub(1);
             let pc = self.frame()?.pc;
             let Some(instruction) = self.frame()?.code.get(pc).cloned() else {
                 return Ok(());
@@ -856,7 +910,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                 self.with.truncate(with_depth);
             }
             self.frame_mut()?.pc = pc.saturating_add(1);
-            let result = self.instruction(instruction.op, &mut loops, &mut each);
+            let result = self.instruction(instruction.op, &mut loops, &mut each).await;
             if let Err(e) = result {
                 let e = self.annotate(e);
                 let handler = self.frame()?.handler.clone();
@@ -880,21 +934,21 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
         self.frame_mut()?.pc = dest;
         Ok(())
     }
-    fn instruction(&mut self, op: Op, loops: &mut BTreeMap<String, LoopState>, each: &mut BTreeMap<String, EachState>) -> Result<()> {
+    async fn instruction(&mut self, op: Op, loops: &mut BTreeMap<String, LoopState>, each: &mut BTreeMap<String, EachState>) -> Result<()> {
         match op {
             Op::Jump(dest) => self.frame_mut()?.pc = dest,
             Op::Unless(e, dest) => {
-                if !self.eval(&e)?.truth()? {
+                if !Box::pin(self.eval_scalar(&e)).await?.truth()? {
                     self.frame_mut()?.pc = dest;
                 }
             }
             Op::Label(_) => {}
             Op::ForInit(name, start, end, step, dest) => {
-                let start = self.eval(&start)?;
-                let end = self.eval(&end)?.number()?;
-                let step = self.eval(&step)?.number()?;
+                let start = Box::pin(self.eval_scalar(&start)).await?;
+                let end = Box::pin(self.eval_scalar(&end)).await?.number()?;
+                let step = Box::pin(self.eval_scalar(&step)).await?.number()?;
                 let n = start.number()?;
-                self.assign(&Expr::Name(name.clone()), start)?;
+                self.assign(&Expr::Name(name.clone()), start).await?;
                 loops.insert(name, LoopState { end, step });
                 if (step >= 0.0 && n > end) || (step < 0.0 && n < end) {
                     self.frame_mut()?.pc = dest;
@@ -904,13 +958,13 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                 let state = loops.get(&name).ok_or_else(|| Error::runtime(92, "For loop not initialized"))?;
                 let n = self.variable(&name)?.read()?.number()? + state.step;
                 let again = if state.step >= 0.0 { n <= state.end } else { n >= state.end };
-                self.assign(&Expr::Name(name), Value::Double(n))?;
+                self.assign(&Expr::Name(name), Value::Double(n)).await?;
                 if again {
                     self.frame_mut()?.pc = dest;
                 }
             }
             Op::EachInit(name, expr, dest) => {
-                let values = match self.eval(&expr)? {
+                let values = match Box::pin(self.eval(&expr)).await? {
                     Value::Array(a) => a.values,
                     Value::Object(Some(id)) => self.host.enumerate(id)?,
                     _ => return Err(mismatch()),
@@ -922,7 +976,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                     self.validate(value)?;
                 }
                 if let Some(v) = values.first() {
-                    self.assign(&Expr::Name(name.clone()), v.clone())?;
+                    self.assign(&Expr::Name(name.clone()), v.clone()).await?;
                 } else {
                     self.frame_mut()?.pc = dest;
                 }
@@ -932,12 +986,12 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                 let state = each.get_mut(&name).ok_or_else(mismatch)?;
                 state.index = state.index.saturating_add(1);
                 if let Some(v) = state.values.get(state.index) {
-                    self.assign(&Expr::Name(name), v.clone())?;
+                    self.assign(&Expr::Name(name), v.clone()).await?;
                     self.frame_mut()?.pc = dest;
                 }
             }
             Op::With(e) => {
-                let v = self.eval(&e)?;
+                let v = Box::pin(self.eval(&e)).await?;
                 self.with.push(v);
             }
             Op::EndWith => {
@@ -946,18 +1000,32 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
             Op::Simple(s) => match s {
                 Statement::Decl(ds) => {
                     for d in &ds {
-                        self.declare(d, false)?;
+                        self.declare(d, false).await?;
                     }
                 }
                 Statement::Assign(dest, value) => {
-                    let v = self.eval(&value)?;
-                    self.assign(&dest, v)?;
+                    let v = Box::pin(self.eval(&value)).await?;
+                    let v = self.host.scalar(v)?;
+                    let object = if let Expr::Name(name) = &dest {
+                        self.lookup(name).ok().map(|p| p.read()).transpose()?.or_else(|| self.host.global(name))
+                    } else {
+                        None
+                    };
+                    if let Some(Value::Object(Some(id))) = object {
+                        self.host.set_member_async(id, "", &[], v).await?;
+                    } else {
+                        self.assign(&dest, v).await?;
+                    }
+                }
+                Statement::SetAssign(dest, value) => {
+                    let v = Box::pin(self.eval(&value)).await?;
+                    self.assign(&dest, v).await?;
                 }
                 Statement::Call(e) => {
                     if let Expr::Invoke(target, args) = e {
-                        self.call(&target, &args, true)?;
+                        self.call(&target, &args, true).await?;
                     } else {
-                        self.call(&e, &[], true)?;
+                        self.call(&e, &[], true).await?;
                     }
                 }
                 Statement::Goto(label) => self.goto(&label)?,
@@ -986,7 +1054,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                         if !dynamic {
                             return Err(Error::runtime(10, "Array is fixed"));
                         }
-                        let mut a = Array::new(self.bounds(d)?, ty, true, self.array_cap())?;
+                        let mut a = Array::new(self.bounds(d).await?, ty, true, self.array_cap())?;
                         if preserve
                             && let Value::Array(old) = old
                             && !old.bounds.is_empty()
@@ -1021,7 +1089,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                 }
                 Statement::Erase(es) => {
                     for e in &es {
-                        let p = self.location(e)?;
+                        let p = Box::pin(self.location(e)).await?;
                         let Value::Array(a) = p.read()? else {
                             return Err(mismatch());
                         };
@@ -1030,13 +1098,14 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                     }
                 }
                 Statement::Mid(dest, start, len, replacement) => {
-                    let original = self.eval(&dest)?.text()?;
-                    let start = self.eval(&start)?.integer()?;
+                    let original = Box::pin(self.eval_scalar(&dest)).await?.text()?;
+                    let start = Box::pin(self.eval_scalar(&start)).await?.integer()?;
                     if start < 1 {
                         return Err(Error::runtime(5, "Invalid Mid start"));
                     }
-                    let replacement = self.eval(&replacement)?.text()?;
-                    let len = if let Some(e) = len { self.eval(&e)?.integer()? } else { replacement.encode_utf16().count() as i64 };
+                    let replacement = Box::pin(self.eval_scalar(&replacement)).await?.text()?;
+                    let len =
+                        if let Some(e) = len { Box::pin(self.eval_scalar(&e)).await?.integer()? } else { replacement.encode_utf16().count() as i64 };
                     if len < 0 {
                         return Err(Error::runtime(5, "Invalid Mid length"));
                     }
@@ -1047,12 +1116,12 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                             *to = u;
                         }
                     }
-                    self.assign(&dest, Value::String(String::from_utf16_lossy(&units)))?;
+                    self.assign(&dest, Value::String(String::from_utf16_lossy(&units))).await?;
                 }
                 Statement::Print(es) => {
                     let mut out = String::new();
                     for e in &es {
-                        let text = self.eval(e)?.text()?;
+                        let text = Box::pin(self.eval_scalar(e)).await?.text()?;
                         let length = out.len().saturating_add(text.len()).saturating_add(usize::from(!out.is_empty()));
                         if length > self.limits.max_string_length || length > self.limits.max_memory_bytes {
                             return Err(Error::limit("log length"));
@@ -1070,7 +1139,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                     return Err(Error { fatal: true, ..Error::runtime(-32001, "Stop: VBA execution halted") });
                 }
                 Statement::Randomize(e) => {
-                    let n = if let Some(e) = e { self.eval(&e)?.number()? } else { self.clock.date_serial() };
+                    let n = if let Some(e) = e { Box::pin(self.eval_scalar(&e)).await?.number()? } else { self.clock.date_serial() };
                     self.rng = n.to_bits() as u32 ^ (n.to_bits() >> 32) as u32;
                 }
                 _ => return Err(Error::runtime(5, "Invalid compiled statement")),
@@ -1326,4 +1395,23 @@ fn arithmetic_type(op: &str, a: &Value, b: &Value) -> &'static str {
         return "byte";
     }
     "integer"
+}
+
+struct YieldOnce(bool);
+impl std::future::Future for YieldOnce {
+    type Output = ();
+    fn poll(mut self: std::pin::Pin<&mut Self>, context: &mut std::task::Context<'_>) -> std::task::Poll<()> {
+        if self.0 {
+            std::task::Poll::Ready(())
+        } else {
+            self.0 = true;
+            context.waker().wake_by_ref();
+            std::task::Poll::Pending
+        }
+    }
+}
+
+/// Returns control to an embedding frame loop without requiring an executor dependency.
+pub async fn yield_once() {
+    YieldOnce(false).await;
 }

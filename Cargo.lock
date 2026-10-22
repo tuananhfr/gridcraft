@@ -1828,6 +1828,7 @@ dependencies = [
  "gridcraft-numfmt",
  "gridcraft-pdf",
  "gridcraft-vba",
+ "gridcraft-vbarun",
  "gridcraft-xlsx",
  "image",
  "log",
@@ -1860,6 +1861,7 @@ name = "gridcraft-mcp"
 version = "0.6.5"
 dependencies = [
  "gridcraft-engine",
+ "gridcraft-vba",
  "log",
  "serde_json",
 ]

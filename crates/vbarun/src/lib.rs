@@ -9,7 +9,7 @@ mod runtime;
 mod value;
 
 pub use parser::{Module, Program};
-pub use runtime::Interpreter;
+pub use runtime::{Interpreter, yield_once};
 use std::sync::{Arc, atomic::AtomicBool};
 pub use value::{Array, Value};
 
@@ -65,7 +65,17 @@ impl Argument {
 }
 
 /// All external effects are explicitly delegated; the default host grants no capabilities.
+#[allow(async_fn_in_trait)]
 pub trait Host {
+    async fn set_member_async(&mut self, obj: Object, name: &str, args: &[Argument], value: Value) -> Result<()> {
+        self.set_member(obj, name, args, value)
+    }
+    fn scalar(&mut self, value: Value) -> Result<Value> {
+        Ok(value)
+    }
+    fn enter_procedure(&mut self, _module: &str, _procedure: &str) -> Result<()> {
+        Ok(())
+    }
     fn get_member(&mut self, _obj: Object, name: &str, _args: &[Argument]) -> Result<Value> {
         Err(Error::unsupported(name))
     }

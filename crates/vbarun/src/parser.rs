@@ -68,6 +68,7 @@ pub(crate) struct Stmt {
 pub(crate) enum Statement {
     Decl(Vec<Decl>),
     Assign(Expr, Expr),
+    SetAssign(Expr, Expr),
     Call(Expr),
     If(Vec<(Expr, Vec<Stmt>)>, Vec<Stmt>),
     Select(Expr, Vec<(Vec<Case>, Vec<Stmt>)>, Vec<Stmt>),
@@ -546,11 +547,11 @@ impl Parser {
             Statement::Mid(dest, start, len, self.expr(0)?)
         } else {
             let explicit_call = self.eat("call");
-            self.eat("set");
+            let set = self.eat("set");
             self.eat("let");
             let target = self.expr(7)?;
             if !explicit_call && self.eat("=") {
-                Statement::Assign(target, self.expr(0)?)
+                if set { Statement::SetAssign(target, self.expr(0)?) } else { Statement::Assign(target, self.expr(0)?) }
             } else if !self.sep() && !self.at("else") {
                 let args = self.args(false)?;
                 Statement::Call(Expr::Invoke(Box::new(target), args))

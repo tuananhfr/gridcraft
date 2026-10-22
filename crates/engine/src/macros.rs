@@ -133,7 +133,7 @@ pub fn inspect(wb: &Workbook) -> Json {
                                 && module.kind == gridcraft_vba::ModuleKind::Standard
                                 && procedure.scope == gridcraft_vba::Scope::Public
                                 && procedure.kind == gridcraft_vba::ProcKind::Sub
-                                && procedure.params.is_empty()
+                                && procedure.params.iter().all(|p| p.optional || p.param_array)
                         ),
                     );
                 }

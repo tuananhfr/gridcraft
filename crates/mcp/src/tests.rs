@@ -564,3 +564,24 @@ fn vba_signature_headless_save_returns_structured_warnings() {
     }
     std::fs::remove_file(source).unwrap();
 }
+
+#[test]
+fn macro_mcp_consent_run_log_and_undo() {
+    use gridcraft_vba::testing::{FixtureModule, fixture};
+    let mut backend = Headless::new();
+    std::sync::Arc::make_mut(&mut backend.session.doc_mut().unwrap().wb).vba_project = Some(
+        fixture(&[FixtureModule::new("Module1", "Module", "Sub Main()\nRange(\"A1:B2\").Value=7\nMsgBox \"Done\"\nEnd Sub").unwrap()], 1252, "", &[])
+            .unwrap(),
+    );
+    let execute = |backend: &mut Headless, command: &str, params: Value| backend.call("engine.execute", json!({"command":command,"params":params}));
+    assert!(execute(&mut backend, "macros.run", json!({"name":"Main"})).is_err());
+    execute(&mut backend, "macros.consent", json!({"allow":true})).unwrap();
+    assert_eq!(execute(&mut backend, "macros.run", json!({"name":"Main"})).unwrap()["status"], "completed");
+    let log = execute(&mut backend, "macros.log", json!({})).unwrap();
+    assert_eq!(log["runs"][0]["cellsChanged"], 4);
+    assert_eq!(log["runs"][0]["messages"].as_array().unwrap().len(), 1);
+    assert!(backend.session.take_ui_requests().is_empty());
+    assert_eq!(backend.session.doc().unwrap().undo.len(), 1);
+    execute(&mut backend, "edit.undo", json!({})).unwrap();
+    assert_eq!(backend.session.doc().unwrap().wb.sheet(0).unwrap().value(gridcraft_engine::cell(0, 0)), gridcraft_engine::core::Value::Empty);
+}

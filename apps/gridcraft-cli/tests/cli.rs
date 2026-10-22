@@ -210,3 +210,32 @@ fn vba_signature_convert_and_run_print_save_warnings_to_stderr() {
     }
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn macro_cli_requires_consent_and_preserves_project() {
+    use gridcraft_vba::testing::{FixtureModule, fixture};
+    let dir = tmpdir("macro-execution");
+    let input = dir.join("input.json");
+    let output = dir.join("output.json");
+    let mut wb = gridcraft_engine::model::Workbook::new();
+    let project = fixture(&[FixtureModule::new("Module1", "Module", "Sub Main()\nRange(\"A1\").Value=42\nEnd Sub").unwrap()], 1252, "", &[]).unwrap();
+    wb.vba_project = Some(project.clone());
+    std::fs::write(&input, serde_json::to_vec(&wb).unwrap()).unwrap();
+    let denied = run(&["run", "--in", input.to_str().unwrap(), "--cmd", "macros.run={\"name\":\"Main\"}"]);
+    assert!(!denied.status.success());
+    ok(&[
+        "run",
+        "--in",
+        input.to_str().unwrap(),
+        "--cmd",
+        "macros.consent={\"allow\":true}",
+        "--cmd",
+        "macros.run={\"name\":\"Main\"}",
+        "--out",
+        output.to_str().unwrap(),
+    ]);
+    let wb: gridcraft_engine::model::Workbook = serde_json::from_slice(&std::fs::read(&output).unwrap()).unwrap();
+    assert_eq!(wb.sheet(0).unwrap().value(gridcraft_engine::cell(0, 0)), gridcraft_engine::core::Value::Number(42.0));
+    assert_eq!(wb.vba_project, Some(project));
+    std::fs::remove_dir_all(dir).unwrap();
+}

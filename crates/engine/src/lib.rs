@@ -20,6 +20,7 @@ pub mod io;
 mod io_csv;
 pub mod legacy;
 pub mod links;
+pub mod macro_host;
 pub mod macros;
 pub mod outline;
 pub mod paper;
@@ -105,6 +106,7 @@ pub enum Mode {
 
 #[derive(Clone, Debug)]
 pub struct DocState {
+    pub macro_state: macro_host::MacroState,
     pub wb: Arc<Workbook>,
     pub calc: Calc,
     pub selection: Selection,
@@ -141,6 +143,7 @@ impl DocState {
         let wb = Arc::new(wb);
         let sel = Selection::at(wb.active().map(|s| s.view_active).unwrap_or_default());
         DocState {
+            macro_state: macro_host::MacroState::default(),
             saved: wb.clone(),
             wb,
             calc,
@@ -348,6 +351,7 @@ impl Session {
             return;
         }
         let closed = self.docs.remove(i);
+        closed.macro_state.cancellation.store(true, std::sync::atomic::Ordering::Relaxed);
         self.hidden_windows.retain(|uid| *uid != closed.uid);
         if i < self.active {
             self.active -= 1;

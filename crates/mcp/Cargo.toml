@@ -13,3 +13,6 @@ workspace = true
 gridcraft-engine = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
+
+[dev-dependencies]
+gridcraft-vba = { workspace = true, features = ["test-support"] }

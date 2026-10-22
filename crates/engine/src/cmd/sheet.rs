@@ -52,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("sheet.rename", "Rename Sheet", ["Home", "Cells", "Format"], None, "{sheet?, name}", has_doc, rename_sheet),
         cmd!("sheet.move", "Move or Copy Sheet…", ["Home", "Cells", "Format"], None, "{sheet?, to: index, copy?: bool}", has_doc, move_sheet),
         cmd!("sheet.tabColor", "Tab Color", ["Home", "Cells", "Format"], None, "{sheet?, color: \"#FF0000\"|\"none\"}", has_doc, tab_color),
-        cmd!("sheet.hide", "Hide Sheet", ["Home", "Cells", "Format", "Hide & Unhide"], None, "{sheet?}", has_doc, hide_sheet),
+        cmd!("sheet.hide", "Hide Sheet", ["Home", "Cells", "Format", "Hide & Unhide"], None, "{sheet?, veryHidden?: bool}", has_doc, hide_sheet),
         cmd!("sheet.unhide", "Unhide Sheet…", ["Home", "Cells", "Format", "Hide & Unhide"], None, "{sheet}", has_doc, unhide_sheet),
         cmd!(noundo "sheet.activate", "Activate Sheet", [], None, "{sheet: index | name}", has_doc, activate),
         cmd!(noundo "sheet.next", "Next Sheet", [], Some("Ctrl+PageDown"), "{}", has_doc, |s, _| step_sheet(s, 1)),
@@ -896,11 +896,13 @@ fn tab_color(s: &mut Session, p: &Json) -> Result<Json> {
 
 fn hide_sheet(s: &mut Session, p: &Json) -> Result<Json> {
     let i = target_sheet(s, p)?;
-    if s.doc()?.wb.sheets.iter().filter(|s| s.visibility == Visibility::Visible).count() <= 1 {
+    if s.doc()?.wb.sheet(i).is_some_and(|sheet| sheet.visibility == Visibility::Visible)
+        && s.doc()?.wb.sheets.iter().filter(|s| s.visibility == Visibility::Visible).count() <= 1
+    {
         return Err(EngineError::Other("A workbook must contain at least one visible worksheet.".into()));
     }
     edit(s, |cx| {
-        cx.sheet_mut(i)?.visibility = Visibility::Hidden;
+        cx.sheet_mut(i)?.visibility = if bool_param(p, "veryHidden").unwrap_or(false) { Visibility::VeryHidden } else { Visibility::Hidden };
         if cx.wb.active_sheet == i {
             cx.wb.active_sheet = cx.wb.sheets.iter().position(|s| s.visibility == Visibility::Visible).unwrap_or(0);
         }

@@ -147,6 +147,10 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!(noundo "view.unhideWindow", "Unhide…", ["View", "Window"], None, "{index?}", has_doc, unhide_window),
         cmd!(query "view.switchWindows", "Switch Windows", ["View", "Window"], None, "{} → open windows", always, switch_windows),
         cmd!(noundo "view.ruler", "Ruler", ["View", "Show"], None, "{on?} → {on}: rulers in Page Layout view (an application option)", has_doc, ruler),
+        cmd!(query "macros.run", "Run Macro", [], None, "{name, wallMs?, maxSteps?} → run result; requires macros.consent", has_doc, crate::macro_host::run),
+        cmd!(query "macros.stop", "Stop Macro", [], None, "{} → cancel the current run", has_doc, crate::macro_host::stop),
+        cmd!(query "macros.log", "Macro Log", [], None, "{} → session run log", has_doc, crate::macro_host::log),
+        cmd!(query "macros.consent", "Macro Consent", [], None, "{allow?: bool} → per-document session consent; false also cancels", has_doc, crate::macro_host::consent),
         cmd!(query "macros.analyze", "Macros", ["Developer", "Macros"], None, "{} → read-only VBA analysis", has_doc, analyze_macros),
         cmd!(query "view.macros", "Macros", ["View", "Macros"], None, "{} → scripts", has_doc, all_scripts),
         // Table tools

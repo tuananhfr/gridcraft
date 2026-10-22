@@ -245,7 +245,7 @@ impl Value {
             Self::Array(a) => 8192 + if a.element_type == "variant" { 12 } else { default_value(&a.element_type).var_type() },
         }
     }
-    pub(crate) fn memory(&self) -> usize {
+    pub fn memory(&self) -> usize {
         match self {
             Self::String(s) => 32usize.saturating_add(s.len()),
             Self::Array(a) => a.values.iter().fold(64usize, |n, v| n.saturating_add(v.memory())),
