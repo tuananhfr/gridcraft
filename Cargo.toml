@@ -13,6 +13,7 @@ repository = "https://github.com/storytold/gridcraft"
 [workspace.dependencies]
 # internal
 gridcraft-mdb = { path = "crates/mdb" }
+gridcraft-vba = { path = "crates/vba" }
 gridcraft-core = { path = "crates/core" }
 gridcraft-numfmt = { path = "crates/numfmt" }
 gridcraft-formula = { path = "crates/formula" }

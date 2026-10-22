@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: add the `gridcraft-vba` crate, a bounded read-only MS-OVBA project analysis (modules, procedures, UDFs, events, references, protection flags, compatibility levels 1-4) that never executes VBA (GRID-08 groundwork; not wired into the UI yet).
+
 - (desktop) Repository variable `ERPCONS_SKIP_MACOS=true` releases Windows and Linux installers without waiting for a macOS runner; update.json then lists no Mac asset.
 
 - Both: add sandboxed Jet 3/4 Access table reading, R2000 DXF drawing output and the undoable `data.importAccess` command for future ETABS VBA bindings.
