@@ -69,6 +69,12 @@ pub fn start() {
                     app.ui.system_theme = true;
                     app.ui.language = crate::language::initial();
                     app.ui.region = crate::region::initial();
+                    app.ui.macro_time_limit_seconds = macro_time_limit_storage()
+                        .and_then(|s| s.get_item(MACRO_TIME_LIMIT_KEY).ok().flatten())
+                        .and_then(|s| s.parse::<u32>().ok())
+                        .unwrap_or(app.ui.macro_time_limit_seconds)
+                        .clamp(1, 300);
+                    let macro_time_limit_seconds = app.ui.macro_time_limit_seconds;
                     let language = app.ui.language;
                     let region = app.ui.region;
                     SheetApp::setup_context_for_language(&cc.egui_ctx, false, app.ui.language);
@@ -80,7 +86,7 @@ pub fn start() {
                     }
                     // Drafts are the office shell's; an embedding parent stores what it opened itself.
                     let drafts = app_bridge.is_none().then(|| crate::drafts::Drafts::install(&cc.egui_ctx));
-                    Ok(Box::new(WebShell { app, inbox, bridge: app_bridge, clipboard, dirty, drafts, language, region }))
+                    Ok(Box::new(WebShell { app, inbox, bridge: app_bridge, clipboard, dirty, drafts, language, region, macro_time_limit_seconds }))
                 }),
             )
             .await;
@@ -104,8 +110,15 @@ fn query_param(key: &str) -> Option<String> {
     web_sys::UrlSearchParams::new_with_str(&query()).ok()?.get(key)
 }
 
+const MACRO_TIME_LIMIT_KEY: &str = "gridcraft-macro-time-limit-seconds";
+
+fn macro_time_limit_storage() -> Option<web_sys::Storage> {
+    web_sys::window()?.local_storage().ok().flatten()
+}
+
 struct WebShell {
     app: SheetApp,
+    macro_time_limit_seconds: u32,
     inbox: Inbox,
     bridge: Option<crate::host::Bridge>,
     clipboard: Option<crate::clipboard::ClipboardBridge>,
@@ -142,6 +155,14 @@ impl eframe::App for WebShell {
         self.app.logic(ctx);
         if let Some(clipboard) = &self.clipboard {
             clipboard.show_notice(&mut self.app);
+        }
+        if self.app.ui.macro_time_limit_seconds != self.macro_time_limit_seconds {
+            self.macro_time_limit_seconds = self.app.ui.macro_time_limit_seconds;
+            if let Some(s) = macro_time_limit_storage()
+                && let Err(e) = s.set_item(MACRO_TIME_LIMIT_KEY, &self.macro_time_limit_seconds.to_string())
+            {
+                log::warn!("couldn't remember the macro time limit: {e:?}");
+            }
         }
         if self.app.ui.language != self.language {
             self.language = self.app.ui.language;

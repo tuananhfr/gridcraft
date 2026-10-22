@@ -9,6 +9,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Macro|Completed" => "Dokončeno",
         "Macro|Cancelled" => "Zrušeno",
         "Macro|Start" => "Začátek",
+        "Macro|Duration" => "Doba trvání",
         "Macro|End" => "Konec",
         "Macro|Abort" => "Přerušit",
         "Macro|Ignore" => "Ignorovat",
@@ -37,7 +38,6 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Macro|No" => "Ne",
 
         "Form Control" => "Ovládací prvek formuláře",
-        "Macros cannot be run in GridCraft yet; this is read-only analysis." => "Makra se zatím nespouštějí; jde o analýzu pouze pro čtení.",
         "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
             "{modules} modulů · {procedures} procedur · {udfs} UDF · Události: {events} · Podepsáno: {signed} · Zamčeno: {locked}"
         }

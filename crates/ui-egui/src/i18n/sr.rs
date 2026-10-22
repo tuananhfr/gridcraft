@@ -9,6 +9,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Macro|Completed" => "Завршено",
         "Macro|Cancelled" => "Отказано",
         "Macro|Start" => "Почетак",
+        "Macro|Duration" => "Трајање",
         "Macro|End" => "Крај",
         "Macro|Abort" => "Прекини",
         "Macro|Ignore" => "Занемари",
@@ -37,7 +38,6 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Macro|No" => "Ne",
 
         "Form Control" => "Kontrola obrasca",
-        "Macros cannot be run in GridCraft yet; this is read-only analysis." => "Makroi se još ne izvršavaju; ovo je analiza samo za čitanje.",
         "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
             "{modules} modula · {procedures} procedura · {udfs} UDF · Događaji: {events} · Potpisano: {signed} · Zaključano: {locked}"
         }

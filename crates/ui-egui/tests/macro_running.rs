@@ -50,6 +50,7 @@ fn macro_run_requires_consent_and_has_one_undo() {
     h.get_by_label("Chạy").click();
     h.run_steps(3);
     assert!(h.query_by_label("Cho phép chạy macro này?").is_some());
+    assert!(h.query_by_label("Sự kiện — chưa hỗ trợ tự chạy").is_none());
     assert_eq!(value(h.state(), "A1"), Value::Empty);
     h.get_by_label("Hủy").click();
     h.run_steps(2);
@@ -104,6 +105,11 @@ fn macro_refusal_reports_level_and_preserves_workbook() {
     h.get_by_label("Chạy").click();
     h.run_steps(3);
     assert!(h.query_by_label("Chưa hỗ trợ mức tương thích 3.").is_some());
+    assert!(h.query_by_label("Module1 · Dòng 3").is_some());
+    assert!(h.query_by_label("Module1 · Dòng 1").is_none());
+    let log = h.state().session.doc().unwrap().macro_state.log.last().unwrap();
+    assert_eq!(log["error"]["line"], 3);
+    assert_eq!(log["error"]["reasons"][0]["line"], 3);
     assert_eq!(h.state().session.doc().unwrap().wb, wb);
     assert!(h.state().session.doc().unwrap().undo.is_empty());
 }
@@ -174,4 +180,56 @@ fn macro_file_picker_is_explicit_and_returns_false_without_opening_a_document() 
     assert!(picked.load(std::sync::atomic::Ordering::Relaxed));
     assert_eq!(value(h.state(), "A1"), Value::Bool(false));
     assert_eq!(h.state().session.documents().len(), 1);
+}
+
+#[test]
+fn macro_event_notice_only_labels_event_handlers() {
+    let mut h = harness("Sub Main()\nEnd Sub\nSub Auto_Open()\nEnd Sub", 375.0, false);
+    assert_eq!(h.query_all_by_label("Sự kiện — chưa hỗ trợ tự chạy").count(), 1);
+    h.get_by_label("Main — Module1").click();
+    h.run_steps(3);
+    h.get_by_label("Chạy").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Cho phép chạy macro này?").is_some());
+    assert_eq!(h.query_all_by_label("Sự kiện — chưa hỗ trợ tự chạy").count(), 1);
+}
+
+#[test]
+fn macro_log_and_refusal_use_local_clock_times_and_duration() {
+    for (start, end, duration) in [(1_700_000_000_123_i64, 1_700_000_000_165_i64, "42 ms"), (1_700_000_000_123, 1_700_000_001_357, "1.234 s")] {
+        let mut h = harness(FILL, 1440.0, false);
+        h.state_mut().session.doc_mut().unwrap().macro_state.log.push(json!({
+            "macro":"Module1.Main", "status":"completed", "start":start, "end":end, "steps":1, "cellsChanged":0
+        }));
+        h.get_by_label("Nhật ký chạy").click();
+        h.run_steps(4);
+        for (label, ms) in [("Bắt đầu", start), ("Kết thúc", end)] {
+            let time = chrono::DateTime::from_timestamp_millis(ms).unwrap().with_timezone(&chrono::Local).format("%H:%M:%S");
+            assert!(h.query_by_label(&format!("{label}: {time}")).is_some());
+            assert!(h.query_by_label(&format!("{label}: {ms}")).is_none());
+        }
+        assert!(h.query_by_label(&format!("Thời lượng: {duration}")).is_some());
+    }
+    let mut h = harness("Sub Main()\nDim o As Object\nSet o=CreateObject(\"Synthetic.Test\")\nEnd Sub", 375.0, false);
+    h.get_by_label("Chạy").click();
+    h.run_steps(3);
+    let log = h.state().session.doc().unwrap().macro_state.log.last().unwrap();
+    for (label, key) in [("Bắt đầu", "start"), ("Kết thúc", "end")] {
+        let ms = log[key].as_i64().unwrap();
+        let time = chrono::DateTime::from_timestamp_millis(ms).unwrap().with_timezone(&chrono::Local).format("%H:%M:%S");
+        assert!(h.query_by_label(&format!("{label}: {time}")).is_some());
+    }
+}
+
+#[test]
+fn macro_time_limit_preference_round_trips_and_defaults_per_target() {
+    let mut ui = gridcraft_ui_egui::UiState::default();
+    assert_eq!(ui.macro_time_limit_seconds, if cfg!(target_arch = "wasm32") { 5 } else { 30 });
+    ui.macro_time_limit_seconds = 17;
+    let encoded = serde_json::to_value(ui).unwrap();
+    assert_eq!(encoded["macroTimeLimitSeconds"], 17);
+    let restored: gridcraft_ui_egui::UiState = serde_json::from_value(encoded).unwrap();
+    assert_eq!(restored.macro_time_limit_seconds, 17);
+    let old: gridcraft_ui_egui::UiState = serde_json::from_value(json!({})).unwrap();
+    assert_eq!(old.macro_time_limit_seconds, gridcraft_ui_egui::UiState::default().macro_time_limit_seconds);
 }

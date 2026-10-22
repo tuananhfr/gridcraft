@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: enable cooperative macro running on web with persisted time limits (5 s web, 30 s desktop defaults), local run times and duration, event-only consent notices and precise refusal locations.
+
 - (desktop) Run VBA macros and assigned Form Control buttons from Macro with session consent, responsive Stop, interactive prompts, rollback diagnostics, run logs and a configurable time limit.
 
 - Both: add consent-gated Excel VBA engine bindings, cooperative macro execution with cancellation and atomic undo/rollback, headless dialog defaults and session run logs; unsupported compatibility levels are refused and no open/event macros run automatically.

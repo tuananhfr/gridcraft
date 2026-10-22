@@ -33,7 +33,6 @@ pub mod icons;
 pub mod keymap;
 pub mod keytips;
 mod macro_dialog;
-#[cfg(not(target_arch = "wasm32"))]
 mod macro_runtime;
 pub mod narrow;
 pub mod outline;
@@ -73,7 +72,6 @@ pub mod desktop_theme;
 pub struct UiState {
     /// The manual preference, retained when following the system appearance.
     pub dark: bool,
-    #[cfg(not(target_arch = "wasm32"))]
     pub macro_time_limit_seconds: u32,
     pub system_theme: bool,
     pub ribbon_tab: String,
@@ -125,8 +123,7 @@ impl Default for UiState {
     fn default() -> Self {
         UiState {
             dark: false,
-            #[cfg(not(target_arch = "wasm32"))]
-            macro_time_limit_seconds: 30,
+            macro_time_limit_seconds: if cfg!(target_arch = "wasm32") { 5 } else { 30 },
             system_theme: false,
             ribbon_tab: "Home".into(),
             ribbon_collapsed: false,
@@ -193,10 +190,6 @@ pub enum NoticeKind {
 }
 
 /// The info bar for a workbook opened with a VBA project.
-#[cfg(target_arch = "wasm32")]
-pub const VBA_NOTICE: &str =
-    "This workbook contains VBA macros. GridCraft doesn't run them. Saving as .xlsm keeps them; saving as .xlsx removes them.";
-#[cfg(not(target_arch = "wasm32"))]
 pub const VBA_NOTICE: &str = "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them.";
 
 /// A dismissible bar under the ribbon, in the spirit of Excel's message bar. Used to tell the
@@ -322,7 +315,6 @@ pub struct SheetApp {
     pub editor: Option<editor::EditState>,
     pub text_box_editor: Option<text_box::EditState>,
     pub dialog: Option<dialogs::Dialog>,
-    #[cfg(not(target_arch = "wasm32"))]
     macro_runtime: macro_runtime::State,
     /// The File tab's Backstage view, when open (UI-only; replaces the ribbon, grid and tabs).
     pub backstage: Option<backstage::Backstage>,
@@ -446,7 +438,6 @@ impl SheetApp {
             editor: None,
             text_box_editor: None,
             dialog: None,
-            #[cfg(not(target_arch = "wasm32"))]
             macro_runtime: Default::default(),
             backstage: None,
             message: None,
@@ -1301,7 +1292,6 @@ impl SheetApp {
 
     /// Per-frame logic (control channel, screenshots). Call before `ui`.
     pub fn logic(&mut self, ctx: &egui::Context) {
-        #[cfg(not(target_arch = "wasm32"))]
         macro_runtime::step(self, ctx);
         // A keytip control request lives one frame: the ribbon consumes it during `ui`, and
         // anything that never reached a control (collapsed ribbon, tab switch) is dropped.
@@ -1520,7 +1510,6 @@ impl SheetApp {
         #[cfg(not(target_arch = "wasm32"))]
         updates::dialog(self, &ctx);
         dialogs::show(self, &ctx);
-        #[cfg(not(target_arch = "wasm32"))]
         macro_runtime::modals(self, &ctx);
         widgets::message_box(self, &ctx);
         widgets::toast(self, &ctx);

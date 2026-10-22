@@ -78,7 +78,7 @@ fn macro_dialog_labels_source_and_narrow_layouts() {
         assert!(h.query_by_label("    1  Public Sub CalculateLoads()").is_some());
         let bounds = h.ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new(gridcraft_ui_egui::dialogs::MACRO_DIALOG_LAYOUT))).unwrap();
         assert!(bounds.contains_rect(h.get_by_label("    3  x = 2").rect()), "source must be visible at {width}");
-        assert_eq!(h.query_by_label("Chạy").is_some(), !cfg!(target_arch = "wasm32"));
+        assert!(h.query_by_label("Chạy").is_some());
     }
 }
 

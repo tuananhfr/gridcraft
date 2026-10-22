@@ -9,6 +9,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Macro|Completed" => "已完成",
         "Macro|Cancelled" => "已取消",
         "Macro|Start" => "开始",
+        "Macro|Duration" => "持续时间",
         "Macro|End" => "结束",
         "Macro|Abort" => "中止",
         "Macro|Ignore" => "忽略",
@@ -37,7 +38,6 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Macro|No" => "否",
 
         "Form Control" => "窗体控件",
-        "Macros cannot be run in GridCraft yet; this is read-only analysis." => "暂不支持运行宏；此处为只读分析。",
         "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
             "{modules} 个模块 · {procedures} 个过程 · {udfs} 个 UDF · 事件: {events} · 已签名: {signed} · 已锁定: {locked}"
         }

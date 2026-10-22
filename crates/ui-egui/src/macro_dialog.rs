@@ -1,8 +1,6 @@
 use crate::{dialogs::Dialog, widgets::tr};
 use serde_json::{Value as Json, json};
 
-#[cfg(any(target_arch = "wasm32", test))]
-pub const NOTE: &str = "Macros cannot be run in GridCraft yet; this is read-only analysis.";
 pub const SUMMARY: &str = "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}";
 pub const LEVELS: [&str; 4] = ["Runnable with a macro runner", "Uses Windows API", "Uses COM (ETABS, AutoCAD, Access…)", "ActiveX / UserForm"];
 
@@ -64,8 +62,6 @@ pub fn diagnostic_text(language: crate::i18n::Language, error: &Json) -> String 
 }
 
 pub fn show(ui: &mut egui::Ui, d: &mut Dialog) {
-    #[cfg(target_arch = "wasm32")]
-    ui.label(tr(ui, NOTE));
     let empty = Json::Null;
     let data = d.result.as_ref().unwrap_or(&empty);
     if let Some(error) = data.get("error").filter(|e| !e.is_null()) {
@@ -107,7 +103,7 @@ pub fn show(ui: &mut egui::Ui, d: &mut Dialog) {
                         ui.weak("UDF");
                     }
                     if procedure.get("event").is_some_and(|e| !e.is_null()) {
-                        ui.weak(tr(ui, if cfg!(target_arch = "wasm32") { "Event" } else { "Event — automatic execution is not supported" }));
+                        ui.weak(tr(ui, "Event — automatic execution is not supported"));
                     }
                     ui.add(egui::Label::new(format!("({})", parameters(ui, procedure))).wrap());
                 });
@@ -219,7 +215,6 @@ mod tests {
     fn macro_labels_and_diagnostics_exist_in_every_catalogue() {
         for language in Language::ALL.into_iter().filter(|l| *l != Language::En) {
             for key in [
-                NOTE,
                 SUMMARY,
                 LEVELS[0],
                 LEVELS[1],

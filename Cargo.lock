@@ -1904,6 +1904,7 @@ dependencies = [
 name = "gridcraft-ui-egui"
 version = "0.6.5"
 dependencies = [
+ "chrono",
  "craft-ui",
  "egui",
  "egui_kittest",

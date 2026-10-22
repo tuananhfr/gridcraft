@@ -425,3 +425,14 @@ fn cancelling_an_interactive_prompt_rolls_back() {
     assert_eq!(value(&s, "A1"), Value::Empty);
     assert!(s.doc().unwrap().undo.is_empty());
 }
+
+#[test]
+fn refused_feature_location_matches_its_reason_line() {
+    let mut s = session("Sub Main()\nDim o As Object\nSet o=CreateObject(\"Synthetic.Test\")\nEnd Sub");
+    let before = s.doc().unwrap().wb.clone();
+    assert!(s.execute("macros.run", json!({"name":"Main"})).is_err());
+    let log = s.execute("macros.log", json!({})).unwrap();
+    assert_eq!(log["runs"][0]["error"]["line"], 3);
+    assert_eq!(log["runs"][0]["error"]["reasons"][0]["line"], 3);
+    assert_eq!(s.doc().unwrap().wb, before);
+}

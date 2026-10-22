@@ -1144,7 +1144,6 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                     });
                 }
                 "macros" => {
-                    #[cfg(not(target_arch = "wasm32"))]
                     crate::macro_runtime::controls(app, ui, &d);
                     crate::macro_dialog::show(ui, &mut d);
                 },

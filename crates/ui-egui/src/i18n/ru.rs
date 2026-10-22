@@ -9,6 +9,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Macro|Completed" => "Завершено",
         "Macro|Cancelled" => "Отменено",
         "Macro|Start" => "Начало",
+        "Macro|Duration" => "Длительность",
         "Macro|End" => "Конец",
         "Macro|Abort" => "Прервать",
         "Macro|Ignore" => "Игнорировать",
@@ -37,7 +38,6 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Macro|No" => "Нет",
 
         "Form Control" => "Элемент управления формы",
-        "Macros cannot be run in GridCraft yet; this is read-only analysis." => "Макросы пока не выполняются; это анализ только для чтения.",
         "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
             "Модули: {modules} · Процедуры: {procedures} · UDF: {udfs} · События: {events} · Подпись: {signed} · Блокировка: {locked}"
         }

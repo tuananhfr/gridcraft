@@ -21,7 +21,6 @@ enum ExcelObject {
     Global(String),
 }
 pub(crate) struct ExcelHost {
-    #[cfg(not(target_arch = "wasm32"))]
     pub interaction: Option<super::Interaction>,
     pub session: Session,
     objects: Vec<ExcelObject>,
@@ -70,7 +69,6 @@ fn cap(range: RangeRef) -> Result<()> {
 impl ExcelHost {
     pub fn new(session: Session) -> Self {
         Self {
-            #[cfg(not(target_arch = "wasm32"))]
             interaction: None,
             session,
             objects: vec![ExcelObject::Application],
@@ -631,7 +629,6 @@ impl ExcelHost {
         };
         self.object(ExcelObject::Sheet(si))
     }
-    #[cfg(not(target_arch = "wasm32"))]
     async fn prompt(&mut self, name: &str, args: &[Argument]) -> Result<Json> {
         let interaction = self.interaction.clone().ok_or_else(|| invalid("No interactive macro host"))?;
         let prompt = arg(args, 0, "Prompt").map(Value::text).transpose()?.unwrap_or_default();
@@ -679,7 +676,6 @@ impl ExcelHost {
 }
 impl Host for ExcelHost {
     async fn msg_box_async(&mut self, args: &[Argument]) -> Result<Value> {
-        #[cfg(not(target_arch = "wasm32"))]
         if self.interaction.is_some() {
             let response = self.prompt("macro.msgBox", args).await?;
             return Ok(Value::Long(response.as_i64().and_then(|n| i32::try_from(n).ok()).unwrap_or(2)));
@@ -687,7 +683,6 @@ impl Host for ExcelHost {
         self.msg_box(args)
     }
     async fn input_box_async(&mut self, args: &[Argument]) -> Result<Value> {
-        #[cfg(not(target_arch = "wasm32"))]
         if self.interaction.is_some() {
             let response = self.prompt("macro.inputBox", args).await?;
             return Ok(Value::String(response.as_str().unwrap_or_default().into()));
@@ -698,7 +693,6 @@ impl Host for ExcelHost {
         self.get_member_async(id, name, args).await
     }
     async fn get_member_async(&mut self, id: Object, name: &str, args: &[Argument]) -> Result<Value> {
-        #[cfg(not(target_arch = "wasm32"))]
         if self.interaction.is_some() {
             let object = self.resolve(id)?;
             let member = match &object {
@@ -867,7 +861,6 @@ impl Host for ExcelHost {
             "activeworkbook" | "thisworkbook" | "activesheet" | "activecell" | "selection" | "worksheetfunction" => self.application(&name, &[]).ok(),
             "sheets" | "worksheets" | "cells" | "rows" | "columns" => self.application(&name, &[]).ok(),
             "range" | "union" | "intersect" => self.object(ExcelObject::Global(name)).ok(),
-            #[cfg(not(target_arch = "wasm32"))]
             "getopenfilename" => self.object(ExcelObject::Global(name)).ok(),
             _ => None,
         }

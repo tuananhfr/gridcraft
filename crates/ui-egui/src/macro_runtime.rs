@@ -5,7 +5,7 @@ use serde_json::{Value as Json, json};
 #[derive(Default)]
 pub(crate) struct State {
     task: Option<MacroTask>,
-    consent: Option<(u64, String)>,
+    consent: Option<(u64, String, bool)>,
     prompt: Option<(String, Json)>,
     input: String,
     feedback: Option<Json>,
@@ -32,10 +32,13 @@ fn begin(app: &mut SheetApp, name: String) {
             if error.to_string().contains("Macro consent is required") {
                 // Consume only the consent request; the Macro dialog remains open behind the modal.
                 let requests = app.session.take_ui_requests();
+                let event = requests.iter().any(|r| {
+                    matches!(r, gridcraft_engine::UiRequest::Dialog(n, p) if n == "macro.consent" && p.get("event").is_some_and(|e| !e.is_null()))
+                });
                 app.session
                     .ui_requests
                     .extend(requests.into_iter().filter(|r| !matches!(r, gridcraft_engine::UiRequest::Dialog(n, _) if n == "macro.consent")));
-                app.macro_runtime.consent = Some((uid, name));
+                app.macro_runtime.consent = Some((uid, name, event));
                 return;
             }
             let entry = app.session.doc().ok().and_then(|d| d.macro_state.log.last()).filter(|entry| Some(*entry) != previous_run.as_ref()).cloned();
@@ -90,7 +93,20 @@ fn entry(ui: &mut egui::Ui, value: &Json) {
         _ => "Macro running",
     };
     ui.strong(tr(ui, status));
-    for (key, label) in [("start", "Macro|Start"), ("end", "Macro|End"), ("steps", "Steps"), ("cellsChanged", "Cells changed")] {
+    for (key, label) in [("start", "Macro|Start"), ("end", "Macro|End")] {
+        if let Some(ms) = value.get(key).and_then(Json::as_i64) {
+            let time = chrono::DateTime::from_timestamp_millis(ms)
+                .map(|time| time.with_timezone(&chrono::Local).format("%H:%M:%S").to_string())
+                .unwrap_or_else(|| "—".into());
+            ui.label(format!("{}: {time}", tr(ui, label)));
+        }
+    }
+    if let (Some(start), Some(end)) = (value.get("start").and_then(Json::as_u64), value.get("end").and_then(Json::as_u64)) {
+        let ms = end.saturating_sub(start);
+        let duration = if ms < 1000 { format!("{ms} ms") } else { format!("{}.{:03} s", ms / 1000, ms % 1000) };
+        ui.label(format!("{}: {duration}", tr(ui, "Macro|Duration")));
+    }
+    for (key, label) in [("steps", "Steps"), ("cellsChanged", "Cells changed")] {
         if let Some(value) = value.get(key).filter(|v| !v.is_null()) {
             ui.label(format!("{}: {value}", tr(ui, label)));
         }
@@ -165,7 +181,7 @@ pub(crate) fn controls(app: &mut SheetApp, ui: &mut egui::Ui, d: &Dialog) {
 
 pub(crate) fn modals(app: &mut SheetApp, ctx: &egui::Context) {
     let lang = app.ui.language;
-    if let Some((uid, name)) = app.macro_runtime.consent.clone() {
+    if let Some((uid, name, event)) = app.macro_runtime.consent.clone() {
         if app.session.doc().ok().is_none_or(|d| d.uid != uid) {
             app.macro_runtime.consent = None;
             return;
@@ -177,7 +193,9 @@ pub(crate) fn modals(app: &mut SheetApp, ctx: &egui::Context) {
             ui.heading(tr(ui, "Allow this macro?"));
             ui.label(&name);
             ui.label(tr(ui, "This level-1 macro can change cells. Consent lasts for this document session and can be revoked."));
-            ui.label(tr(ui, "Event — automatic execution is not supported"));
+            if event {
+                ui.label(tr(ui, "Event — automatic execution is not supported"));
+            }
             ui.horizontal_wrapped(|ui| {
                 allow = ui.button(tr(ui, "Allow and run")).clicked();
                 cancel = ui.button(tr(ui, "Cancel")).clicked();
@@ -299,6 +317,7 @@ mod tests {
                 "Macro|Cancelled",
                 "Macro|Start",
                 "Macro|End",
+                "Macro|Duration",
                 "Macro|Abort",
                 "Macro|Ignore",
             ] {

@@ -12,6 +12,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Macro|Completed" => "Hoàn tất",
         "Macro|Cancelled" => "Đã hủy",
         "Macro|Start" => "Bắt đầu",
+        "Macro|Duration" => "Thời lượng",
         "Macro|End" => "Kết thúc",
         "Macro|Abort" => "Hủy bỏ",
         "Macro|Ignore" => "Bỏ qua",
@@ -41,7 +42,6 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
 
         "ActiveX / UserForm" => "ActiveX / UserForm",
         "Form Control" => "Điều khiển biểu mẫu",
-        "Macros cannot be run in GridCraft yet; this is read-only analysis." => "Macro chưa được chạy trong Bảng tính; đây là phân tích chỉ đọc.",
         "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
             "{modules} mô-đun · {procedures} thủ tục · {udfs} UDF · Sự kiện tự chạy: {events} · Đã ký: {signed} · Đã khóa: {locked}"
         }
@@ -1382,9 +1382,6 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Couldn't decode the generated PDF." => "Không thể giải mã tệp PDF vừa tạo.",
         "A print job is already being submitted." => "Đang có một lệnh in được gửi đi.",
         "Printing is unavailable here; export a PDF instead." => "Không thể in ở đây; hãy xuất thành PDF.",
-        "This workbook contains VBA macros. GridCraft doesn't run them. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
-            "Sổ làm việc này chứa macro VBA. Bảng tính không chạy macro. Lưu dạng .xlsm sẽ giữ lại macro; lưu dạng .xlsx sẽ xóa chúng."
-        }
         "macros (VBA project) were kept but not executed" => "Đã giữ lại macro (dự án VBA) nhưng không chạy",
         "macros (VBA project) reference a missing part and were dropped" => "Macro (dự án VBA) trỏ tới một phần không có trong tệp nên đã bị bỏ",
         "Save Without Macros?" => "Lưu mà không có macro?",
