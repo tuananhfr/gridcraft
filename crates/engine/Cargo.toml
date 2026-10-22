@@ -10,6 +10,7 @@ publish = false
 workspace = true
 
 [dependencies]
+gridcraft-mdb = { workspace = true }
 gridcraft-core = { workspace = true }
 gridcraft-numfmt = { workspace = true }
 gridcraft-formula = { workspace = true }

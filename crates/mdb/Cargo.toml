@@ -1,0 +1,13 @@
+[package]
+name = "gridcraft-mdb"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+encoding_rs = "=0.8.35"

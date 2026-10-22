@@ -61,6 +61,17 @@ Results are one text block holding pretty JSON; failures set `isError: true` wit
 missing required arguments and wrong argument types are JSON-RPC `-32602` errors; malformed JSON is `-32700`; unknown
 methods `-32601`.
 
+## Access database import
+
+Call `execute_command` with `command: "data.importAccess"` and `params: {"data": "<base64 MDB>"}`
+to list user tables, columns and row counts. Add `"table": "Support Reactions"` to import at A1
+in a new sheet, or `"sheet": "Reactions"` to write into that named sheet (created if absent).
+The header is bold; numbers and booleans stay typed, dates carry a date format, and text is literal.
+The import is one undo step. Jet 3/4 only; ACE/encrypted files, malformed files, unsupported binary
+cell values and tables exceeding sheet or decoding limits return errors without opening dialogs.
+Input is capped at 128 MiB; decoded table data at 64 MiB and individual strings at 4 MiB.
+No filesystem, DAO, COM, SQL or VBA binding is involved.
+
 ## Resources
 
 - `gridcraft://workbook` — `document.inspect` of the active workbook.
