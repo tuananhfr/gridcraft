@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: keep the Macro procedure list in a stable clipped viewport when viewing source, and show translated coloured compatibility level badges.
+
 - Both: add cached read-only VBA analysis, procedure compatibility and source browsing in Macro, and precise VBA UDF Error Checking with CLI udfUnavailable counts (GRID-08).
 
 - Both: add the sandboxed gridcraft-vbarun VBA language interpreter with host hooks, injectable clock, runtime limits and synthetic language tests; no Excel object bindings or automatic macro execution.

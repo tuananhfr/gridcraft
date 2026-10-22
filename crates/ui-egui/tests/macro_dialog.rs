@@ -43,6 +43,26 @@ fn assert_dialog_fits(h: &egui_kittest::Harness<'static, SheetApp>, width: f32) 
 }
 
 #[test]
+fn macro_procedure_viewport_stays_below_summary_when_code_opens() {
+    for width in [1440.0, 375.0] {
+        let mut h = harness(width);
+        for code in [false, true] {
+            if code {
+                h.get_by_label("Xem mã").click();
+                h.run_steps(4);
+            }
+            let rect = h.ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new("gridcraft.macros.procedures.rect"))).unwrap();
+            assert!(rect.height() >= 200.0, "{width}, code={code}: {rect:?}");
+            let summary = h.get_by_label("2 mô-đun · 3 thủ tục · 1 UDF · Sự kiện tự chạy: Có · Đã ký: Không · Đã khóa: Không").rect();
+            assert!(rect.top() >= summary.bottom(), "{width}, code={code}: {rect:?}, {summary:?}");
+            let first = h.get_by_label("CalculateLoads — Module1").rect();
+            assert!(rect.contains_rect(first), "{width}, code={code}: {first:?}, {rect:?}");
+            assert!(h.query_all_by_label("Mức 1").count() > 0);
+        }
+    }
+}
+
+#[test]
 fn macro_dialog_labels_source_and_narrow_layouts() {
     for width in [1440.0, 320.0, 375.0, 390.0] {
         let mut h = harness(width);

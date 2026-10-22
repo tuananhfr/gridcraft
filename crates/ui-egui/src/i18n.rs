@@ -202,6 +202,7 @@ const JAPANESE: &[(&str, &str)] = &[
     ("Parameters", "引数"),
     ("Returns", "戻り値"),
     ("Event", "イベント"),
+    ("Macro|Level {level}", "レベル {level}"),
     ("Macro|Line", "行"),
     ("Optional", "省略可能"),
     ("Found", "見つかりました"),

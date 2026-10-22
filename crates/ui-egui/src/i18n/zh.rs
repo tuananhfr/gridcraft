@@ -18,6 +18,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Parameters" => "参数",
         "Returns" => "返回类型",
         "Event" => "事件",
+        "Macro|Level {level}" => "级别 {level}",
         "Macro|Line" => "行",
         "Optional" => "可选",
         "Found" => "已找到",

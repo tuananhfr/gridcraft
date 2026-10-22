@@ -19,6 +19,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Parameters" => "Parâmetros",
         "Returns" => "Tipo de retorno",
         "Event" => "Evento",
+        "Macro|Level {level}" => "Nível {level}",
         "Macro|Line" => "Linha",
         "Optional" => "Opcional",
         "Found" => "Encontrado",

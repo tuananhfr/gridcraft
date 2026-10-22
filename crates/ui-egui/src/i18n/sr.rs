@@ -18,6 +18,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Parameters" => "Parametri",
         "Returns" => "Povratni tip",
         "Event" => "Događaj",
+        "Macro|Level {level}" => "Ниво {level}",
         "Macro|Line" => "Red",
         "Optional" => "Opcioni",
         "Found" => "Pronađeno",

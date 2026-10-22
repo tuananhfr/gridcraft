@@ -18,6 +18,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Parameters" => "매개 변수",
         "Returns" => "반환 형식",
         "Event" => "이벤트",
+        "Macro|Level {level}" => "수준 {level}",
         "Macro|Line" => "줄",
         "Optional" => "선택 사항",
         "Found" => "찾음",

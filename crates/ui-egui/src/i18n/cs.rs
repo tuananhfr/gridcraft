@@ -18,6 +18,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Parameters" => "Parametry",
         "Returns" => "Návratový typ",
         "Event" => "Událost",
+        "Macro|Level {level}" => "Úroveň {level}",
         "Macro|Line" => "Řádek",
         "Optional" => "Volitelný",
         "Found" => "Nalezeno",

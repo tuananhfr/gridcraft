@@ -21,6 +21,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Parameters" => "Tham số",
         "Returns" => "Kiểu trả về",
         "Event" => "Sự kiện",
+        "Macro|Level {level}" => "Mức {level}",
         "Macro|Line" => "Dòng",
         "Optional" => "Tùy chọn",
         "Found" => "Có trong dự án",

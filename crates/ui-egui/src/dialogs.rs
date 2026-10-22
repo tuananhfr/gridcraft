@@ -1090,7 +1090,14 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
         .default_width(width)
         .anchor(egui::Align2::CENTER_CENTER, vec2(0.0, -40.0))
         .open(&mut win_open);
-    let window = if d.name == "insertPicture" { window.default_height(240.0) } else { window };
+    let window = match d.name.as_str() {
+        "insertPicture" => window.default_height(240.0),
+        "macros" => {
+            let height = (ctx.content_rect().height() - 140.0).max(300.0);
+            window.default_height(height).min_height(height).max_height(height)
+        }
+        _ => window,
+    };
     let window_response = window.show(ctx, |ui| {
             ui.set_min_width(width - 20.0);
             match d.name.as_str() {
