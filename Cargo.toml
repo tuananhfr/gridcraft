@@ -14,6 +14,7 @@ repository = "https://github.com/storytold/gridcraft"
 # internal
 gridcraft-mdb = { path = "crates/mdb" }
 gridcraft-vba = { path = "crates/vba" }
+gridcraft-vbarun = { path = "crates/vbarun" }
 gridcraft-core = { path = "crates/core" }
 gridcraft-numfmt = { path = "crates/numfmt" }
 gridcraft-formula = { path = "crates/formula" }

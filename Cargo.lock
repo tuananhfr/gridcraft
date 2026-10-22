@@ -1919,6 +1919,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "gridcraft-vba"
+version = "0.6.5"
+dependencies = [
+ "cfb",
+ "encoding_rs",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "gridcraft-vbarun"
+version = "0.6.5"
+dependencies = [
+ "gridcraft-core",
+ "gridcraft-vba",
+]
+
+[[package]]
 name = "gridcraft-web"
 version = "0.6.5"
 dependencies = [
@@ -1933,17 +1952,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
-]
-
-[[package]]
-name = "gridcraft-vba"
-version = "0.6.5"
-dependencies = [
- "cfb",
- "encoding_rs",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
 ]
 
 [[package]]
