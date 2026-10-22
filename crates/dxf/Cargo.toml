@@ -1,0 +1,15 @@
+[package]
+name = "gridcraft-dxf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+
+[dev-dependencies]
+dxf = { version = "=0.6.1", default-features = false }

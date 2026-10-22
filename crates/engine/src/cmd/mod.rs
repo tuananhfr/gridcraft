@@ -1,6 +1,7 @@
 //! The command registry. Ids follow Excel's ribbon (`home.bold`, `insert.chart`,
 //! `data.sortAscending`) plus primitive editing commands (`cell.set`, `selection.set`).
 
+mod access;
 pub mod analysis;
 pub mod data;
 pub mod draw;
@@ -88,7 +89,7 @@ pub fn journal_params(params: &Json) -> Json {
 /// [`journal_params`] for command `id`. `file.open` is also kept without the file it carries as
 /// `base64`: the journal lives as long as the session, and each opened file would stay in it.
 pub fn journal_entry_params(id: &str, params: &Json) -> Json {
-    let kept = |k: &str| !is_secret_param(k) && !(id == "file.open" && k == "base64");
+    let kept = |k: &str| !is_secret_param(k) && !(id == "file.open" && k == "base64") && !(id == "data.importAccess" && k == "data");
     match params {
         Json::Object(o) => Json::Object(o.iter().filter(|(k, _)| kept(k)).map(|(k, v)| (k.clone(), v.clone())).collect()),
         other => other.clone(),
@@ -137,6 +138,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(sheet::specs());
         v.extend(insert::specs());
         v.extend(data::specs());
+        v.extend(access::specs());
         v.extend(formulas::specs());
         v.extend(review::specs());
         v.extend(view::specs());
