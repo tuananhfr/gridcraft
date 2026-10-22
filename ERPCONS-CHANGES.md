@@ -4,6 +4,10 @@
 
 - Both: add the sandboxed gridcraft-vbarun VBA language interpreter with host hooks, injectable clock, runtime limits and synthetic language tests; no Excel object bindings or automatic macro execution.
 
+- (desktop) Attach a deterministic CycloneDX 1.5 Cargo dependency SBOM to each desktop release and include it in SHA256SUMS.
+
+- (web) Report per-document draft revisions and asynchronous checkpoint outcomes to the ERPCons shell v2 bridge.
+
 - Both: add the `gridcraft-vba` crate, a bounded read-only MS-OVBA project analysis (modules, procedures, UDFs, events, references, protection flags, compatibility levels 1-4) that never executes VBA (GRID-08 groundwork; not wired into the UI yet).
 
 - (desktop) Repository variable `ERPCONS_SKIP_MACOS=true` releases Windows and Linux installers without waiting for a macOS runner; update.json then lists no Mac asset.
