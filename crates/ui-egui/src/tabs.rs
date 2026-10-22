@@ -260,9 +260,7 @@ pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
                         ui.add_space(12.0);
                         ui.label(egui::RichText::new(lang.tr("Recalculation needed")).font(theme::ui_font(12.5)).color(t.text_dim));
                     }
-                    if (!d.calc.not_calculated.is_empty() || workbook_has_errors(ui, d))
-                        && fits(ui, lang.tr("Calculation has errors"))
-                    {
+                    if (!d.calc.not_calculated.is_empty() || workbook_has_errors(ui, d)) && fits(ui, lang.tr("Calculation has errors")) {
                         ui.add_space(12.0);
                         ui.label(egui::RichText::new(lang.tr("Calculation has errors")).font(theme::ui_font(12.5)).color(t.danger));
                     }

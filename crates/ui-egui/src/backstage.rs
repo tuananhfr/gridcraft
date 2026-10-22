@@ -417,6 +417,8 @@ fn recent_list(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Ou
 
 /// What the file system said about a recent workbook.
 #[derive(Clone, Copy, Debug, PartialEq)]
+// The web build has no file system to ask, so it never constructs one.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 enum Modified {
     /// When it was last changed, in seconds since 1970.
     At(f64),
