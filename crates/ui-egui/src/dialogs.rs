@@ -1101,7 +1101,27 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                     });
                 }
                 "macros" => macros(ui, &mut d, app),
-                "statistics" | "accessibility" | "errorChecking" | "evaluateFormula" | "comments" => {
+                "errorChecking" => {
+                    egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                        if let Some(errors) = d.result.as_ref().and_then(|r| r.get("errors")).and_then(Json::as_array) {
+                            for error in errors {
+                                let sheet = error.get("sheet").and_then(Json::as_str).unwrap_or_default();
+                                let cell = error.get("cell").and_then(Json::as_str).unwrap_or_default();
+                                let reason = error.get("reason").or_else(|| error.get("error")).and_then(Json::as_str).unwrap_or_default();
+                                ui.label(format!("{sheet}!{cell}: {}", app.ui.language.tr(reason)));
+                                if let Some(formula) = error.get("formula").and_then(Json::as_str) {
+                                    ui.monospace(formula);
+                                }
+                            }
+                        }
+                        if let Some(circular) = d.result.as_ref().and_then(|r| r.get("circular")).and_then(Json::as_array) {
+                            for reference in circular.iter().filter_map(Json::as_str) {
+                                ui.label(format!("{}: {reference}", app.ui.language.tr("Circular References")));
+                            }
+                        }
+                    });
+                }
+                "statistics" | "accessibility" | "evaluateFormula" | "comments" => {
                     let r = if d.name == "comments" {
                         app.session.active().and_then(|doc| doc.wb.active().map(|s| json!(s.comments.iter().map(|(c, m)| json!({"cell": c.a1(), "author": m.author, "text": m.text})).collect::<Vec<_>>())))
                     } else {

@@ -2,6 +2,17 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
+            "Не удалось прочитать формулу — показано старое значение из файла, которое не было пересчитано"
+        }
+        "Depends on a cell that could not be calculated" => "Зависит от ячейки, которую не удалось вычислить",
+        "Could not calculate {count} cells. Open Error Checking for details." => {
+            "Не удалось вычислить ячейки: {count}. Откройте проверку ошибок для подробностей."
+        }
+        "Macro-assigned buttons in .xls files have not been converted." => "Кнопки с назначенными макросами в файлах .xls ещё не преобразованы.",
+        "The legacy .xls file has been opened. It will be saved as .xlsm, keeping its macros. Macro-assigned buttons in .xls files have not been converted." => {
+            "Открыт файл старого формата .xls. Он будет сохранён как .xlsm с сохранением макросов. Кнопки с назначенными макросами в файлах .xls ещё не преобразованы."
+        }
         "The update check stopped unexpectedly" => "Проверка обновлений неожиданно прервалась",
         "Could not start updater: {reason}" => "Не удалось запустить программу обновления: {reason}",
         "Updated to version {version}" => "Обновлено до версии {version}",

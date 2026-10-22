@@ -3081,6 +3081,25 @@ pub(crate) fn paint_overlays(
     sh: &Sheet,
     sel: &gridcraft_engine::Selection,
 ) {
+    if let Some(doc) = app.session.active() {
+        for (&(sheet, at), state) in &doc.calc.not_calculated {
+            if sheet != si || geo.hidden_under_frozen(sh, at) {
+                continue;
+            }
+            let r = geo.cell_rect(sh, at);
+            if !r.intersects(geo.cells) {
+                continue;
+            }
+            let size = 6.0 * geo.z.max(0.7);
+            p.add(egui::Shape::convex_polygon(
+                vec![r.left_top(), pos2(r.left() + size, r.top()), pos2(r.left(), r.top() + size)],
+                Tokens::get(ui.ctx()).notice_warn_border,
+                Stroke::NONE,
+            ));
+            ui.interact(geo.screen_cell_rect(sh, at), ui.id().with(("not_calculated", sheet, at)), egui::Sense::hover())
+                .on_hover_text(app.ui.language.tr(state.reason()));
+        }
+    }
     // Validation dropdown arrow for the active cell.
     if app.editor.is_none()
         && let Some(r) = validation_arrow(sh, geo, sel.active)

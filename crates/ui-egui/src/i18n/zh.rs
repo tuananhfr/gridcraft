@@ -2,6 +2,15 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
+            "无法读取公式 — 显示的是文件中的旧值，尚未重新计算"
+        }
+        "Depends on a cell that could not be calculated" => "依赖于无法计算的单元格",
+        "Could not calculate {count} cells. Open Error Checking for details." => "有 {count} 个单元格无法计算。请打开错误检查查看详情。",
+        "Macro-assigned buttons in .xls files have not been converted." => ".xls 文件中分配了宏的按钮尚未转换。",
+        "The legacy .xls file has been opened. It will be saved as .xlsm, keeping its macros. Macro-assigned buttons in .xls files have not been converted." => {
+            "已打开旧版 .xls 文件。保存时将使用 .xlsm 格式并保留宏。.xls 文件中分配了宏的按钮尚未转换。"
+        }
         "The update check stopped unexpectedly" => "更新检查意外停止",
         "Could not start updater: {reason}" => "无法启动更新程序：{reason}",
         "Updated to version {version}" => "已更新至版本 {version}",

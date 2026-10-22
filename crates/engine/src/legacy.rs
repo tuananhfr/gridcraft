@@ -1,6 +1,8 @@
 //! Legacy workbook detection and open-time messages shared with frontends.
 
 pub const OPENED: &str = "The legacy .xls file has been opened. When saved, it will be saved as .xlsx.";
+pub const BUTTONS: &str = "Macro-assigned buttons in .xls files have not been converted.";
+pub const OPENED_MACROS: &str = "The legacy .xls file has been opened. It will be saved as .xlsm, keeping its macros. Macro-assigned buttons in .xls files have not been converted.";
 pub const FAILED_TITLE: &str = "Could not open the legacy .xls format";
 pub const FAILED: &str = "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again.";
 

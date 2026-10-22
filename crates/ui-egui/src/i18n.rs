@@ -186,6 +186,20 @@ pub fn set_current(ctx: &egui::Context, language: Language) {
 /// English label → Japanese. Keys are the exact interface strings (command ids, file names and
 /// document text are never translated); anything absent falls back to English.
 const JAPANESE: &[(&str, &str)] = &[
+    (
+        "The formula could not be read — the displayed value is the old value from the file and has not been recalculated",
+        "数式を読み取れませんでした — 表示値はファイル内の古い値であり、再計算されていません",
+    ),
+    ("Depends on a cell that could not be calculated", "計算できなかったセルに依存しています"),
+    (
+        "Could not calculate {count} cells. Open Error Checking for details.",
+        "{count} 個のセルを計算できませんでした。詳細はエラーチェックを開いてください。",
+    ),
+    ("Macro-assigned buttons in .xls files have not been converted.", ".xls ファイル内のマクロが割り当てられたボタンはまだ変換されていません。"),
+    (
+        "The legacy .xls file has been opened. It will be saved as .xlsm, keeping its macros. Macro-assigned buttons in .xls files have not been converted.",
+        "旧形式の .xls ファイルを開きました。マクロを保持して .xlsm として保存されます。.xls ファイル内のマクロが割り当てられたボタンはまだ変換されていません。",
+    ),
     ("The update check stopped unexpectedly", "更新の確認が予期せず停止しました"),
     ("Could not start updater: {reason}", "更新プログラムを起動できませんでした: {reason}"),
     ("Updated to version {version}", "バージョン {version} に更新しました"),

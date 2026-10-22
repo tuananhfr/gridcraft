@@ -2,6 +2,17 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
+            "Формула није могла да се прочита — приказана је стара вредност из датотеке која није поново израчуната"
+        }
+        "Depends on a cell that could not be calculated" => "Зависи од ћелије која није могла да се израчуна",
+        "Could not calculate {count} cells. Open Error Checking for details." => {
+            "Број ћелија које није могуће израчунати: {count}. Отворите проверу грешака за детаље."
+        }
+        "Macro-assigned buttons in .xls files have not been converted." => "Дугмад са додељеним макроима у .xls датотекама још нису претворена.",
+        "The legacy .xls file has been opened. It will be saved as .xlsm, keeping its macros. Macro-assigned buttons in .xls files have not been converted." => {
+            "Стара .xls датотека је отворена. Биће сачувана као .xlsm уз очување макроа. Дугмад са додељеним макроима у .xls датотекама још нису претворена."
+        }
         "The update check stopped unexpectedly" => "Provera ažuriranja je neočekivano zaustavljena",
         "Could not start updater: {reason}" => "Nije moguće pokrenuti ažuriranje: {reason}",
         "Updated to version {version}" => "Ažurirano na verziju {version}",

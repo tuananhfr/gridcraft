@@ -8,6 +8,7 @@
 
 pub mod backstage;
 mod border_preview;
+mod calculation_notice;
 mod cell_pictures;
 pub mod chartview;
 mod circular_notice;
@@ -319,6 +320,8 @@ pub struct SheetApp {
     pub notice: Option<Notice>,
     font_notice_pending: std::collections::HashSet<u64>,
     circular_notice_pending: std::collections::HashSet<u64>,
+    calculation_notice_seen: std::collections::HashSet<u64>,
+    calculation_notice_line: Option<String>,
     pub services: Services,
     pending_saves: Vec<PendingSave>,
     pub(crate) save_failures: save_status::SaveFailures,
@@ -435,6 +438,8 @@ impl SheetApp {
             notice: None,
             font_notice_pending: Default::default(),
             circular_notice_pending,
+            calculation_notice_seen: Default::default(),
+            calculation_notice_line: None,
             services,
             pending_saves: Vec::new(),
             save_failures: Default::default(),
@@ -514,6 +519,11 @@ impl SheetApp {
         let r = self.run_command(id, params);
         if r.is_ok() {
             self.circular_notice_after_edit(before);
+            if id == "formulas.calculateNow" || id == "formulas.calculateSheet" {
+                self.show_calculation_notice(true);
+            } else if id != "file.open" {
+                self.clear_calculation_notice_if_resolved();
+            }
         }
         if id == "file.open"
             && let Ok(result) = &r
@@ -999,6 +1009,7 @@ impl SheetApp {
             self.ui.recent.truncate(20);
         }
         self.show_open_warnings(r);
+        self.show_calculation_notice(true);
     }
 
     /// Turns the `warnings` a `file.open` result carries into an info-bar notice, choosing the
@@ -1019,6 +1030,12 @@ impl SheetApp {
         if !vba.is_empty() {
             self.notice =
                 Some(Notice { text: VBA_NOTICE.into(), kind: NoticeKind::Warning, action: Some(("What this means".into(), "macros".into())) });
+            if msgs.contains(&gridcraft_engine::legacy::BUTTONS) {
+                let text = self.ui.language.tr(gridcraft_engine::legacy::BUTTONS);
+                if let Some(notice) = &mut self.notice {
+                    notice.text = format!("{}\n{text}", self.ui.language.tr(VBA_NOTICE));
+                }
+            }
         } else {
             let text = if msgs.len() == 1 {
                 msgs[0].to_string()
@@ -1161,6 +1178,7 @@ impl SheetApp {
         match r {
             Ok(_) => {
                 self.circular_notice_after_edit(before);
+                self.clear_calculation_notice_if_resolved();
                 if dr != 0 || dc != 0 {
                     self.move_after_enter(dr, dc);
                 }
@@ -1263,6 +1281,7 @@ impl SheetApp {
             }
         }
         self.show_circular_open_notice();
+        self.show_calculation_notice(false);
         self.show_font_notice();
         if let Some(answer) = self.desktop_theme.take_change() {
             self.desktop_dark = Some(answer);

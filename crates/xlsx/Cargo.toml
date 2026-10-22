@@ -24,3 +24,4 @@ zip = { workspace = true }
 aes = { workspace = true }
 sha1 = { workspace = true }
 sha2 = { workspace = true }
+cfb = "0.15"

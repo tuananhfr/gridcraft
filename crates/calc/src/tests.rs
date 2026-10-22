@@ -1266,3 +1266,22 @@ fn offset_extreme_arguments_return_ref() {
         assert_eq!(crate::evaluate(&wb, 0, c("D1"), formula), Value::Number(expected), "{formula}");
     }
 }
+
+#[test]
+fn unparsed_cache_marks_static_and_dynamic_dependents_until_fixed() {
+    let mut t = T::new();
+    let mut invalid = Cell::formula(Formula::new("1+"));
+    invalid.value = Value::Number(123.0);
+    t.wb.sheet_mut(0).unwrap().cells.set(c("A1"), invalid);
+    t.set("B1", "=A1*2");
+    t.set("C1", r#"=INDIRECT("A1")+1"#);
+    t.set("D1", "=C1+1");
+    t.calc.cells_changed(&mut t.wb, &[(0, c("A1"))]);
+    t.calc.recalc_all(&mut t.wb);
+    assert_eq!(t.wb.sheet(0).unwrap().value(c("A1")), Value::Number(123.0));
+    assert_eq!(t.calc.not_calculated.len(), 4);
+    assert_eq!(t.calc.last_recalc_cells, 0);
+    t.set("A1", "=1+1");
+    assert!(t.calc.not_calculated.is_empty());
+    assert_eq!(t.wb.sheet(0).unwrap().value(c("D1")), Value::Number(4.0));
+}

@@ -492,9 +492,12 @@ fn show_formulas(s: &mut Session, p: &Json) -> Result<Json> {
 fn error_checking(s: &mut Session, _: &Json) -> Result<Json> {
     let d = s.doc()?;
     let mut out = Vec::new();
-    for sh in &d.wb.sheets {
+    for (si, sh) in d.wb.sheets.iter().enumerate() {
         for (c, cell) in sh.cells.iter() {
-            if let Some(e) = cell.value.as_error() {
+            if let Some(state) = d.calc.not_calculated.get(&(si, c)) {
+                out.push(json!({"sheet": sh.name, "cell": c.a1(), "error": "notCalculated", "reason": state.reason(),
+                    "formula": cell.formula.as_ref().map(|f| format!("={}", f.text))}));
+            } else if let Some(e) = cell.value.as_error() {
                 out.push(
                     json!({"sheet": sh.name, "cell": c.a1(), "error": e.as_str(), "formula": cell.formula.as_ref().map(|f| format!("={}", f.text))}),
                 );
@@ -506,7 +509,7 @@ fn error_checking(s: &mut Session, _: &Json) -> Result<Json> {
     }
     let circ: Vec<String> =
         d.calc.circular.iter().map(|(si, c)| format!("{}!{}", d.wb.sheet(*si).map(|s| s.name.clone()).unwrap_or_default(), c.a1())).collect();
-    Ok(json!({"errors": out, "circular": circ}))
+    Ok(json!({"errors": out, "circular": circ, "notCalculated": d.calc.not_calculated.len()}))
 }
 
 fn evaluate_formula(s: &mut Session, p: &Json) -> Result<Json> {
@@ -553,7 +556,7 @@ fn calc_now(s: &mut Session, _: &Json) -> Result<Json> {
     let mut wb = (*d.wb).clone();
     d.calc.recalc_all(&mut wb);
     d.wb = std::sync::Arc::new(wb);
-    Ok(json!({"cells": d.calc.last_recalc_cells}))
+    Ok(json!({"cells": d.calc.last_recalc_cells, "notCalculated": d.calc.not_calculated.len()}))
 }
 
 fn calc_options(s: &mut Session, p: &Json) -> Result<Json> {

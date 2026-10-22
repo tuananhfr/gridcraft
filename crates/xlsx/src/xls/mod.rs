@@ -6,7 +6,7 @@
 //! shared and array formulas), number formats, the 1904 date system, merged cells, column
 //! widths, row heights, defined names, print areas, print titles and the calculation settings
 //! (mode, iteration, precision as displayed). Everything else (fonts, fills, borders, charts,
-//! pictures, comments, conditional formats, validation, macros) is skipped with a warning.
+//! pictures, comments, conditional formats, validation) is skipped with a warning.
 //! Encrypted workbooks and pre-BIFF8 versions are refused.
 
 mod formula;
@@ -149,6 +149,9 @@ pub(crate) fn read_xls_with(bytes: &[u8], mut budget: Budget) -> Result<(Workboo
 
     let mut wb = Workbook::new();
     wb.sheets.clear();
+    if cf.has_root_storage("_VBA_PROJECT_CUR") {
+        wb.vba_project = vba_project(bytes)?;
+    }
     wb.date_system = if g.date1904 { DateSystem::D1904 } else { DateSystem::D1900 };
     // One model style per XF: only the number format is imported.
     let styles: Vec<StyleId> = g
@@ -201,7 +204,60 @@ pub(crate) fn read_xls_with(bytes: &[u8], mut budget: Budget) -> Result<(Workboo
         0,
         "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.".into(),
     );
+    if wb.vba_project.is_some() {
+        if let Some(overview) = report.warnings.first_mut() {
+            *overview = overview.replace("Save as .xlsx", "Save as .xlsm");
+        }
+        report.warn("Macro-assigned buttons in .xls files have not been converted.");
+    }
     Ok((wb, report))
+}
+
+fn vba_project(bytes: &[u8]) -> Result<Option<Vec<u8>>, IoError> {
+    use std::io::{Cursor, Read, Write};
+    let mut source = cfb::CompoundFile::open(Cursor::new(bytes)).map_err(|e| invalid(e.to_string()))?;
+    let root = std::path::Path::new("/_VBA_PROJECT_CUR");
+    if !source.is_storage(root) {
+        return Ok(None);
+    }
+    let root = source.entry(root).map_err(|e| invalid(e.to_string()))?.path().to_path_buf();
+    let mut entries = Vec::new();
+    let mut total = 0u64;
+    for entry in source.walk_storage(&root).map_err(|e| invalid(e.to_string()))? {
+        total = total.saturating_add(entry.len());
+        if entries.len() >= MAX_NAMES || total > MAX_TEXT as u64 {
+            return Err(IoError::TooLarge("XLS: VBA project exceeds the import budget".into()));
+        }
+        entries.push(entry);
+    }
+    let mut output = cfb::CompoundFile::create_with_version(cfb::Version::V3, Cursor::new(Vec::new())).map_err(|e| invalid(e.to_string()))?;
+    for entry in entries {
+        let relative = entry.path().strip_prefix(&root).map_err(|e| invalid(e.to_string()))?;
+        if relative.components().count() > 128 {
+            return Err(IoError::TooLarge("XLS: VBA storage nesting exceeds the import budget".into()));
+        }
+        if relative.as_os_str().is_empty() {
+            continue;
+        }
+        let target = std::path::Path::new("/").join(relative);
+        if entry.is_storage() {
+            output.create_storage_all(&target).map_err(|e| invalid(e.to_string()))?;
+        } else if entry.is_stream() {
+            let mut data = Vec::new();
+            source
+                .open_stream(entry.path())
+                .map_err(|e| invalid(e.to_string()))?
+                .take(MAX_TEXT as u64 + 1)
+                .read_to_end(&mut data)
+                .map_err(|e| invalid(e.to_string()))?;
+            if data.len() > MAX_TEXT {
+                return Err(IoError::TooLarge("XLS: VBA stream exceeds the import budget".into()));
+            }
+            output.create_stream(&target).map_err(|e| invalid(e.to_string()))?.write_all(&data).map_err(|e| invalid(e.to_string()))?;
+        }
+    }
+    output.flush().map_err(|e| invalid(e.to_string()))?;
+    Ok(Some(output.into_inner().into_inner()))
 }
 
 fn bof(rec: &Record<'_>) -> Result<(u16, u16), IoError> {

@@ -2,6 +2,19 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
+            "La formule n’a pas pu être lue — la valeur affichée est l’ancienne valeur du fichier et n’a pas été recalculée"
+        }
+        "Depends on a cell that could not be calculated" => "Dépend d’une cellule qui n’a pas pu être calculée",
+        "Could not calculate {count} cells. Open Error Checking for details." => {
+            "Impossible de calculer {count} cellules. Ouvrez Vérification des erreurs pour plus de détails."
+        }
+        "Macro-assigned buttons in .xls files have not been converted." => {
+            "Les boutons associés à des macros dans les fichiers .xls n’ont pas encore été convertis."
+        }
+        "The legacy .xls file has been opened. It will be saved as .xlsm, keeping its macros. Macro-assigned buttons in .xls files have not been converted." => {
+            "Le fichier .xls ancien a été ouvert. Il sera enregistré au format .xlsm en conservant ses macros. Les boutons associés à des macros dans les fichiers .xls n’ont pas encore été convertis."
+        }
         "The update check stopped unexpectedly" => "La recherche de mises à jour s’est arrêtée de manière inattendue",
         "Could not start updater: {reason}" => "Impossible de démarrer le programme de mise à jour : {reason}",
         "Updated to version {version}" => "Mise à jour vers la version {version} effectuée",

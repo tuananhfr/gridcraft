@@ -2,6 +2,17 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
+            "수식을 읽을 수 없습니다 — 표시된 값은 파일의 이전 값이며 다시 계산되지 않았습니다"
+        }
+        "Depends on a cell that could not be calculated" => "계산할 수 없는 셀에 종속됨",
+        "Could not calculate {count} cells. Open Error Checking for details." => {
+            "{count}개 셀을 계산할 수 없습니다. 자세한 내용은 오류 검사를 여세요."
+        }
+        "Macro-assigned buttons in .xls files have not been converted." => ".xls 파일에서 매크로가 지정된 단추는 아직 변환되지 않았습니다.",
+        "The legacy .xls file has been opened. It will be saved as .xlsm, keeping its macros. Macro-assigned buttons in .xls files have not been converted." => {
+            "이전 .xls 파일을 열었습니다. 매크로를 유지하며 .xlsm으로 저장됩니다. .xls 파일에서 매크로가 지정된 단추는 아직 변환되지 않았습니다."
+        }
         "The update check stopped unexpectedly" => "업데이트 확인이 예기치 않게 중단되었습니다",
         "Could not start updater: {reason}" => "업데이터를 시작할 수 없습니다: {reason}",
         "Updated to version {version}" => "버전 {version}(으)로 업데이트되었습니다",

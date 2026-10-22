@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: GRID-02 marks unreadable formulas and their dependents as not calculated while retaining cached values, with translated grid diagnostics and Error Checking notices; GRID-10 preserves legacy .xls VBA projects when saving as .xlsm and warns about unconverted macro buttons.
+
 - Point the website links (About, installers, release notes) to https://office.erpcons.ai; app ids keep the `vn.erpcons.*` form.
 - (desktop) Add signed self-updates with automatic checks, translated Help notices, save-before-update guards, download cancellation and retry, and Windows installation permission guidance; MSI updates wait for Install now or Cancel.
 

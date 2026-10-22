@@ -275,7 +275,7 @@ impl<'a> Compound<'a> {
     /// storage, or `None` when there is no such stream.
     /// The directory entry of the stream called `name` (case-insensitive) directly under the
     /// root storage.
-    fn root_entry(&self, name: &str) -> Result<Option<&DirEntry>, String> {
+    fn root_entry_kind(&self, name: &str, kind: u8) -> Result<Option<&DirEntry>, String> {
         let Some(root) = self.entries.first() else { return Ok(None) };
         // Walk the root's children (a red-black tree through left/right siblings), bounded.
         let mut stack = vec![root.child];
@@ -289,13 +289,21 @@ impl<'a> Compound<'a> {
                 return Err("damaged compound file: directory tree loops".into());
             }
             let Some(e) = self.entries.get(i as usize) else { continue };
-            if e.kind == STREAM_OBJECT && e.name.eq_ignore_ascii_case(name) {
+            if e.kind == kind && e.name.eq_ignore_ascii_case(name) {
                 return Ok(Some(e));
             }
             stack.push(e.left);
             stack.push(e.right);
         }
         Ok(None)
+    }
+
+    fn root_entry(&self, name: &str) -> Result<Option<&DirEntry>, String> {
+        self.root_entry_kind(name, STREAM_OBJECT)
+    }
+
+    pub(crate) fn has_root_storage(&self, name: &str) -> bool {
+        matches!(self.root_entry_kind(name, 1), Ok(Some(_)))
     }
 
     /// Whether the root storage holds a stream called `name`, without reading it.

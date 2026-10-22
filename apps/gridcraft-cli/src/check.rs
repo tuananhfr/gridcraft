@@ -97,6 +97,7 @@ pub struct CalcReport {
     pub matched: usize,
     pub mismatched: usize,
     pub no_oracle: usize,
+    pub not_calculated: usize,
     /// The producer asked for a full recalculation on load (`fullCalcOnLoad`): its cached values
     /// aren't results, so every formula counts as no oracle.
     pub stale_cache: bool,
@@ -148,7 +149,7 @@ pub struct FileReport {
 
 impl FileReport {
     fn is_clean(&self) -> bool {
-        self.error.is_none() && self.calc.mismatched == 0 && self.round_trip.is_clean()
+        self.error.is_none() && self.calc.mismatched == 0 && self.calc.not_calculated == 0 && self.round_trip.is_clean()
     }
 }
 
@@ -455,6 +456,10 @@ pub fn oracle(cached: &Workbook, fresh: &Workbook, calc: &Calc, trust_cache: boo
     for (si, sh) in cached.sheets.iter().enumerate() {
         for (c, cell) in sh.cells.iter() {
             let Some(f) = &cell.formula else { continue };
+            if calc.not_calculated.contains_key(&(si, c)) {
+                r.not_calculated += 1;
+                continue;
+            }
             if volatile.contains(&(si, c)) {
                 r.volatile += 1;
                 continue;
@@ -1010,6 +1015,7 @@ struct Totals {
     matched: usize,
     mismatched: usize,
     no_oracle: usize,
+    not_calculated: usize,
     volatile: usize,
     bool_as_number: usize,
     round_trip_failed: usize,
@@ -1032,6 +1038,7 @@ fn totals(reports: &[FileReport]) -> Totals {
         t.matched += r.calc.matched;
         t.mismatched += r.calc.mismatched;
         t.no_oracle += r.calc.no_oracle;
+        t.not_calculated += r.calc.not_calculated;
         t.volatile += r.calc.volatile;
         t.bool_as_number += r.calc.bool_as_number;
         if r.round_trip.error.is_some() {
@@ -1094,7 +1101,7 @@ pub fn report_json(reports: &[FileReport], opts: &Options) -> Json {
                 "warnings": r.warnings,
                 "calc": {
                     "formulaCells": c.formula_cells, "checked": c.checked, "matched": c.matched, "mismatched": c.mismatched,
-                    "noOracle": c.no_oracle, "staleCache": c.stale_cache, "volatile": c.volatile, "boolAsNumber": c.bool_as_number,
+                    "notCalculated": c.not_calculated, "noOracle": c.no_oracle, "staleCache": c.stale_cache, "volatile": c.volatile, "boolAsNumber": c.bool_as_number,
                     "mismatches": mismatches, "functions": functions_json(&c.functions),
                     "signatures": c.signatures,
                 },
@@ -1109,7 +1116,7 @@ pub fn report_json(reports: &[FileReport], opts: &Options) -> Json {
         "files": files,
         "totals": {
             "files": t.files, "opened": t.opened, "failedToOpen": t.failed, "formulaCells": t.formula_cells, "checked": t.checked,
-            "matched": t.matched, "mismatched": t.mismatched, "noOracle": t.no_oracle, "volatile": t.volatile, "boolAsNumber": t.bool_as_number,
+            "matched": t.matched, "mismatched": t.mismatched, "notCalculated": t.not_calculated, "noOracle": t.no_oracle, "volatile": t.volatile, "boolAsNumber": t.bool_as_number,
             "roundTripFailed": t.round_trip_failed, "roundTripDiffering": t.round_trip_differing, "categoriesDiffering": t.categories,
         },
         "functions": functions_json(&t.functions),
@@ -1137,13 +1144,14 @@ fn print_human(reports: &[FileReport], opts: &Options) {
         }
         let c = &r.calc;
         outln!(
-            "  formulas {}: {} checked, {} matched, {} mismatched, {} no oracle, {} volatile",
+            "  formulas {}: {} checked, {} matched, {} mismatched, {} no oracle, {} volatile, {} not calculated",
             c.formula_cells,
             c.checked,
             c.matched,
             c.mismatched,
             c.no_oracle,
-            c.volatile
+            c.volatile,
+            c.not_calculated
         );
         if c.stale_cache {
             outln!("  (the producer asked for a full recalculation on load: its cached values aren't results)");
@@ -1297,6 +1305,17 @@ mod tests {
 
     fn n(x: f64) -> Value {
         Value::number(x)
+    }
+
+    #[test]
+    fn unparsed_cache_and_its_dependents_are_never_verified_as_calculated() {
+        let wb = book(&[("A1", "=1+", n(123.0)), ("B1", "=A1*2", n(246.0))]);
+        let r = check(&wb, &Options::default());
+        assert_eq!((r.calc.not_calculated, r.calc.checked, r.calc.matched), (2, 0, 0));
+        assert!(!r.is_clean());
+        let report = report_json(&[r], &Options::default());
+        assert_eq!(report["files"][0]["calc"]["notCalculated"], 2);
+        assert_eq!(report["totals"]["notCalculated"], 2);
     }
 
     #[test]
@@ -1625,6 +1644,7 @@ mod tests {
                 "checked",
                 "matched",
                 "mismatched",
+                "notCalculated",
                 "noOracle",
                 "staleCache",
                 "volatile",
@@ -1669,6 +1689,7 @@ mod tests {
                 "checked",
                 "matched",
                 "mismatched",
+                "notCalculated",
                 "noOracle",
                 "volatile",
                 "boolAsNumber",

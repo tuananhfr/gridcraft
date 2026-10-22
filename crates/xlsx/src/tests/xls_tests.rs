@@ -594,3 +594,35 @@ fn a_format_shorter_than_its_count_keeps_its_characters() {
     assert_eq!(fmt("A3"), "0.000");
     assert!(report.warnings.iter().any(|w| w.contains("declared length")), "{:?}", report.warnings);
 }
+
+#[test]
+fn legacy_vba_storage_becomes_a_macro_enabled_package() {
+    use std::io::{Cursor, Read, Write};
+    let workbook = sample(false);
+    let mut ole = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
+    ole.create_stream("/Workbook").unwrap().write_all(&workbook).unwrap();
+    ole.create_storage_all("/_VBA_PROJECT_CUR/VBA").unwrap();
+    let streams = [("PROJECT", b"ID=synthetic".to_vec()), ("PROJECTwm", vec![0, 1, 2]), ("VBA/Module1", vec![42; 8192]), ("VBA/dir", vec![3; 200])];
+    for (name, bytes) in &streams {
+        ole.create_stream(format!("/_VBA_PROJECT_CUR/{name}")).unwrap().write_all(bytes).unwrap();
+    }
+    let (wb, _) = read_xls(&ole.into_inner().into_inner()).unwrap();
+    let project = wb.vba_project.as_ref().expect("legacy macros must be preserved");
+    let mut vba = cfb::CompoundFile::open(Cursor::new(project)).unwrap();
+    for (name, bytes) in &streams {
+        let mut actual = Vec::new();
+        vba.open_stream(format!("/{name}")).unwrap().read_to_end(&mut actual).unwrap();
+        assert_eq!(&actual, bytes);
+    }
+    let package = crate::write_xlsx_as(&wb, crate::XlsxKind::MacroWorkbook).unwrap();
+    let mut zip = zip::ZipArchive::new(Cursor::new(package)).unwrap();
+    let mut actual = Vec::new();
+    zip.by_name("xl/vbaProject.bin").unwrap().read_to_end(&mut actual).unwrap();
+    assert_eq!(&actual, project);
+    let mut types = String::new();
+    zip.by_name("[Content_Types].xml").unwrap().read_to_string(&mut types).unwrap();
+    assert!(types.contains("macroEnabled.main+xml"));
+    let mut rels = String::new();
+    zip.by_name("xl/_rels/workbook.xml.rels").unwrap().read_to_string(&mut rels).unwrap();
+    assert!(rels.contains("vbaProject.bin"));
+}

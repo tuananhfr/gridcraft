@@ -361,6 +361,21 @@ impl Graph {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NotCalculated {
+    Unparsed,
+    Dependent,
+}
+
+impl NotCalculated {
+    pub fn reason(self) -> &'static str {
+        match self {
+            Self::Unparsed => "The formula could not be read — the displayed value is the old value from the file and has not been recalculated",
+            Self::Dependent => "Depends on a cell that could not be calculated",
+        }
+    }
+}
+
 /// Calculation state kept beside a workbook.
 #[derive(Clone, Debug)]
 pub struct Calc {
@@ -371,11 +386,19 @@ pub struct Calc {
     /// Cells whose formulas have errors from cycles.
     pub circular: Vec<Key>,
     pub last_recalc_cells: usize,
+    pub not_calculated: HashMap<Key, NotCalculated>,
 }
 
 impl Default for Calc {
     fn default() -> Self {
-        Calc { graph: Graph::default(), rng: 0x9E37_79B9_7F4A_7C15, fixed_now: None, circular: vec![], last_recalc_cells: 0 }
+        Calc {
+            graph: Graph::default(),
+            rng: 0x9E37_79B9_7F4A_7C15,
+            fixed_now: None,
+            circular: vec![],
+            last_recalc_cells: 0,
+            not_calculated: HashMap::default(),
+        }
     }
 }
 
@@ -400,7 +423,7 @@ struct PassHost<'a> {
     iterate: bool,
     /// Values from the previous iteration; cells not in it read their stored value.
     prev: HashMap<Key, Value>,
-    /// Formulas being evaluated, innermost last (kept only when iterating).
+    /// Formulas being evaluated, innermost last.
     stack: Vec<Key>,
     /// Formulas found on a circular reference (when iterating).
     members: HashSet<Key>,
@@ -408,6 +431,7 @@ struct PassHost<'a> {
     tainted: HashSet<Key>,
     /// Whether the formula being evaluated has read a previous value.
     taint: bool,
+    not_calculated: HashMap<Key, NotCalculated>,
 }
 
 impl<'a> PassHost<'a> {
@@ -431,6 +455,7 @@ impl<'a> PassHost<'a> {
             members: HashSet::default(),
             tainted: HashSet::default(),
             taint: false,
+            not_calculated: HashMap::default(),
         }
     }
 }
@@ -457,7 +482,16 @@ fn spill_blocked(host: &PassHost<'_>, (sheet, anchor): Key, a: &Array) -> bool {
 }
 
 impl PassHost<'_> {
+    fn mark_uncalculated_read(&mut self, key: Key) {
+        if self.not_calculated.contains_key(&key) {
+            for at in &self.stack {
+                self.not_calculated.entry(*at).or_insert(NotCalculated::Dependent);
+            }
+        }
+    }
+
     fn compute(&mut self, k: Key) -> Value {
+        self.mark_uncalculated_read(k);
         if let Some(v) = self.results.get(&k) {
             let v = v.clone();
             if self.iterate && self.tainted.contains(&k) {
@@ -479,9 +513,7 @@ impl PassHost<'_> {
         self.in_progress.insert(k);
         self.depth += 1;
         let outer_taint = std::mem::replace(&mut self.taint, false);
-        if self.iterate {
-            self.stack.push(k);
-        }
+        self.stack.push(k);
         let expr = std::sync::Arc::clone(expr);
         let v = {
             let mut ev = Evaluator::new(self, k.0, k.1);
@@ -496,8 +528,8 @@ impl PassHost<'_> {
         self.depth -= 1;
         self.in_progress.remove(&k);
         self.pending.remove(&k);
+        self.stack.pop();
         if self.iterate {
-            self.stack.pop();
             if self.taint {
                 self.tainted.insert(k);
             } else {
@@ -650,6 +682,7 @@ impl Host for PassHost<'_> {
     }
     fn cell_value(&mut self, sheet: usize, c: CellRef) -> Value {
         let k = (sheet, c);
+        self.mark_uncalculated_read(k);
         if self.pending.contains(&k) || self.results.contains_key(&k) {
             return self.compute(k);
         }
@@ -807,6 +840,7 @@ impl Calc {
             }
         }
         self.graph.settle();
+        self.refresh_not_calculated(wb);
     }
 
     /// Recalculates every formula (F9 / Ctrl+Alt+F9, and after loading).
@@ -847,16 +881,11 @@ impl Calc {
                         }
                         cleared.push((k.0, r));
                     }
-                    // A formula that doesn't parse evaluates to #NAME?.
-                    if let Some(cell) = wb.sheet_mut(k.0).and_then(|s| s.cells.get_mut(k.1))
-                        && cell.formula.is_some()
-                    {
-                        cell.value = Value::Error(CellError::Name);
-                    }
                 }
             }
         }
         self.graph.settle();
+        self.refresh_not_calculated(wb);
         if wb.calc.mode == CalcMode::Manual {
             // Only the edited formulas themselves are evaluated.
             let own: Vec<Key> = changed.iter().copied().filter(|k| self.graph.nodes.contains_key(k)).collect();
@@ -914,6 +943,30 @@ impl Calc {
         }
     }
 
+    fn refresh_not_calculated(&mut self, wb: &Workbook) {
+        self.not_calculated.clear();
+        let mut queue = VecDeque::new();
+        for (si, sh) in wb.sheets.iter().enumerate() {
+            for (at, cell) in sh.cells.iter() {
+                if cell.formula.as_ref().is_some_and(|f| f.expr_arc().is_none()) {
+                    self.not_calculated.insert((si, at), NotCalculated::Unparsed);
+                    queue.push_back((si, at));
+                }
+            }
+        }
+        let mut deps = Vec::new();
+        while let Some((si, at)) = queue.pop_front() {
+            deps.clear();
+            self.graph.dependents(si, at, &mut deps);
+            for key in deps.drain(..) {
+                if let std::collections::hash_map::Entry::Vacant(entry) = self.not_calculated.entry(key) {
+                    entry.insert(NotCalculated::Dependent);
+                    queue.push_back(key);
+                }
+            }
+        }
+    }
+
     fn dirty_closure(&self, _wb: &Workbook, seeds: &[Key]) -> Vec<Key> {
         let mut seen: HashSet<Key> = HashSet::default();
         let mut queue: VecDeque<Key> = VecDeque::new();
@@ -949,6 +1002,7 @@ impl Calc {
 
     /// Evaluates the dirty set and writes results (and spills) back.
     fn run(&mut self, wb: &mut Workbook, mut dirty: Vec<Key>, full: bool) {
+        self.last_recalc_cells = 0;
         let mut dynamic_again = !self.graph.dynamic.is_empty();
         for _round in 0..8 {
             if dirty.is_empty() {
@@ -965,9 +1019,10 @@ impl Calc {
             let now = self.now();
             let mut rng = self.rng;
             let tp = prof_now();
-            let (results, spills, cycles) = {
+            let (results, spills, cycles, not_calculated) = {
                 let mut host = PassHost::new(wb, &exprs, &mut rng, now);
                 host.iterate = wb.calc.iterative;
+                host.not_calculated = self.not_calculated.clone();
                 for k in &dirty {
                     host.compute(*k);
                 }
@@ -977,14 +1032,15 @@ impl Calc {
                         eprintln!("  iterative calculation: {} passes over {} formulas", passes, host.tainted.len());
                     }
                 }
-                (host.results, host.spills, host.cycles)
+                (host.results, host.spills, host.cycles, host.not_calculated)
             };
             self.rng = rng;
+            self.not_calculated = not_calculated;
             if std::env::var_os("GRIDCRAFT_PROFILE").is_some() {
                 eprintln!("  eval {} formulas {:.1} ms", results.len(), prof_now() - tp);
             }
             let tw = prof_now();
-            self.last_recalc_cells = results.len();
+            self.last_recalc_cells = results.keys().filter(|k| !self.not_calculated.contains_key(*k)).count();
             self.circular = cycles;
             // Write back.
             let mut spill_changes: Vec<Key> = Vec::new();

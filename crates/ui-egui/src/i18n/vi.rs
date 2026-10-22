@@ -5,6 +5,15 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
+            "Công thức không đọc được — giá trị hiển thị là giá trị cũ trong tệp, chưa được tính lại"
+        }
+        "Depends on a cell that could not be calculated" => "Phụ thuộc ô chưa tính được",
+        "Could not calculate {count} cells. Open Error Checking for details." => "Có {count} ô chưa tính được. Mở Kiểm tra lỗi để xem chi tiết.",
+        "Macro-assigned buttons in .xls files have not been converted." => "Nút bấm gắn macro trong tệp .xls chưa được chuyển sang",
+        "The legacy .xls file has been opened. It will be saved as .xlsm, keeping its macros. Macro-assigned buttons in .xls files have not been converted." => {
+            "Đã mở tệp .xls cũ. Khi lưu, tệp sẽ có định dạng .xlsm và giữ lại macro. Nút bấm gắn macro trong tệp .xls chưa được chuyển sang"
+        }
         "The update check stopped unexpectedly" => "Quá trình kiểm tra cập nhật đã dừng đột ngột",
         "Could not start updater: {reason}" => "Không khởi chạy được trình cập nhật: {reason}",
         "Updated to version {version}" => "Đã cập nhật lên phiên bản {version}",

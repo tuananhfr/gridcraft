@@ -2,6 +2,17 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
+            "Vzorec nelze přečíst — zobrazená hodnota je původní hodnota ze souboru a nebyla přepočítána"
+        }
+        "Depends on a cell that could not be calculated" => "Závisí na buňce, kterou nelze vypočítat",
+        "Could not calculate {count} cells. Open Error Checking for details." => {
+            "Počet buněk, které nelze vypočítat: {count}. Podrobnosti najdete v kontrole chyb."
+        }
+        "Macro-assigned buttons in .xls files have not been converted." => "Tlačítka s přiřazenými makry v souborech .xls dosud nebyla převedena.",
+        "The legacy .xls file has been opened. It will be saved as .xlsm, keeping its macros. Macro-assigned buttons in .xls files have not been converted." => {
+            "Soubor starého formátu .xls byl otevřen. Bude uložen jako .xlsm se zachováním maker. Tlačítka s přiřazenými makry v souborech .xls dosud nebyla převedena."
+        }
         "The update check stopped unexpectedly" => "Kontrola aktualizací se neočekávaně zastavila",
         "Could not start updater: {reason}" => "Aktualizační program nelze spustit: {reason}",
         "Updated to version {version}" => "Aktualizováno na verzi {version}",
