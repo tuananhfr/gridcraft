@@ -20,6 +20,8 @@ pub enum AfterClose {
     Close,
     /// Quit the app (desktop), leaving them open meanwhile.
     Quit,
+    #[cfg(not(target_arch = "wasm32"))]
+    Update,
 }
 
 impl AfterClose {
@@ -27,10 +29,16 @@ impl AfterClose {
         match self {
             AfterClose::Close => "close",
             AfterClose::Quit => "quit",
+            #[cfg(not(target_arch = "wasm32"))]
+            AfterClose::Update => "update",
         }
     }
 
     fn parse(id: &str) -> AfterClose {
+        #[cfg(not(target_arch = "wasm32"))]
+        if id == "update" {
+            return AfterClose::Update;
+        }
         if id == "quit" { AfterClose::Quit } else { AfterClose::Close }
     }
 }
@@ -104,6 +112,11 @@ impl SheetApp {
 
     fn finish_close(&mut self, uids: &[u64], then: AfterClose) {
         match then {
+            #[cfg(not(target_arch = "wasm32"))]
+            AfterClose::Update => {
+                self.updates.awaiting_save = false;
+                self.updates.continue_requested = true;
+            }
             AfterClose::Close => {
                 for &uid in uids {
                     self.close_by_uid(uid, true);

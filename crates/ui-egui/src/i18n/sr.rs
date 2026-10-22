@@ -2,6 +2,38 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The update check stopped unexpectedly" => "Provera ažuriranja je neočekivano zaustavljena",
+        "Could not start updater: {reason}" => "Nije moguće pokrenuti ažuriranje: {reason}",
+        "Updated to version {version}" => "Ažurirano na verziju {version}",
+        "Update to {version} failed: {reason}" => "Ažuriranje na {version} nije uspelo: {reason}",
+        "Bảng tính – ERPCons is up to date." => "Bảng tính – ERPCons je ažuran.",
+        "Automatically check for updates" => "Automatski proveravaj ažuriranja",
+        "Retry" => "Pokušaj ponovo",
+        "Bảng tính – ERPCons {version} is available" => "Dostupan je Bảng tính – ERPCons {version}",
+        "Cancel" => "Otkaži",
+        "Checking for a newer version…" => "Provera novije verzije…",
+        "Download new version" => "Preuzmi novu verziju",
+        "Update now" => "Ažuriraj sada",
+        "Remind me later" => "Podseti me kasnije",
+        "Skip this version" => "Preskoči ovu verziju",
+        "What's new" => "Šta je novo",
+        "The updater is busy; try again shortly" => "Program za ažuriranje je zauzet; pokušajte ponovo uskoro",
+        "The updater failed; restart the app and try again" => "Program za ažuriranje nije uspeo; ponovo pokrenite aplikaciju i pokušajte ponovo",
+        "The app will close, Windows will ask for installation permission — choose Yes — then the app will reopen automatically" => {
+            "Aplikacija će se zatvoriti, Windows će tražiti dozvolu za instalaciju — izaberite Yes — a zatim će se aplikacija automatski ponovo otvoriti"
+        }
+        "The app will close and reopen after updating" => "Aplikacija će se zatvoriti i ponovo otvoriti posle ažuriranja",
+        "Check for updates" => "Proveri ažuriranja",
+        "Help" => "Pomoć",
+        "Update network unavailable: {detail}" => "Mreža za ažuriranje nije dostupna: {detail}",
+        "Update server returned HTTP {detail}" => "Server za ažuriranje je vratio HTTP {detail}",
+        "The update signature is invalid" => "Potpis ažuriranja nije važeći",
+        "The update manifest is invalid: {detail}" => "Manifest ažuriranja nije važeći: {detail}",
+        "The downloaded update failed verification" => "Preuzeto ažuriranje nije prošlo proveru",
+        "Could not write the update: {detail}" => "Nije moguće upisati ažuriranje: {detail}",
+        "This installation cannot update automatically" => "Ova instalacija ne može automatski da se ažurira",
+        "Permission denied while updating; check folder permissions" => "Pristup odbijen pri ažuriranju; proverite dozvole fascikle",
+        "Update cancelled" => "Ažuriranje je otkazano",
         "This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself." => "Ova formula stvara kružnu referencu, pa ćelija prikazuje #CIRC!. Izmenite formulu tako da ne upućuje sama na sebe.",
         "Could not open the legacy .xls format" => "Није могуће отворити стари формат .xls",
         "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "Није могуће отворити ову датотеку у старом Excel формату (.xls). Отворите је у Excel-у или LibreOffice-у, сачувајте као .xlsx и покушајте поново.",

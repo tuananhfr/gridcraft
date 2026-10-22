@@ -2,6 +2,37 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The update check stopped unexpectedly" => "Kontrola aktualizací se neočekávaně zastavila",
+        "Could not start updater: {reason}" => "Aktualizační program nelze spustit: {reason}",
+        "Updated to version {version}" => "Aktualizováno na verzi {version}",
+        "Update to {version} failed: {reason}" => "Aktualizace na {version} selhala: {reason}",
+        "Bảng tính – ERPCons is up to date." => "Bảng tính – ERPCons je aktuální.",
+        "Automatically check for updates" => "Automaticky kontrolovat aktualizace",
+        "Retry" => "Zkusit znovu",
+        "Bảng tính – ERPCons {version} is available" => "Je k dispozici Bảng tính – ERPCons {version}",
+        "Checking for a newer version…" => "Hledání novější verze…",
+        "Download new version" => "Stáhnout novou verzi",
+        "Update now" => "Aktualizovat nyní",
+        "Remind me later" => "Připomenout později",
+        "Skip this version" => "Přeskočit tuto verzi",
+        "What's new" => "Co je nového",
+        "The updater is busy; try again shortly" => "Aktualizační program je zaneprázdněn; zkuste to za chvíli znovu",
+        "The updater failed; restart the app and try again" => "Aktualizační program selhal; restartujte aplikaci a zkuste to znovu",
+        "The app will close, Windows will ask for installation permission — choose Yes — then the app will reopen automatically" => {
+            "Aplikace se zavře, Windows požádá o oprávnění k instalaci — zvolte Yes — a aplikace se pak automaticky znovu otevře"
+        }
+        "The app will close and reopen after updating" => "Aplikace se po aktualizaci zavře a znovu otevře",
+        "Check for updates" => "Zkontrolovat aktualizace",
+        "Help" => "Nápověda",
+        "Update network unavailable: {detail}" => "Síť pro aktualizace není dostupná: {detail}",
+        "Update server returned HTTP {detail}" => "Aktualizační server vrátil HTTP {detail}",
+        "The update signature is invalid" => "Podpis aktualizace je neplatný",
+        "The update manifest is invalid: {detail}" => "Manifest aktualizace je neplatný: {detail}",
+        "The downloaded update failed verification" => "Stažená aktualizace neprošla ověřením",
+        "Could not write the update: {detail}" => "Aktualizaci nelze zapsat: {detail}",
+        "This installation cannot update automatically" => "Tuto instalaci nelze aktualizovat automaticky",
+        "Permission denied while updating; check folder permissions" => "Přístup při aktualizaci odepřen; zkontrolujte oprávnění složky",
+        "Update cancelled" => "Aktualizace zrušena",
         "This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself." => "Tento vzorec vytváří cyklický odkaz, proto buňka zobrazuje #CIRC!. Upravte vzorec tak, aby neodkazoval sám na sebe.",
         "Could not open the legacy .xls format" => "Starý formát .xls nelze otevřít",
         "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "Tento soubor ve starém formátu Excel (.xls) nelze otevřít. Otevřete jej v Excelu nebo LibreOffice, uložte jako .xlsx a zkuste to znovu.",

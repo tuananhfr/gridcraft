@@ -2,6 +2,38 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The update check stopped unexpectedly" => "업데이트 확인이 예기치 않게 중단되었습니다",
+        "Could not start updater: {reason}" => "업데이터를 시작할 수 없습니다: {reason}",
+        "Updated to version {version}" => "버전 {version}(으)로 업데이트되었습니다",
+        "Update to {version} failed: {reason}" => "{version}(으)로 업데이트하지 못했습니다: {reason}",
+        "Bảng tính – ERPCons is up to date." => "Bảng tính – ERPCons가 최신 버전입니다.",
+        "Automatically check for updates" => "자동으로 업데이트 확인",
+        "Retry" => "다시 시도",
+        "Bảng tính – ERPCons {version} is available" => "Bảng tính – ERPCons {version} 버전을 사용할 수 있습니다",
+        "Cancel" => "취소",
+        "Checking for a newer version…" => "새 버전 확인 중…",
+        "Download new version" => "새 버전 다운로드",
+        "Update now" => "지금 업데이트",
+        "Remind me later" => "나중에 알림",
+        "Skip this version" => "이 버전 건너뛰기",
+        "What's new" => "새로운 기능",
+        "The updater is busy; try again shortly" => "업데이터가 사용 중입니다. 잠시 후 다시 시도하세요",
+        "The updater failed; restart the app and try again" => "업데이터에 오류가 발생했습니다. 앱을 다시 시작하고 다시 시도하세요",
+        "The app will close, Windows will ask for installation permission — choose Yes — then the app will reopen automatically" => {
+            "앱이 닫히면 Windows에서 설치 권한을 요청합니다 — Yes를 선택하세요 — 이후 앱이 자동으로 다시 열립니다"
+        }
+        "The app will close and reopen after updating" => "업데이트 후 앱이 닫혔다가 다시 열립니다",
+        "Check for updates" => "업데이트 확인",
+        "Help" => "도움말",
+        "Update network unavailable: {detail}" => "업데이트 네트워크를 사용할 수 없습니다: {detail}",
+        "Update server returned HTTP {detail}" => "업데이트 서버가 HTTP {detail}을 반환했습니다",
+        "The update signature is invalid" => "업데이트 서명이 유효하지 않습니다",
+        "The update manifest is invalid: {detail}" => "업데이트 매니페스트가 유효하지 않습니다: {detail}",
+        "The downloaded update failed verification" => "다운로드한 업데이트를 검증하지 못했습니다",
+        "Could not write the update: {detail}" => "업데이트를 쓸 수 없습니다: {detail}",
+        "This installation cannot update automatically" => "이 설치는 자동으로 업데이트할 수 없습니다",
+        "Permission denied while updating; check folder permissions" => "업데이트 권한이 없습니다. 폴더 권한을 확인하세요",
+        "Update cancelled" => "업데이트가 취소되었습니다",
         "This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself." => "이 수식은 순환 참조를 생성하므로 셀에 #CIRC!이 표시됩니다. 자신을 참조하지 않도록 수식을 수정하세요.",
         "Could not open the legacy .xls format" => "이전 .xls 형식을 열 수 없습니다",
         "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "이전 Excel 파일(.xls)을 열 수 없습니다. Excel 또는 LibreOffice에서 열고 .xlsx로 저장한 다음 다시 시도하세요.",

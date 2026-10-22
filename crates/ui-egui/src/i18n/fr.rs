@@ -2,6 +2,40 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The update check stopped unexpectedly" => "La recherche de mises à jour s’est arrêtée de manière inattendue",
+        "Could not start updater: {reason}" => "Impossible de démarrer le programme de mise à jour : {reason}",
+        "Updated to version {version}" => "Mise à jour vers la version {version} effectuée",
+        "Update to {version} failed: {reason}" => "La mise à jour vers {version} a échoué : {reason}",
+        "Bảng tính – ERPCons is up to date." => "Bảng tính – ERPCons est à jour.",
+        "Automatically check for updates" => "Rechercher automatiquement les mises à jour",
+        "Retry" => "Réessayer",
+        "Bảng tính – ERPCons {version} is available" => "Bảng tính – ERPCons {version} est disponible",
+        "Cancel" => "Annuler",
+        "Checking for a newer version…" => "Recherche d'une version plus récente…",
+        "Download new version" => "Télécharger la nouvelle version",
+        "Update now" => "Mettre à jour maintenant",
+        "Remind me later" => "Me le rappeler plus tard",
+        "Skip this version" => "Ignorer cette version",
+        "What's new" => "Nouveautés",
+        "The updater is busy; try again shortly" => "Le programme de mise à jour est occupé ; réessayez dans un instant",
+        "The updater failed; restart the app and try again" => "Le programme de mise à jour a échoué ; redémarrez l’application et réessayez",
+        "The app will close, Windows will ask for installation permission — choose Yes — then the app will reopen automatically" => {
+            "L’application va se fermer, Windows demandera l’autorisation d’installer — choisissez Yes — puis l’application se rouvrira automatiquement"
+        }
+        "The app will close and reopen after updating" => "L’application se fermera et se rouvrira après la mise à jour",
+        "Check for updates" => "Rechercher des mises à jour",
+        "Help" => "Aide",
+        "Update network unavailable: {detail}" => "Réseau de mise à jour indisponible : {detail}",
+        "Update server returned HTTP {detail}" => "Le serveur de mise à jour a renvoyé HTTP {detail}",
+        "The update signature is invalid" => "La signature de la mise à jour est invalide",
+        "The update manifest is invalid: {detail}" => "Le manifeste de mise à jour est invalide : {detail}",
+        "The downloaded update failed verification" => "La mise à jour téléchargée a échoué à la vérification",
+        "Could not write the update: {detail}" => "Impossible d’enregistrer la mise à jour : {detail}",
+        "This installation cannot update automatically" => "Cette installation ne peut pas être mise à jour automatiquement",
+        "Permission denied while updating; check folder permissions" => {
+            "Autorisation refusée pendant la mise à jour ; vérifiez les permissions du dossier"
+        }
+        "Update cancelled" => "Mise à jour annulée",
         "This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself." => "Cette formule crée une référence circulaire ; la cellule affiche donc #CIRC!. Modifiez la formule pour qu’elle ne fasse pas référence à elle-même.",
         "Could not open the legacy .xls format" => "Impossible d’ouvrir l’ancien format .xls",
         "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "Impossible d’ouvrir ce fichier dans l’ancien format Excel (.xls). Ouvrez-le dans Excel ou LibreOffice, enregistrez-le au format .xlsx et réessayez.",

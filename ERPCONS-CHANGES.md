@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- (desktop) Add signed self-updates with automatic checks, translated Help notices, save-before-update guards, download cancellation and retry, and Windows installation permission guidance.
+
 - (desktop) Use the ERPCons app icon for macOS document types and offer XLSB/ODS imports in Windows Default apps alongside the existing file associations.
 
 - (desktop) Add tag-validated GitHub Actions builds for unsigned Windows, Linux and ad-hoc signed universal macOS installers, fixed download names, SHA-256 checksums and Vietnamese release notes.

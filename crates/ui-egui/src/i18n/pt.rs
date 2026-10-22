@@ -3,6 +3,37 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The update check stopped unexpectedly" => "A verificação de atualizações foi interrompida inesperadamente",
+        "Could not start updater: {reason}" => "Não foi possível iniciar o atualizador: {reason}",
+        "Updated to version {version}" => "Atualizado para a versão {version}",
+        "Update to {version} failed: {reason}" => "Falha ao atualizar para {version}: {reason}",
+        "Bảng tính – ERPCons is up to date." => "Bảng tính – ERPCons está atualizado.",
+        "Automatically check for updates" => "Verificar atualizações automaticamente",
+        "Retry" => "Tentar novamente",
+        "Bảng tính – ERPCons {version} is available" => "Bảng tính – ERPCons {version} está disponível",
+        "Checking for a newer version…" => "Verificando se há uma versão mais recente…",
+        "Download new version" => "Baixar nova versão",
+        "Update now" => "Atualizar agora",
+        "Remind me later" => "Lembrar mais tarde",
+        "Skip this version" => "Ignorar esta versão",
+        "What's new" => "Novidades",
+        "The updater is busy; try again shortly" => "O atualizador está ocupado; tente novamente em instantes",
+        "The updater failed; restart the app and try again" => "O atualizador falhou; reinicie o aplicativo e tente novamente",
+        "The app will close, Windows will ask for installation permission — choose Yes — then the app will reopen automatically" => {
+            "O aplicativo será fechado, o Windows pedirá permissão para instalar — escolha Yes — e o aplicativo será reaberto automaticamente"
+        }
+        "The app will close and reopen after updating" => "O aplicativo será fechado e reaberto após a atualização",
+        "Check for updates" => "Verificar atualizações",
+        "Help" => "Ajuda",
+        "Update network unavailable: {detail}" => "Rede de atualização indisponível: {detail}",
+        "Update server returned HTTP {detail}" => "O servidor de atualização retornou HTTP {detail}",
+        "The update signature is invalid" => "A assinatura da atualização é inválida",
+        "The update manifest is invalid: {detail}" => "O manifesto da atualização é inválido: {detail}",
+        "The downloaded update failed verification" => "A atualização baixada não passou na verificação",
+        "Could not write the update: {detail}" => "Não foi possível gravar a atualização: {detail}",
+        "This installation cannot update automatically" => "Esta instalação não pode ser atualizada automaticamente",
+        "Permission denied while updating; check folder permissions" => "Permissão negada durante a atualização; verifique as permissões da pasta",
+        "Update cancelled" => "Atualização cancelada",
         "This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself." => "Esta fórmula cria uma referência circular, por isso a célula exibe #CIRC!. Edite a fórmula para que ela não faça referência a si mesma.",
         "Could not open the legacy .xls format" => "Não foi possível abrir o formato antigo .xls",
         "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "Não foi possível abrir este arquivo do Excel antigo (.xls). Abra-o no Excel ou no LibreOffice, salve como .xlsx e tente novamente.",

@@ -2,6 +2,40 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The update check stopped unexpectedly" => "Проверка обновлений неожиданно прервалась",
+        "Could not start updater: {reason}" => "Не удалось запустить программу обновления: {reason}",
+        "Updated to version {version}" => "Обновлено до версии {version}",
+        "Update to {version} failed: {reason}" => "Не удалось обновить до {version}: {reason}",
+        "Bảng tính – ERPCons is up to date." => "Установлена последняя версия Bảng tính – ERPCons.",
+        "Automatically check for updates" => "Автоматически проверять обновления",
+        "Retry" => "Повторить",
+        "Bảng tính – ERPCons {version} is available" => "Доступна версия Bảng tính – ERPCons {version}",
+        "Cancel" => "Отмена",
+        "Checking for a newer version…" => "Проверка новой версии…",
+        "Download new version" => "Скачать новую версию",
+        "Update now" => "Обновить сейчас",
+        "Remind me later" => "Напомнить позже",
+        "Skip this version" => "Пропустить эту версию",
+        "What's new" => "Что нового",
+        "The updater is busy; try again shortly" => "Программа обновления занята; повторите попытку чуть позже",
+        "The updater failed; restart the app and try again" => {
+            "Программа обновления завершилась с ошибкой; перезапустите приложение и повторите попытку"
+        }
+        "The app will close, Windows will ask for installation permission — choose Yes — then the app will reopen automatically" => {
+            "Приложение закроется, Windows запросит разрешение на установку — выберите Yes — затем приложение откроется автоматически"
+        }
+        "The app will close and reopen after updating" => "После обновления приложение закроется и откроется снова",
+        "Check for updates" => "Проверить обновления",
+        "Help" => "Справка",
+        "Update network unavailable: {detail}" => "Сеть обновлений недоступна: {detail}",
+        "Update server returned HTTP {detail}" => "Сервер обновлений вернул HTTP {detail}",
+        "The update signature is invalid" => "Подпись обновления недействительна",
+        "The update manifest is invalid: {detail}" => "Манифест обновления недействителен: {detail}",
+        "The downloaded update failed verification" => "Загруженное обновление не прошло проверку",
+        "Could not write the update: {detail}" => "Не удалось записать обновление: {detail}",
+        "This installation cannot update automatically" => "Эту установку нельзя обновить автоматически",
+        "Permission denied while updating; check folder permissions" => "Доступ при обновлении запрещён; проверьте права на папку",
+        "Update cancelled" => "Обновление отменено",
         "This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself." => "Эта формула создаёт циклическую ссылку, поэтому в ячейке отображается #CIRC!. Измените формулу так, чтобы она не ссылалась сама на себя.",
         "Could not open the legacy .xls format" => "Не удалось открыть старый формат .xls",
         "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "Не удалось открыть этот файл в старом формате Excel (.xls). Откройте его в Excel или LibreOffice, сохраните как .xlsx и повторите попытку.",

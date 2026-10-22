@@ -5,6 +5,37 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The update check stopped unexpectedly" => "Quá trình kiểm tra cập nhật đã dừng đột ngột",
+        "Could not start updater: {reason}" => "Không khởi chạy được trình cập nhật: {reason}",
+        "Updated to version {version}" => "Đã cập nhật lên phiên bản {version}",
+        "Update to {version} failed: {reason}" => "Cập nhật lên {version} không thành công: {reason}",
+        "Bảng tính – ERPCons is up to date." => "Bảng tính – ERPCons đang ở phiên bản mới nhất.",
+        "Automatically check for updates" => "Tự động kiểm tra cập nhật",
+        "Retry" => "Thử lại",
+        "Bảng tính – ERPCons {version} is available" => "Đã có Bảng tính – ERPCons {version}",
+        "Checking for a newer version…" => "Đang kiểm tra phiên bản mới hơn…",
+        "Download new version" => "Tải bản mới",
+        "Update now" => "Cập nhật ngay",
+        "Remind me later" => "Nhắc sau",
+        "Skip this version" => "Bỏ qua phiên bản này",
+        "What's new" => "Xem có gì mới",
+        "The updater is busy; try again shortly" => "Trình cập nhật đang bận; hãy thử lại sau ít phút",
+        "The updater failed; restart the app and try again" => "Trình cập nhật gặp lỗi; hãy khởi động lại ứng dụng và thử lại",
+        "The app will close, Windows will ask for installation permission — choose Yes — then the app will reopen automatically" => {
+            "Ứng dụng sẽ đóng, Windows sẽ hỏi quyền cài đặt — hãy chọn Yes — rồi ứng dụng tự mở lại"
+        }
+        "The app will close and reopen after updating" => "Ứng dụng sẽ đóng và mở lại sau khi cập nhật",
+        "Check for updates" => "Kiểm tra cập nhật",
+        "Help" => "Trợ giúp",
+        "Update network unavailable: {detail}" => "Không có kết nối cập nhật: {detail}",
+        "Update server returned HTTP {detail}" => "Máy chủ cập nhật trả về HTTP {detail}",
+        "The update signature is invalid" => "Chữ ký bản cập nhật không hợp lệ",
+        "The update manifest is invalid: {detail}" => "Thông tin bản cập nhật không hợp lệ: {detail}",
+        "The downloaded update failed verification" => "Bản cập nhật đã tải không vượt qua xác minh",
+        "Could not write the update: {detail}" => "Không ghi được bản cập nhật: {detail}",
+        "This installation cannot update automatically" => "Bản cài đặt này không hỗ trợ cập nhật tự động",
+        "Permission denied while updating; check folder permissions" => "Không có quyền cập nhật; hãy kiểm tra quyền truy cập thư mục",
+        "Update cancelled" => "Đã huỷ cập nhật",
         "Recovery" => "Khôi phục",
         " — Edited" => " — Đã chỉnh sửa",
         "Recovered" => "Đã khôi phục",

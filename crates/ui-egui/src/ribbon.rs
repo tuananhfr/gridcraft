@@ -129,6 +129,15 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
                     app.print_now(json!({}));
                 }
             });
+            #[cfg(not(target_arch = "wasm32"))]
+            if app.update_hook.is_some() {
+                ui.menu_button(tr(ui, "Help"), |ui| {
+                    if ui.button(tr(ui, "Check for updates")).clicked() {
+                        app.run_or_alert("app.checkForUpdates", json!({}));
+                        ui.close();
+                    }
+                });
+            }
             // Centered title.
             let title = app.session.active().map(|d| d.display_title()).unwrap_or_default();
             let dirty = app.session.active().is_some_and(|d| d.is_dirty());
@@ -2330,6 +2339,8 @@ fn view(app: &mut SheetApp, ui: &mut Ui) {
             },
         );
     });
+    #[cfg(not(target_arch = "wasm32"))]
+    crate::updates::preferences(ui, app);
 }
 
 fn automate(app: &mut SheetApp, ui: &mut Ui) {

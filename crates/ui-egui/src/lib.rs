@@ -49,6 +49,8 @@ pub mod text_box;
 pub mod theme;
 pub mod title_fit;
 pub mod touch;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod updates;
 pub mod widgets;
 
 use std::collections::HashMap;
@@ -297,6 +299,10 @@ pub struct Perf {
 }
 
 pub struct SheetApp {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub update_hook: Option<std::sync::Arc<dyn updates::UpdateHook>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    updates: updates::Updates,
     /// Product identity supplied by the host; web retains the upstream default.
     pub product_name: &'static str,
     pub session: Session,
@@ -412,6 +418,10 @@ impl SheetApp {
         craft_fonts::register_print_fonts();
         let circular_notice_pending = session.documents().iter().map(|doc| doc.uid).collect();
         SheetApp {
+            #[cfg(not(target_arch = "wasm32"))]
+            update_hook: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            updates: Default::default(),
             product_name: "GridCraft",
             session,
             ui: UiState::default(),
@@ -759,6 +769,22 @@ impl SheetApp {
     /// UI-only commands (dialogs, view toggles that aren't saved in the file).
     fn run_ui_command(&mut self, id: &str, p: &Json) -> Option<Result<Json, String>> {
         let r = match id {
+            #[cfg(not(target_arch = "wasm32"))]
+            "app.checkForUpdates" => {
+                self.check_for_updates();
+                Ok(Json::Null)
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            "app.autoCheckUpdates" => match &self.update_hook {
+                Some(hook) => {
+                    hook.set_language(self.ui.language);
+                    match p.get("on").and_then(Json::as_bool) {
+                        Some(on) => hook.set_auto_check(on).map(|()| json!({"on": on})),
+                        None => Ok(json!({"on": hook.auto_check()})),
+                    }
+                }
+                None => Err(self.ui.language.tr("This installation cannot update automatically").into()),
+            },
             "ui.printSettings" => printing::settings(&mut self.printing, p, self.services.printers.as_ref()),
             "ui.printSubmit" => self.submit_print(p.clone()),
             "ui.ribbonTab" => {
@@ -1195,6 +1221,8 @@ impl SheetApp {
         self.settle_saves();
         self.advance_pending_closes();
         self.advance_close_queue();
+        #[cfg(not(target_arch = "wasm32"))]
+        self.poll_updates(ctx);
         if std::mem::take(&mut self.quit_requested) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
@@ -1400,6 +1428,8 @@ impl SheetApp {
                 self.perf.grid_ms = now_ms() - g0;
             });
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        updates::dialog(self, &ctx);
         dialogs::show(self, &ctx);
         widgets::message_box(self, &ctx);
         widgets::toast(self, &ctx);

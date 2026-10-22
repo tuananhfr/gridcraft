@@ -172,6 +172,7 @@ fn tree() -> Vec<(&'static str, Vec<Entry>)> {
         (
             "Help",
             vec![
+                ("Check for updates", "app.checkForUpdates", None),
                 ("Agent Control (MCP)…", "dialog:agents", None),
                 ("Contributors…", "dialog:about:Contributors", None),
                 ("Bảng tính – ERPCons on GitHub", "url:https://github.com/tuananhfr/gridcraft", None),
@@ -234,6 +235,8 @@ impl NativeMenu {
                     continue;
                 }
                 let accel = acc.and_then(|a| Accelerator::from_str(a).ok());
+                let language = gridcraft_ui_egui::i18n::current(ctx);
+                let label = if id == "app.checkForUpdates" { language.tr(label) } else { label };
                 let item = MenuItem::with_id(id, label, true, accel);
                 let _ = sub.append(&item);
             }
@@ -285,6 +288,10 @@ impl NativeMenu {
                     });
                     continue;
                 }
+            }
+            if id == "app.checkForUpdates" {
+                app.run_or_alert("app.checkForUpdates", json!({}));
+                continue;
             }
             if select_theme(app, &id) {
                 continue;

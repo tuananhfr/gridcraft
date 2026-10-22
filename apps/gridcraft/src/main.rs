@@ -18,6 +18,7 @@ mod logging;
 #[cfg(target_os = "macos")]
 mod native_menu;
 mod print;
+mod updates;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -42,6 +43,7 @@ impl eframe::App for App {
         self.language.set(language);
         #[cfg(target_os = "macos")]
         {
+            gridcraft_ui_egui::i18n::set_current(ctx, language);
             if self.menu.is_none() && std::env::var_os("GRIDCRAFT_NO_NATIVE_MENU").is_none() {
                 self.menu = Some(native_menu::NativeMenu::install(ctx));
             }
@@ -303,6 +305,9 @@ fn icon() -> Option<egui::IconData> {
 }
 
 fn main() -> eframe::Result<()> {
+    if let Some(code) = erpcons_update::run_helper_from_args() {
+        std::process::exit(code);
+    }
     // First, so the panic hook and every start-up warning are recorded (`logging`).
     let logger = logging::install();
     // Commands catch their panics (`Session::execute`), but the default hook only prints to
@@ -379,6 +384,11 @@ fn main() -> eframe::Result<()> {
     app.after_engine(); // Show warnings from the sample.
     let control_port = control_port;
     load_prefs(&mut app);
+    if prefs_enabled()
+        && let Some(dir) = config_dir()
+    {
+        app.update_hook = Some(std::sync::Arc::new(updates::DesktopUpdates::new(dir.join("update-state.json"))));
+    }
     language.set(app.ui.language);
     let mut drafts = if prefs_enabled() {
         config_dir().and_then(|dir| match drafts::Drafts::new(dir.join("drafts")) {

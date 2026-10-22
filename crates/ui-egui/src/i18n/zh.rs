@@ -2,6 +2,38 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The update check stopped unexpectedly" => "更新检查意外停止",
+        "Could not start updater: {reason}" => "无法启动更新程序：{reason}",
+        "Updated to version {version}" => "已更新至版本 {version}",
+        "Update to {version} failed: {reason}" => "更新至 {version} 失败：{reason}",
+        "Bảng tính – ERPCons is up to date." => "Bảng tính – ERPCons 已是最新版本。",
+        "Automatically check for updates" => "自动检查更新",
+        "Retry" => "重试",
+        "Bảng tính – ERPCons {version} is available" => "Bảng tính – ERPCons {version} 已可用",
+        "Cancel" => "取消",
+        "Checking for a newer version…" => "正在检查新版本…",
+        "Download new version" => "下载新版本",
+        "Update now" => "立即更新",
+        "Remind me later" => "稍后提醒我",
+        "Skip this version" => "跳过此版本",
+        "What's new" => "更新内容",
+        "The updater is busy; try again shortly" => "更新程序正忙，请稍后重试",
+        "The updater failed; restart the app and try again" => "更新程序失败，请重启应用后重试",
+        "The app will close, Windows will ask for installation permission — choose Yes — then the app will reopen automatically" => {
+            "应用将关闭，Windows 会请求安装权限 — 请选择 Yes — 随后应用将自动重新打开"
+        }
+        "The app will close and reopen after updating" => "更新后应用将关闭并重新打开",
+        "Check for updates" => "检查更新",
+        "Help" => "帮助",
+        "Update network unavailable: {detail}" => "更新网络不可用：{detail}",
+        "Update server returned HTTP {detail}" => "更新服务器返回 HTTP {detail}",
+        "The update signature is invalid" => "更新签名无效",
+        "The update manifest is invalid: {detail}" => "更新清单无效：{detail}",
+        "The downloaded update failed verification" => "下载的更新未通过验证",
+        "Could not write the update: {detail}" => "无法写入更新：{detail}",
+        "This installation cannot update automatically" => "此安装无法自动更新",
+        "Permission denied while updating; check folder permissions" => "更新时权限被拒绝，请检查文件夹权限",
+        "Update cancelled" => "更新已取消",
         "This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself." => "此公式产生循环引用，因此单元格显示 #CIRC!。请修改公式，使其不再引用自身。",
         "Could not open the legacy .xls format" => "无法打开旧版 .xls 格式",
         "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "无法打开此旧版 Excel 文件 (.xls)。请用 Excel 或 LibreOffice 打开，将其另存为 .xlsx 后重试。",

@@ -3,6 +3,40 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "The update check stopped unexpectedly" => "Die Suche nach Updates wurde unerwartet beendet",
+        "Could not start updater: {reason}" => "Das Aktualisierungsprogramm konnte nicht gestartet werden: {reason}",
+        "Updated to version {version}" => "Auf Version {version} aktualisiert",
+        "Update to {version} failed: {reason}" => "Update auf {version} fehlgeschlagen: {reason}",
+        "Bảng tính – ERPCons is up to date." => "Bảng tính – ERPCons ist auf dem neuesten Stand.",
+        "Automatically check for updates" => "Automatisch nach Updates suchen",
+        "Retry" => "Erneut versuchen",
+        "Bảng tính – ERPCons {version} is available" => "Bảng tính – ERPCons {version} ist verfügbar",
+        "Cancel" => "Abbrechen",
+        "Checking for a newer version…" => "Suche nach einer neueren Version…",
+        "Download new version" => "Neue Version herunterladen",
+        "Update now" => "Jetzt aktualisieren",
+        "Remind me later" => "Später erinnern",
+        "Skip this version" => "Diese Version überspringen",
+        "What's new" => "Neuigkeiten",
+        "The updater is busy; try again shortly" => "Das Aktualisierungsprogramm ist beschäftigt; versuchen Sie es gleich erneut",
+        "The updater failed; restart the app and try again" => {
+            "Das Aktualisierungsprogramm ist fehlgeschlagen; starten Sie die App neu und versuchen Sie es erneut"
+        }
+        "The app will close, Windows will ask for installation permission — choose Yes — then the app will reopen automatically" => {
+            "Die App wird geschlossen, Windows fragt nach der Installationsberechtigung — wählen Sie Yes — danach öffnet sich die App automatisch wieder"
+        }
+        "The app will close and reopen after updating" => "Die App wird nach dem Update geschlossen und erneut geöffnet",
+        "Check for updates" => "Nach Updates suchen",
+        "Help" => "Hilfe",
+        "Update network unavailable: {detail}" => "Netzwerk für Updates nicht verfügbar: {detail}",
+        "Update server returned HTTP {detail}" => "Der Update-Server hat HTTP {detail} zurückgegeben",
+        "The update signature is invalid" => "Die Signatur des Updates ist ungültig",
+        "The update manifest is invalid: {detail}" => "Das Update-Manifest ist ungültig: {detail}",
+        "The downloaded update failed verification" => "Das heruntergeladene Update hat die Überprüfung nicht bestanden",
+        "Could not write the update: {detail}" => "Das Update konnte nicht geschrieben werden: {detail}",
+        "This installation cannot update automatically" => "Diese Installation kann nicht automatisch aktualisiert werden",
+        "Permission denied while updating; check folder permissions" => "Zugriff beim Aktualisieren verweigert; prüfen Sie die Ordnerberechtigungen",
+        "Update cancelled" => "Update abgebrochen",
         "This formula creates a circular reference, so the cell displays #CIRC!. Edit the formula so it does not refer to itself." => "Diese Formel erzeugt einen Zirkelbezug, daher zeigt die Zelle #CIRC! an. Bearbeiten Sie die Formel so, dass sie nicht auf sich selbst verweist.",
         "Could not open the legacy .xls format" => "Das alte .xls-Format konnte nicht geöffnet werden",
         "This legacy Excel file (.xls) could not be opened. Open it in Excel or LibreOffice, save it as .xlsx and try again." => "Diese Datei im alten Excel-Format (.xls) konnte nicht geöffnet werden. Öffnen Sie sie in Excel oder LibreOffice, speichern Sie sie als .xlsx und versuchen Sie es erneut.",
