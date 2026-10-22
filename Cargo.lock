@@ -1737,7 +1737,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "arboard",
  "craft-print",
@@ -1761,7 +1761,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-calc"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "gridcraft-core",
  "gridcraft-formula",
@@ -1773,7 +1773,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-chart"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "gridcraft-calc",
  "gridcraft-core",
@@ -1784,7 +1784,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-cli"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "gridcraft-engine",
  "gridcraft-mcp",
@@ -1796,7 +1796,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-core"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "js-sys",
  "serde",
@@ -1806,7 +1806,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-dxf"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "dxf",
  "thiserror 2.0.21",
@@ -1814,7 +1814,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-engine"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "cfb",
  "gridcraft-calc",
@@ -1837,7 +1837,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-formula"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "gridcraft-core",
  "serde",
@@ -1846,7 +1846,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-functions"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "gridcraft-core",
  "regex",
@@ -1854,7 +1854,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-mcp"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "gridcraft-engine",
  "log",
@@ -1863,7 +1863,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-mdb"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "encoding_rs",
  "thiserror 2.0.21",
@@ -1871,7 +1871,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-model"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "gridcraft-core",
  "gridcraft-formula",
@@ -1883,21 +1883,21 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-numfmt"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "gridcraft-core",
 ]
 
 [[package]]
 name = "gridcraft-pdf"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "skrifa",
 ]
 
 [[package]]
 name = "gridcraft-ui-egui"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "craft-ui",
  "egui",
@@ -1920,7 +1920,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-web"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "eframe",
  "egui",
@@ -1937,7 +1937,7 @@ dependencies = [
 
 [[package]]
 name = "gridcraft-xlsx"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "aes",
  "cfb",
@@ -5122,7 +5122,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "gridcraft-engine",
  "serde_json",
