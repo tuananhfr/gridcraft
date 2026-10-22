@@ -13,6 +13,8 @@ use crate::SheetApp;
 use crate::theme;
 use crate::widgets::tr;
 
+pub const MACRO_DIALOG_LAYOUT: &str = "gridcraft.macros.rect";
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Field {
     Text { key: &'static str, label: &'static str },
@@ -738,7 +740,28 @@ impl Dialog {
             "journal" => Dialog::custom("journal", "Action Journal", json!({})),
             "macros" => {
                 let mut d = Dialog::custom("macros", "Macros", json!({}));
-                d.result = app.session.run("view.macros", json!({})).ok();
+                d.result = app.session.run("macros.analyze", json!({})).ok();
+                let scripts = app.session.run("view.macros", json!({})).ok().and_then(|r| r.as_array().cloned()).unwrap_or_default();
+                if let Some(result) = d.result.as_mut().and_then(Json::as_object_mut) {
+                    result.insert(
+                        "scripts".into(),
+                        json!(scripts.into_iter().filter(|s| s.get("kind").and_then(Json::as_str) != Some("vba")).collect::<Vec<_>>()),
+                    );
+                }
+                if let Some(procedure) = params.get("procedure").and_then(Json::as_str) {
+                    d.list_index = d
+                        .result
+                        .as_ref()
+                        .and_then(|r| r.get("procedures"))
+                        .and_then(Json::as_array)
+                        .and_then(|items| {
+                            items.iter().position(|item| {
+                                item.get("name").and_then(Json::as_str) == Some(procedure)
+                                    && params.get("module").is_none_or(|module| item.get("module") == Some(module))
+                            })
+                        })
+                        .unwrap_or(0);
+                }
                 d
             }
             "statistics" => {
@@ -1047,12 +1070,14 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
     let mut open = true;
     let mut win_open = true;
     let mut confirm = false;
+    let mut macro_target = None;
     let width = match d.name.as_str() {
         "formatCells" => 560.0,
         "about" => 660.0,
+        "macros" => 640.0_f32.min((ctx.content_rect().width() - 40.0).max(260.0)),
         "errorChecking" => 800.0_f32.min((ctx.content_rect().width() - 40.0).max(280.0)),
         "importWarnings" => 600.0,
-        "insertFunction" | "commandSearch" | "shortcuts" | "nameManager" | "manageRules" | "journal" | "agents" | "macros" => 520.0,
+        "insertFunction" | "commandSearch" | "shortcuts" | "nameManager" | "manageRules" | "journal" | "agents" => 520.0,
         "recommendedCharts" => 600.0,
         "analysisToolPak" => 420.0,
         "solver" => 460.0,
@@ -1066,7 +1091,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
         .anchor(egui::Align2::CENTER_CENTER, vec2(0.0, -40.0))
         .open(&mut win_open);
     let window = if d.name == "insertPicture" { window.default_height(240.0) } else { window };
-    window.show(ctx, |ui| {
+    let window_response = window.show(ctx, |ui| {
             ui.set_min_width(width - 20.0);
             match d.name.as_str() {
                 "formatCells" => format_cells(app, ui, &mut d, &mut confirm),
@@ -1111,7 +1136,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                         }
                     });
                 }
-                "macros" => macros(ui, &mut d, app),
+                "macros" => crate::macro_dialog::show(ui, &mut d),
                 "errorChecking" => {
                     egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
                         if let Some(errors) = d.result.as_ref().and_then(|r| r.get("errors")).and_then(Json::as_array) {
@@ -1129,11 +1154,13 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                                     for error in errors {
                                         let text = |key| error.get(key).and_then(Json::as_str).unwrap_or_default();
                                         ui.label(format!("{}!{}", text("sheet"), text("cell")));
-                                        let reason = app.ui.language.tr(text("reason"));
-                                        let symbol = text("symbol");
-                                        ui.label(if symbol.is_empty() { reason.to_string() } else { format!("{reason}: {symbol}") });
+                                        ui.label(crate::macro_dialog::diagnostic_text(app.ui.language, error));
                                         ui.add(egui::Label::new(egui::RichText::new(text("formula")).monospace()).wrap());
-                                        ui.label(app.ui.language.tr(text("suggestion")));
+                                        if text("suggestion") == "View code" {
+                                            if ui.button(tr(ui, "View code")).clicked() {
+                                                macro_target = Some(json!({"procedure": text("procedure"), "module": text("module")}));
+                                            }
+                                        } else { ui.label(app.ui.language.tr(text("suggestion"))); }
                                         ui.end_row();
                                     }
                                 });
@@ -1300,6 +1327,11 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                 _ => form(ui, &mut d, &mut confirm, &mut open),
             }
         });
+    if d.name == "macros"
+        && let Some(window) = window_response
+    {
+        ctx.data_mut(|data| data.insert_temp(egui::Id::new(MACRO_DIALOG_LAYOUT), window.response.rect));
+    }
     // Hyperlinks inside dialogs (About ▸ Contributors) open through the host's `open_url`, since
     // the native shell has no browser integration of its own.
     if let Some(open_url) = &app.services.open_url {
@@ -1362,7 +1394,9 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
         }
         return;
     }
-    if open {
+    if let Some(target) = macro_target {
+        app.open_dialog("macros", target);
+    } else if open {
         app.dialog = Some(d);
     } else if let Some(back) = d.back.take() {
         app.dialog = Some(*back);
@@ -1567,35 +1601,6 @@ fn about(ui: &mut egui::Ui, d: &mut Dialog, app: &SheetApp) {
             ui.hyperlink_to(tr(ui, "Source on GitHub"), "https://github.com/tuananhfr/gridcraft");
         }
     }
-}
-
-/// The Macros dialog: lists GridCraft's own recorded scripts and (if the file carries one) the
-/// preserved VBA project. Mirrors Excel's Developer ▸ Macros list, but is honest that VBA is
-/// preserved and not executed.
-fn macros(ui: &mut egui::Ui, d: &mut Dialog, app: &SheetApp) {
-    ui.label(app.product_text("Automation in this workbook. GridCraft runs its own scripts; a file's VBA project is preserved but not executed."));
-    ui.add_space(6.0);
-    let items: Vec<Json> = d.result.as_ref().and_then(Json::as_array).cloned().unwrap_or_default();
-    if items.is_empty() {
-        ui.weak(tr(ui, "This workbook has no scripts or macros."));
-        return;
-    }
-    egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-        for it in &items {
-            let name = it.get("name").and_then(Json::as_str).unwrap_or("(unnamed)");
-            let is_vba = it.get("kind").and_then(Json::as_str) == Some("vba");
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(name).strong());
-                if is_vba {
-                    ui.weak(format!("— {}", tr(ui, "VBA project (preserved, not run)")));
-                } else {
-                    let steps = it.get("steps").and_then(Json::as_u64).unwrap_or(0);
-                    let text = if steps == 1 { tr(ui, "{count} step") } else { tr(ui, "{count} steps") };
-                    ui.weak(format!("— {}", text.replace("{count}", &steps.to_string())));
-                }
-            });
-        }
-    });
 }
 
 fn format_cells(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confirm: &mut bool) {

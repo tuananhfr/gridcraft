@@ -75,7 +75,7 @@ fn selection_calculates_cross_sheet_precedents_only() {
 fn calculation_status_and_diagnostic_causes() {
     for (formula, cause, symbol) in [
         ("=NOSUCHFN()", "unknownFunction", "NOSUCHFN"),
-        ("=_xludf.MyRate()", "missingUdf", "MyRate"),
+        ("=_xludf.MyRate()", "unknownFunction", "MyRate"),
         ("=MissingName", "undefinedName", "MissingName"),
         ("='[Book.xlsx]Sheet1'!A1", "externalReference", ""),
     ] {

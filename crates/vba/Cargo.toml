@@ -8,6 +8,9 @@ publish = false
 [lints]
 workspace = true
 
+[features]
+test-support = []
+
 [dependencies]
 thiserror.workspace = true
 serde.workspace = true
@@ -15,4 +18,5 @@ cfb = "0.15"
 encoding_rs = "=0.8.35"
 
 [dev-dependencies]
+gridcraft-vba = { path = ".", features = ["test-support"] }
 serde_json.workspace = true

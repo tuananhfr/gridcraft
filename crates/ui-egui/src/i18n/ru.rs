@@ -2,6 +2,32 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Macro|Yes" => "Да",
+        "Macro|No" => "Нет",
+
+        "Form Control" => "Элемент управления формы",
+        "Macros cannot be run in GridCraft yet; this is read-only analysis." => "Макросы пока не выполняются; это анализ только для чтения.",
+        "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
+            "Модули: {modules} · Процедуры: {procedures} · UDF: {udfs} · События: {events} · Подпись: {signed} · Блокировка: {locked}"
+        }
+        "Runnable with a macro runner" => "Выполняется при наличии среды макросов",
+        "Uses Windows API" => "Использует Windows API",
+        "Uses COM (ETABS, AutoCAD, Access…)" => "Использует COM (ETABS, AutoCAD, Access…)",
+        "ActiveX / UserForm" => "ActiveX / Пользовательская форма",
+        "View code" => "Просмотр кода",
+        "Parameters" => "Параметры",
+        "Returns" => "Возвращаемый тип",
+        "Event" => "Событие",
+        "Macro|Line" => "Строка",
+        "Optional" => "Необязательный",
+        "Found" => "Найдено",
+        "Not found" => "Не найдено",
+        "VBA function {name} ({module}, line {line}) — macros are not run in GridCraft, so it cannot be calculated yet." => {
+            "Функция VBA {name} ({module}, строка {line}) — макросы пока не выполняются, поэтому вычисление недоступно."
+        }
+        "Function {name} was not found in this file's macros." => "Функция {name} не найдена в макросах этого файла.",
+        "Could not read the VBA project" => "Не удалось прочитать проект VBA",
+
         "too many VBA signature parts" => "Слишком много частей подписи VBA",
         "too many macro buttons" => "Слишком много кнопок макросов",
         "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {

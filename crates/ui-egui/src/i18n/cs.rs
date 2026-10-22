@@ -2,6 +2,32 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Macro|Yes" => "Ano",
+        "Macro|No" => "Ne",
+
+        "Form Control" => "Ovládací prvek formuláře",
+        "Macros cannot be run in GridCraft yet; this is read-only analysis." => "Makra se zatím nespouštějí; jde o analýzu pouze pro čtení.",
+        "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
+            "{modules} modulů · {procedures} procedur · {udfs} UDF · Události: {events} · Podepsáno: {signed} · Zamčeno: {locked}"
+        }
+        "Runnable with a macro runner" => "Spustitelné s prostředím pro makra",
+        "Uses Windows API" => "Používá Windows API",
+        "Uses COM (ETABS, AutoCAD, Access…)" => "Používá COM (ETABS, AutoCAD, Access…)",
+        "ActiveX / UserForm" => "ActiveX / Uživatelský formulář",
+        "View code" => "Zobrazit kód",
+        "Parameters" => "Parametry",
+        "Returns" => "Návratový typ",
+        "Event" => "Událost",
+        "Macro|Line" => "Řádek",
+        "Optional" => "Volitelný",
+        "Found" => "Nalezeno",
+        "Not found" => "Nenalezeno",
+        "VBA function {name} ({module}, line {line}) — macros are not run in GridCraft, so it cannot be calculated yet." => {
+            "Funkce VBA {name} ({module}, řádek {line}) — makra se zatím nespouštějí, proto výpočet není dostupný."
+        }
+        "Function {name} was not found in this file's macros." => "Funkce {name} nebyla nalezena v makrech tohoto souboru.",
+        "Could not read the VBA project" => "Projekt VBA nelze přečíst",
+
         "too many VBA signature parts" => "Příliš mnoho částí podpisu VBA",
         "too many macro buttons" => "Příliš mnoho tlačítek maker",
         "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {

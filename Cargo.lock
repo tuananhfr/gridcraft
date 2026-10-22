@@ -1788,6 +1788,7 @@ version = "0.6.5"
 dependencies = [
  "gridcraft-engine",
  "gridcraft-mcp",
+ "gridcraft-vba",
  "log",
  "quick-xml",
  "serde_json",
@@ -1826,11 +1827,13 @@ dependencies = [
  "gridcraft-model",
  "gridcraft-numfmt",
  "gridcraft-pdf",
+ "gridcraft-vba",
  "gridcraft-xlsx",
  "image",
  "log",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "thiserror 2.0.21",
  "zip 3.0.0",
 ]
@@ -1906,6 +1909,7 @@ dependencies = [
  "gridcraft-chart",
  "gridcraft-engine",
  "gridcraft-pdf",
+ "gridcraft-vba",
  "gridcraft-xlsx",
  "image",
  "log",
@@ -1916,6 +1920,18 @@ dependencies = [
  "toml",
  "web-sys",
  "zbus",
+]
+
+[[package]]
+name = "gridcraft-vba"
+version = "0.6.5"
+dependencies = [
+ "cfb",
+ "encoding_rs",
+ "gridcraft-vba",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1933,17 +1949,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
-]
-
-[[package]]
-name = "gridcraft-vba"
-version = "0.6.5"
-dependencies = [
- "cfb",
- "encoding_rs",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
 ]
 
 [[package]]

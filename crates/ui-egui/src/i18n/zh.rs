@@ -2,6 +2,32 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Macro|Yes" => "是",
+        "Macro|No" => "否",
+
+        "Form Control" => "窗体控件",
+        "Macros cannot be run in GridCraft yet; this is read-only analysis." => "暂不支持运行宏；此处为只读分析。",
+        "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
+            "{modules} 个模块 · {procedures} 个过程 · {udfs} 个 UDF · 事件: {events} · 已签名: {signed} · 已锁定: {locked}"
+        }
+        "Runnable with a macro runner" => "有宏运行器时可运行",
+        "Uses Windows API" => "使用 Windows API",
+        "Uses COM (ETABS, AutoCAD, Access…)" => "使用 COM (ETABS, AutoCAD, Access…)",
+        "ActiveX / UserForm" => "ActiveX / 用户窗体",
+        "View code" => "查看代码",
+        "Parameters" => "参数",
+        "Returns" => "返回类型",
+        "Event" => "事件",
+        "Macro|Line" => "行",
+        "Optional" => "可选",
+        "Found" => "已找到",
+        "Not found" => "未找到",
+        "VBA function {name} ({module}, line {line}) — macros are not run in GridCraft, so it cannot be calculated yet." => {
+            "VBA 函数 {name}（{module}，第 {line} 行）— 尚未运行宏，因此暂时无法计算。"
+        }
+        "Function {name} was not found in this file's macros." => "在此文件的宏中找不到函数 {name}。",
+        "Could not read the VBA project" => "无法读取 VBA 项目",
+
         "too many VBA signature parts" => "VBA 签名部件过多",
         "too many macro buttons" => "宏按钮过多",
         "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {

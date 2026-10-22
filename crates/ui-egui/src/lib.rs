@@ -32,6 +32,7 @@ pub mod i18n;
 pub mod icons;
 pub mod keymap;
 pub mod keytips;
+mod macro_dialog;
 pub mod narrow;
 pub mod outline;
 pub mod panes;

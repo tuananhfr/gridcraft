@@ -5,6 +5,32 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Macro|Yes" => "Có",
+        "Macro|No" => "Không",
+
+        "ActiveX / UserForm" => "ActiveX / UserForm",
+        "Form Control" => "Điều khiển biểu mẫu",
+        "Macros cannot be run in GridCraft yet; this is read-only analysis." => "Macro chưa được chạy trong Bảng tính; đây là phân tích chỉ đọc.",
+        "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
+            "{modules} mô-đun · {procedures} thủ tục · {udfs} UDF · Sự kiện tự chạy: {events} · Đã ký: {signed} · Đã khóa: {locked}"
+        }
+        "Runnable with a macro runner" => "Chạy được khi có trình chạy macro",
+        "Uses Windows API" => "Dùng Windows API",
+        "Uses COM (ETABS, AutoCAD, Access…)" => "Dùng COM (ETABS, AutoCAD, Access…)",
+        "View code" => "Xem mã",
+        "Parameters" => "Tham số",
+        "Returns" => "Kiểu trả về",
+        "Event" => "Sự kiện",
+        "Macro|Line" => "Dòng",
+        "Optional" => "Tùy chọn",
+        "Found" => "Có trong dự án",
+        "Not found" => "Không tìm thấy",
+        "VBA function {name} ({module}, line {line}) — macros are not run in GridCraft, so it cannot be calculated yet." => {
+            "Hàm VBA tự định nghĩa `{name}` ({module}, dòng {line}) — Bảng tính chưa chạy macro nên chưa tính được"
+        }
+        "Function {name} was not found in this file's macros." => "Không tìm thấy hàm `{name}` trong macro của tệp",
+        "Could not read the VBA project" => "Không đọc được dự án VBA",
+
         "too many VBA signature parts" => "Có quá nhiều phần chữ ký VBA",
         "too many macro buttons" => "Có quá nhiều nút macro",
         "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {

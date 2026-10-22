@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: add cached read-only VBA analysis, procedure compatibility and source browsing in Macro, and precise VBA UDF Error Checking with CLI udfUnavailable counts (GRID-08).
+
 - Both: add the `gridcraft-vba` crate, a bounded read-only MS-OVBA project analysis (modules, procedures, UDFs, events, references, protection flags, compatibility levels 1-4) that never executes VBA (GRID-08 groundwork; not wired into the UI yet).
 
 - (desktop) Repository variable `ERPCONS_SKIP_MACOS=true` releases Windows and Linux installers without waiting for a macOS runner; update.json then lists no Mac asset.

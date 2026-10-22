@@ -19,7 +19,7 @@ fn spec_3_2_decompression_vectors_and_raw_chunks() {
         assert_eq!(p.modules[0].source, expected);
     }
     let source = format!("{}\r\nSub Raw()\r\nEnd Sub\r\n", " ".repeat(8192));
-    let p = analyze(&fixture(&[M::new("Raw", "Module", &source)], 1252, "", &[])).unwrap();
+    let p = analyze(&fixture(&[M::new("Raw", "Module", &source).unwrap()], 1252, "", &[])).unwrap();
     assert_eq!(p.modules[0].source, source);
     assert_eq!(p.modules[0].procedures[0].name, "Raw");
 }
@@ -28,11 +28,11 @@ fn spec_3_2_decompression_vectors_and_raw_chunks() {
 fn kinds_headers_parameters_udfs_events_and_json() {
     let source = "Attribute VB_Name = \"Functions\"\r\nPublic Static Function SumIt(Optional ByVal text As String = \"it's,a\", _\r\nByRef count As Long, ParamArray rest() As Variant) As Double ' comment\r\nRem Shell CreateObject\r\ntext = \"Shell ' CreateObject\" ' Shell\r\nEnd Function\r\nPrivate Function Hidden()\r\nEnd Function\r\nSub Auto_Open()\r\nEnd Sub\r\nFriend Property Get Value() As String\r\nEnd Property\r\nProperty Let Value(ByVal rhs As String)\r\nEnd Property\r\nProperty Set Item(ByVal rhs As Object)\r\nEnd Property\r\n";
     let modules = [
-        M::new("Functions", "Module", source),
-        M::new("Book", "Document", "Sub Workbook_Open()\nEnd Sub\nSub Worksheet_Change(ByVal Target As Range)\nEnd Sub"),
-        M::new("Class1", "Class", "Function ClassFn()\nEnd Function"),
-        M::new("Form1", "BaseClass", "Private Sub CommandButton1_Click()\nEnd Sub"),
-        M::new("Internal", "Module", "Option Private Module\nFunction InternalFn()\nEnd Function"),
+        M::new("Functions", "Module", source).unwrap(),
+        M::new("Book", "Document", "Sub Workbook_Open()\nEnd Sub\nSub Worksheet_Change(ByVal Target As Range)\nEnd Sub").unwrap(),
+        M::new("Class1", "Class", "Function ClassFn()\nEnd Function").unwrap(),
+        M::new("Form1", "BaseClass", "Private Sub CommandButton1_Click()\nEnd Sub").unwrap(),
+        M::new("Internal", "Module", "Option Private Module\nFunction InternalFn()\nEnd Function").unwrap(),
     ];
     let p = analyze(&fixture(&modules, 1252, "", &[])).unwrap();
     assert_eq!(p.name, "Synthetic");
@@ -76,7 +76,7 @@ fn kinds_headers_parameters_udfs_events_and_json() {
 #[test]
 fn compatibility_reasons_and_cycle_safe_calls() {
     let source = "Private Declare PtrSafe Function WinApi Lib \"x\" () As Long\nSub ExcelOnly()\nRange(\"A1\") = Application.WorksheetFunction.Sum(1, 2)\nMsgBox InputBox(Application.GetOpenFilename())\nEnd Sub\nSub OS()\nWinApi\nShell \"x\"\nSendKeys \"x\"\nx = Environ(\"PATH\")\nOpen \"x\" For Input As #1\nKill \"x\"\nFileCopy \"x\", \"y\"\nMkDir \"x\"\nx = Dir(\"x\")\nEnd Sub\nSub Com()\nx = CreateObject(\"Autocad.Application\")\nx = GetObject(\"x\")\nDim db As DAO.Database\nDim conn As ADODB.Connection\nx = OpenDatabase(\"x\")\nSet x = New ExternalClass\nx = ETABS.Application\nEnd Sub\nSub Forms()\nUserForm1.Show\nDim x As MSForms.Control\nEnd Sub\nSub A()\nB\nEnd Sub\nSub B()\nA\nCom\nEnd Sub\nSub Start()\nA\nEnd Sub";
-    let p = analyze(&fixture(&[M::new("Macros", "Module", source)], 1252, "", &[])).unwrap();
+    let p = analyze(&fixture(&[M::new("Macros", "Module", source).unwrap()], 1252, "", &[])).unwrap();
     let procs = &p.modules[0].procedures;
     assert_eq!(procs.iter().map(|p| p.compatibility.level).collect::<Vec<_>>(), [1, 2, 3, 4, 3, 3, 3]);
     let reasons = &procs[1].compatibility.reasons;
@@ -96,7 +96,7 @@ fn compatibility_reasons_and_cycle_safe_calls() {
 
 #[test]
 fn protection_missing_source_and_code_pages() {
-    let mut vietnamese = M::new("Vietnamese", "Module", "");
+    let mut vietnamese = M::new("Vietnamese", "Module", "").unwrap();
     let text = "Function Tinh()\n' Tiếng Việt\nEnd Function";
     let (bytes, _, errors) = encoding_rs::WINDOWS_1258.encode(text);
     // Windows-1258 represents Vietnamese using combining tone marks.
@@ -104,7 +104,7 @@ fn protection_missing_source_and_code_pages() {
     let (bytes2, _, errors) = encoding_rs::WINDOWS_1258.encode(text);
     assert!(!errors);
     drop(bytes);
-    vietnamese.source = compress(&bytes2);
+    vietnamese.source = compress(&bytes2).unwrap();
     let missing = M { name: "Removed", kind: "Module", source: vec![], private: true };
     let p = analyze(&fixture(&[vietnamese, missing], 1258, "DPB=\"1234\"\r\nCMG=\"1234\"\r\nGC=\"1234\"\r\n", &[])).unwrap();
     assert!(p.locked);
@@ -114,7 +114,7 @@ fn protection_missing_source_and_code_pages() {
     assert!(p.modules[1].private_module);
     assert!(p.warnings.iter().any(|w| w.contains("p-code only or source removed")));
     let text = "Function Wide()\n' λ\nEnd Function";
-    let wide = M { name: "Wide", kind: "Module", source: compress(&unicode(text)), private: false };
+    let wide = M { name: "Wide", kind: "Module", source: compress(&unicode(text)).unwrap(), private: false };
     let p = analyze(&fixture(&[wide], 1200, "", &[])).unwrap();
     assert_eq!(p.modules[0].source, text);
 }
@@ -159,14 +159,14 @@ fn reference_record_layouts() {
 #[test]
 fn protection_flags_are_decoded_without_touching_the_password() {
     let open = format!("DPB={}\r\nCMG={}\r\nGC={}\r\n", encrypt(0x17, &[0]), encrypt(0x2c, &[0; 4]), encrypt(0x41, &[0xff]));
-    let p = analyze(&fixture(&[M::new("M", "Module", "Sub A()\nEnd Sub")], 1252, &open, &[])).unwrap();
+    let p = analyze(&fixture(&[M::new("M", "Module", "Sub A()\nEnd Sub").unwrap()], 1252, &open, &[])).unwrap();
     assert!(!p.locked);
     assert!(p.warnings.is_empty(), "{:?}", p.warnings);
     for protection in [
         format!("CMG={}\r\nGC={}\r\n", encrypt(0x06, &[1, 0, 0, 0]), encrypt(0x93, &[0xff])),
         format!("CMG={}\r\nGC={}\r\n", encrypt(0xa4, &[0; 4]), encrypt(0x02, &[0])),
     ] {
-        let p = analyze(&fixture(&[M::new("M", "Module", "Sub A()\nEnd Sub")], 1252, &protection, &[])).unwrap();
+        let p = analyze(&fixture(&[M::new("M", "Module", "Sub A()\nEnd Sub").unwrap()], 1252, &protection, &[])).unwrap();
         assert!(p.locked);
         assert!(p.warnings.iter().any(|w| w.contains("not bypassed")));
         assert_eq!(p.modules[0].procedures.len(), 1);
@@ -176,7 +176,7 @@ fn protection_flags_are_decoded_without_touching_the_password() {
 #[test]
 fn malformed_procedures_warn_instead_of_failing() {
     let source = "Sub First()\nWorkbooks.Open Filename:=\"a.xls\", Format:=1: x = 1\nFunction Second()\nEnd Sub\nSub Third()\nMsgBox \"x\" _";
-    let p = analyze(&fixture(&[M::new("M", "Module", source)], 1252, "", &[])).unwrap();
+    let p = analyze(&fixture(&[M::new("M", "Module", source).unwrap()], 1252, "", &[])).unwrap();
     let procs = &p.modules[0].procedures;
     assert_eq!(procs.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["First", "Second", "Third"]);
     assert_eq!(procs[0].compatibility.level, 1);
@@ -187,7 +187,7 @@ fn malformed_procedures_warn_instead_of_failing() {
 
 #[test]
 fn every_truncation_and_2000_seeded_mutations_never_panic() {
-    let bytes = fixture(&[M::new("Macros", "Module", "Function Test() As Long\nTest = 42\nEnd Function")], 1252, "", &[]);
+    let bytes = fixture(&[M::new("Macros", "Module", "Function Test() As Long\nTest = 42\nEnd Function").unwrap()], 1252, "", &[]);
     for end in 0..bytes.len() {
         let _ = analyze(&bytes[..end]);
     }
@@ -218,7 +218,7 @@ fn malformed_tokens_chunks_and_limits_fail_cleanly() {
 #[test]
 fn continuations_keep_reason_lines_and_continue_comments() {
     let source = "Function Visible() As String\nRem ignored _\nShell \"x\"\nx = 1 ' note _\nKill \"x\"\nVisible = _\nCreateObject(\"External.Application\")\nEnd Function\n";
-    let p = analyze(&fixture(&[M::new("M", "Module", source)], 1252, "", &[])).unwrap();
+    let p = analyze(&fixture(&[M::new("M", "Module", source).unwrap()], 1252, "", &[])).unwrap();
     let proc = find_udf(&p, "Visible").unwrap().1;
     assert_eq!(proc.line, 1);
     assert!(proc.compatibility.reasons.iter().any(|r| r.code == "create_object" && r.line == 7));
@@ -234,7 +234,7 @@ fn decompression_and_line_budgets_are_enforced() {
     let excessive = M { name: "Excessive", kind: "Module", source: stream, private: false };
     assert!(matches!(analyze(&fixture(&[excessive], 1252, "", &[])), Err(gridcraft_vba::Error::Limit(_))));
     let line = "x".repeat(256 * 1024 + 1);
-    assert!(matches!(analyze(&fixture(&[M::new("Line", "Module", &line)], 1252, "", &[])), Err(gridcraft_vba::Error::Limit(_))));
+    assert!(matches!(analyze(&fixture(&[M::new("Line", "Module", &line).unwrap()], 1252, "", &[])), Err(gridcraft_vba::Error::Limit(_))));
 }
 
 #[test]
@@ -256,6 +256,6 @@ fn total_decompression_and_metadata_budgets_are_enforced() {
 
 #[test]
 fn udf_lookup_is_case_insensitive_for_unicode_names() {
-    let p = analyze(&fixture(&[M::new("Functions", "Module", "Function TÍNH()\nEnd Function")], 65001, "", &[])).unwrap();
+    let p = analyze(&fixture(&[M::new("Functions", "Module", "Function TÍNH()\nEnd Function").unwrap()], 65001, "", &[])).unwrap();
     assert!(find_udf(&p, "tính").is_some());
 }

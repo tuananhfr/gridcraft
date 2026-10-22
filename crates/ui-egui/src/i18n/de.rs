@@ -3,6 +3,34 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Macro|Yes" => "Ja",
+        "Macro|No" => "Nein",
+
+        "Form Control" => "Formularsteuerelement",
+        "Macros cannot be run in GridCraft yet; this is read-only analysis." => {
+            "Makros werden noch nicht ausgeführt; dies ist eine schreibgeschützte Analyse."
+        }
+        "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
+            "{modules} Module · {procedures} Prozeduren · {udfs} UDFs · Ereignisse: {events} · Signiert: {signed} · Gesperrt: {locked}"
+        }
+        "Runnable with a macro runner" => "Mit einer Makrolaufzeit ausführbar",
+        "Uses Windows API" => "Verwendet Windows API",
+        "Uses COM (ETABS, AutoCAD, Access…)" => "Verwendet COM (ETABS, AutoCAD, Access…)",
+        "ActiveX / UserForm" => "ActiveX / Benutzerformular",
+        "View code" => "Code anzeigen",
+        "Parameters" => "Parameter",
+        "Returns" => "Rückgabetyp",
+        "Event" => "Ereignis",
+        "Macro|Line" => "Zeile",
+        "Optional" => "Optionaler Parameter",
+        "Found" => "Gefunden",
+        "Not found" => "Nicht gefunden",
+        "VBA function {name} ({module}, line {line}) — macros are not run in GridCraft, so it cannot be calculated yet." => {
+            "VBA-Funktion {name} ({module}, Zeile {line}) — Makros werden noch nicht ausgeführt, daher ist die Berechnung nicht verfügbar."
+        }
+        "Function {name} was not found in this file's macros." => "Funktion {name} wurde in den Makros dieser Datei nicht gefunden.",
+        "Could not read the VBA project" => "VBA-Projekt konnte nicht gelesen werden",
+
         "too many VBA signature parts" => "Zu viele VBA-Signaturteile",
         "too many macro buttons" => "Zu viele Makroschaltflächen",
         "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {

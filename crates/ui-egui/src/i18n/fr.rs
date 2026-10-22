@@ -2,6 +2,34 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Macro|Yes" => "Oui",
+        "Macro|No" => "Non",
+
+        "Form Control" => "Contrôle de formulaire",
+        "Macros cannot be run in GridCraft yet; this is read-only analysis." => {
+            "Les macros ne sont pas encore exécutées ; cette analyse est en lecture seule."
+        }
+        "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
+            "{modules} modules · {procedures} procédures · {udfs} UDF · Événements : {events} · Signé : {signed} · Verrouillé : {locked}"
+        }
+        "Runnable with a macro runner" => "Exécutable avec un moteur de macros",
+        "Uses Windows API" => "Utilise l’API Windows",
+        "Uses COM (ETABS, AutoCAD, Access…)" => "Utilise COM (ETABS, AutoCAD, Access…)",
+        "ActiveX / UserForm" => "ActiveX / Formulaire utilisateur",
+        "View code" => "Voir le code",
+        "Parameters" => "Paramètres",
+        "Returns" => "Type de retour",
+        "Event" => "Événement",
+        "Macro|Line" => "Ligne",
+        "Optional" => "Facultatif",
+        "Found" => "Trouvé",
+        "Not found" => "Introuvable",
+        "VBA function {name} ({module}, line {line}) — macros are not run in GridCraft, so it cannot be calculated yet." => {
+            "Fonction VBA {name} ({module}, ligne {line}) — les macros ne sont pas exécutées, le calcul est donc indisponible."
+        }
+        "Function {name} was not found in this file's macros." => "La fonction {name} est introuvable dans les macros de ce fichier.",
+        "Could not read the VBA project" => "Impossible de lire le projet VBA",
+
         "too many VBA signature parts" => "Trop de parties de signature VBA",
         "too many macro buttons" => "Trop de boutons de macro",
         "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {

@@ -147,6 +147,7 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!(noundo "view.unhideWindow", "Unhide…", ["View", "Window"], None, "{index?}", has_doc, unhide_window),
         cmd!(query "view.switchWindows", "Switch Windows", ["View", "Window"], None, "{} → open windows", always, switch_windows),
         cmd!(noundo "view.ruler", "Ruler", ["View", "Show"], None, "{on?} → {on}: rulers in Page Layout view (an application option)", has_doc, ruler),
+        cmd!(query "macros.analyze", "Macros", ["Developer", "Macros"], None, "{} → read-only VBA analysis", has_doc, analyze_macros),
         cmd!(query "view.macros", "Macros", ["View", "Macros"], None, "{} → scripts", has_doc, all_scripts),
         // Table tools
         cmd!("table.resize", "Resize Table", ["Table Design", "Properties"], None, "{table?, range: \"A1:F20\"}", has_doc, table_resize),
@@ -975,6 +976,10 @@ fn new_script(s: &mut Session, p: &Json) -> Result<Json> {
         stash_set(&mut cx.wb, SCRIPTS_NAME, &all);
         Ok(json!({"name": name}))
     })
+}
+
+fn analyze_macros(s: &mut Session, _: &Json) -> Result<Json> {
+    Ok(crate::macros::inspect(&s.doc()?.wb))
 }
 
 fn all_scripts(s: &mut Session, _: &Json) -> Result<Json> {

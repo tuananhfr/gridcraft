@@ -7,6 +7,10 @@ mod dir;
 mod protection;
 mod source;
 
+#[cfg(feature = "test-support")]
+#[doc(hidden)]
+pub mod testing;
+
 use serde::{Deserialize, Serialize};
 use std::io::{Cursor, Read};
 

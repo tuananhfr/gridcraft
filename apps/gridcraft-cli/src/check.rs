@@ -99,6 +99,7 @@ pub struct CalcReport {
     pub no_oracle: usize,
     pub not_calculated: usize,
     pub errors: usize,
+    pub udf_unavailable: usize,
     /// The producer asked for a full recalculation on load (`fullCalcOnLoad`): its cached values
     /// aren't results, so every formula counts as no oracle.
     pub stale_cache: bool,
@@ -435,6 +436,22 @@ pub fn oracle(cached: &Workbook, fresh: &Workbook, calc: &Calc, trust_cache: boo
         .map(|sh| sh.cells.iter().filter(|(_, cell)| cell.value.is_error()).count() + sh.spill.values().filter(|value| value.is_error()).count())
         .sum();
     let mut r = CalcReport { stale_cache: !trust_cache, errors, ..Default::default() };
+    let analysis = gridcraft_engine::macros::project(fresh);
+    r.udf_unavailable = fresh
+        .sheets
+        .iter()
+        .enumerate()
+        .map(|(si, sh)| {
+            sh.cells
+                .iter()
+                .filter(|(_, cell)| {
+                    cell.value.as_error() == Some(gridcraft_engine::core::CellError::Name)
+                        && gridcraft_engine::macros::udf_diagnostic_with(analysis.as_ref(), fresh, si, cell)
+                            .is_some_and(|d| d.get("cause").and_then(Json::as_str) == Some("udfUnavailable"))
+                })
+                .count()
+        })
+        .sum();
     let vnames = volatile_names(cached);
     let mut volatile: HashSet<Key> = HashSet::new();
     for (si, sh) in cached.sheets.iter().enumerate() {
@@ -1028,6 +1045,7 @@ struct Totals {
     no_oracle: usize,
     not_calculated: usize,
     errors: usize,
+    udf_unavailable: usize,
     volatile: usize,
     bool_as_number: usize,
     round_trip_failed: usize,
@@ -1052,6 +1070,7 @@ fn totals(reports: &[FileReport]) -> Totals {
         t.no_oracle += r.calc.no_oracle;
         t.not_calculated += r.calc.not_calculated;
         t.errors += r.calc.errors;
+        t.udf_unavailable += r.calc.udf_unavailable;
         t.volatile += r.calc.volatile;
         t.bool_as_number += r.calc.bool_as_number;
         if r.round_trip.error.is_some() {
@@ -1114,7 +1133,7 @@ pub fn report_json(reports: &[FileReport], opts: &Options) -> Json {
                 "warnings": r.warnings,
                 "calc": {
                     "formulaCells": c.formula_cells, "checked": c.checked, "matched": c.matched, "mismatched": c.mismatched,
-                    "notCalculated": c.not_calculated, "errors": c.errors, "noOracle": c.no_oracle, "staleCache": c.stale_cache, "volatile": c.volatile, "boolAsNumber": c.bool_as_number,
+                    "notCalculated": c.not_calculated, "errors": c.errors, "udfUnavailable": c.udf_unavailable, "noOracle": c.no_oracle, "staleCache": c.stale_cache, "volatile": c.volatile, "boolAsNumber": c.bool_as_number,
                     "mismatches": mismatches, "functions": functions_json(&c.functions),
                     "signatures": c.signatures,
                 },
@@ -1129,7 +1148,7 @@ pub fn report_json(reports: &[FileReport], opts: &Options) -> Json {
         "files": files,
         "totals": {
             "files": t.files, "opened": t.opened, "failedToOpen": t.failed, "formulaCells": t.formula_cells, "checked": t.checked,
-            "matched": t.matched, "mismatched": t.mismatched, "notCalculated": t.not_calculated, "errors": t.errors, "noOracle": t.no_oracle, "volatile": t.volatile, "boolAsNumber": t.bool_as_number,
+            "matched": t.matched, "mismatched": t.mismatched, "notCalculated": t.not_calculated, "errors": t.errors, "udfUnavailable": t.udf_unavailable, "noOracle": t.no_oracle, "volatile": t.volatile, "boolAsNumber": t.bool_as_number,
             "roundTripFailed": t.round_trip_failed, "roundTripDiffering": t.round_trip_differing, "categoriesDiffering": t.categories,
         },
         "functions": functions_json(&t.functions),
@@ -1166,6 +1185,9 @@ fn print_human(reports: &[FileReport], opts: &Options) {
             c.volatile,
             c.not_calculated
         );
+        if c.udf_unavailable > 0 {
+            outln!("  VBA UDFs unavailable: {} cells", c.udf_unavailable);
+        }
         if c.errors > 0 {
             outln!("  calculation has errors: {} cells", c.errors);
         }
@@ -1321,6 +1343,29 @@ mod tests {
 
     fn n(x: f64) -> Value {
         Value::number(x)
+    }
+
+    #[test]
+    fn check_counts_vba_udfs_separately_from_other_name_errors() {
+        use gridcraft_vba::testing::{FixtureModule, fixture};
+        let mut wb = book(&[("A1", "=_xludf.Twice(2)", n(4.0)), ("A2", "=Typo()", n(0.0))]);
+        wb.vba_project = Some(
+            fixture(
+                &[FixtureModule::new("Module1", "Module", "Public Function Twice(x As Double) As Double\nTwice = x * 2\nEnd Function").unwrap()],
+                1252,
+                "",
+                &[],
+            )
+            .unwrap(),
+        );
+        let bytes = gridcraft_engine::io::save_bytes(&wb, "t.xlsm").unwrap();
+        let r = check_bytes("t.xlsm", &bytes, &Options::default());
+        assert_eq!(r.calc.udf_unavailable, 1);
+        assert_eq!(r.calc.errors, 2);
+        assert!(!r.is_clean());
+        let report = report_json(&[r], &Options::default());
+        assert_eq!(report["files"][0]["calc"]["udfUnavailable"], 1);
+        assert_eq!(report["totals"]["udfUnavailable"], 1);
     }
 
     #[test]
@@ -1669,6 +1714,7 @@ mod tests {
                 "mismatched",
                 "notCalculated",
                 "errors",
+                "udfUnavailable",
                 "noOracle",
                 "staleCache",
                 "volatile",
@@ -1715,6 +1761,7 @@ mod tests {
                 "mismatched",
                 "notCalculated",
                 "errors",
+                "udfUnavailable",
                 "noOracle",
                 "volatile",
                 "boolAsNumber",

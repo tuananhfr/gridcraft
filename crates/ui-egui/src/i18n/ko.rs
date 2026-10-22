@@ -2,6 +2,32 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Macro|Yes" => "예",
+        "Macro|No" => "아니요",
+
+        "Form Control" => "폼 컨트롤",
+        "Macros cannot be run in GridCraft yet; this is read-only analysis." => "아직 매크로를 실행할 수 없습니다. 읽기 전용 분석입니다.",
+        "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
+            "모듈 {modules}개 · 프로시저 {procedures}개 · UDF {udfs}개 · 이벤트: {events} · 서명: {signed} · 잠금: {locked}"
+        }
+        "Runnable with a macro runner" => "매크로 실행기가 있으면 실행 가능",
+        "Uses Windows API" => "Windows API 사용",
+        "Uses COM (ETABS, AutoCAD, Access…)" => "COM 사용 (ETABS, AutoCAD, Access…)",
+        "ActiveX / UserForm" => "ActiveX / 사용자 폼",
+        "View code" => "코드 보기",
+        "Parameters" => "매개 변수",
+        "Returns" => "반환 형식",
+        "Event" => "이벤트",
+        "Macro|Line" => "줄",
+        "Optional" => "선택 사항",
+        "Found" => "찾음",
+        "Not found" => "찾을 수 없음",
+        "VBA function {name} ({module}, line {line}) — macros are not run in GridCraft, so it cannot be calculated yet." => {
+            "VBA 함수 {name} ({module}, {line}줄) — 아직 매크로를 실행하지 않아 계산할 수 없습니다."
+        }
+        "Function {name} was not found in this file's macros." => "이 파일의 매크로에서 함수 {name}을 찾을 수 없습니다.",
+        "Could not read the VBA project" => "VBA 프로젝트를 읽을 수 없습니다",
+
         "too many VBA signature parts" => "VBA 서명 부분이 너무 많습니다",
         "too many macro buttons" => "매크로 단추가 너무 많습니다",
         "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {

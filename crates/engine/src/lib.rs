@@ -20,6 +20,7 @@ pub mod io;
 mod io_csv;
 pub mod legacy;
 pub mod links;
+pub mod macros;
 pub mod outline;
 pub mod paper;
 pub mod pivot;

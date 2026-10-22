@@ -262,7 +262,13 @@ pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
                     }
                     if (!d.calc.not_calculated.is_empty() || workbook_has_errors(ui, d)) && fits(ui, lang.tr("Calculation has errors")) {
                         ui.add_space(12.0);
-                        ui.label(egui::RichText::new(lang.tr("Calculation has errors")).font(theme::ui_font(12.5)).color(t.danger));
+                        let response = ui.label(egui::RichText::new(lang.tr("Calculation has errors")).font(theme::ui_font(12.5)).color(t.danger));
+                        if let Some(cell) = d.wb.active().and_then(|sh| sh.cell(d.selection.active))
+                            && cell.value.as_error() == Some(gridcraft_engine::core::CellError::Name)
+                            && let Some(error) = gridcraft_engine::macros::udf_diagnostic(&d.wb, d.wb.active_sheet, cell)
+                        {
+                            response.on_hover_text(crate::macro_dialog::diagnostic_text(lang, &error));
+                        }
                     }
                     if !d.calc.circular.is_empty() {
                         let (si, c) = d.calc.circular[0];

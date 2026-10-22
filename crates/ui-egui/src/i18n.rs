@@ -186,6 +186,32 @@ pub fn set_current(ctx: &egui::Context, language: Language) {
 /// English label → Japanese. Keys are the exact interface strings (command ids, file names and
 /// document text are never translated); anything absent falls back to English.
 const JAPANESE: &[(&str, &str)] = &[
+    ("Macro|Yes", "はい"),
+    ("Macro|No", "いいえ"),
+    ("Form Control", "フォームコントロール"),
+    ("Macros cannot be run in GridCraft yet; this is read-only analysis.", "マクロはまだ実行できません。読み取り専用の解析です。"),
+    (
+        "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}",
+        "{modules} モジュール · {procedures} 手続き · {udfs} UDF · イベント: {events} · 署名: {signed} · ロック: {locked}",
+    ),
+    ("Runnable with a macro runner", "マクロ実行環境があれば実行可能"),
+    ("Uses Windows API", "Windows API を使用"),
+    ("Uses COM (ETABS, AutoCAD, Access…)", "COM を使用 (ETABS, AutoCAD, Access…)"),
+    ("ActiveX / UserForm", "ActiveX / ユーザーフォーム"),
+    ("View code", "コードを表示"),
+    ("Parameters", "引数"),
+    ("Returns", "戻り値"),
+    ("Event", "イベント"),
+    ("Macro|Line", "行"),
+    ("Optional", "省略可能"),
+    ("Found", "見つかりました"),
+    ("Not found", "見つかりません"),
+    (
+        "VBA function {name} ({module}, line {line}) — macros are not run in GridCraft, so it cannot be calculated yet.",
+        "VBA 関数 {name} ({module}、{line} 行) — マクロを実行できないため、まだ計算できません。",
+    ),
+    ("Function {name} was not found in this file's macros.", "このファイルのマクロに関数 {name} が見つかりません。"),
+    ("Could not read the VBA project", "VBA プロジェクトを読み取れませんでした"),
     ("too many VBA signature parts", "VBA 署名のパーツが多すぎます"),
     ("too many macro buttons", "マクロボタンが多すぎます"),
     (

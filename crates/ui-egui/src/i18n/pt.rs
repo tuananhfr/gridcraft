@@ -3,6 +3,32 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Macro|Yes" => "Sim",
+        "Macro|No" => "Não",
+
+        "Form Control" => "Controle de formulário",
+        "Macros cannot be run in GridCraft yet; this is read-only analysis." => "As macros ainda não são executadas; esta análise é somente leitura.",
+        "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
+            "{modules} módulos · {procedures} procedimentos · {udfs} UDFs · Eventos: {events} · Assinado: {signed} · Bloqueado: {locked}"
+        }
+        "Runnable with a macro runner" => "Executável com um executor de macros",
+        "Uses Windows API" => "Usa a API do Windows",
+        "Uses COM (ETABS, AutoCAD, Access…)" => "Usa COM (ETABS, AutoCAD, Access…)",
+        "ActiveX / UserForm" => "ActiveX / Formulário de usuário",
+        "View code" => "Ver código",
+        "Parameters" => "Parâmetros",
+        "Returns" => "Tipo de retorno",
+        "Event" => "Evento",
+        "Macro|Line" => "Linha",
+        "Optional" => "Opcional",
+        "Found" => "Encontrado",
+        "Not found" => "Não encontrado",
+        "VBA function {name} ({module}, line {line}) — macros are not run in GridCraft, so it cannot be calculated yet." => {
+            "Função VBA {name} ({module}, linha {line}) — as macros ainda não são executadas, portanto não é possível calcular."
+        }
+        "Function {name} was not found in this file's macros." => "A função {name} não foi encontrada nas macros deste arquivo.",
+        "Could not read the VBA project" => "Não foi possível ler o projeto VBA",
+
         "too many VBA signature parts" => "Muitas partes de assinatura VBA",
         "too many macro buttons" => "Muitos botões de macro",
         "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {

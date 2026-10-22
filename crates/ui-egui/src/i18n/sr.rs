@@ -2,6 +2,32 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Macro|Yes" => "Da",
+        "Macro|No" => "Ne",
+
+        "Form Control" => "Kontrola obrasca",
+        "Macros cannot be run in GridCraft yet; this is read-only analysis." => "Makroi se još ne izvršavaju; ovo je analiza samo za čitanje.",
+        "{modules} modules · {procedures} procedures · {udfs} UDFs · Events: {events} · Signed: {signed} · Locked: {locked}" => {
+            "{modules} modula · {procedures} procedura · {udfs} UDF · Događaji: {events} · Potpisano: {signed} · Zaključano: {locked}"
+        }
+        "Runnable with a macro runner" => "Izvršivo uz pokretač makroa",
+        "Uses Windows API" => "Koristi Windows API",
+        "Uses COM (ETABS, AutoCAD, Access…)" => "Koristi COM (ETABS, AutoCAD, Access…)",
+        "ActiveX / UserForm" => "ActiveX / Korisnički obrazac",
+        "View code" => "Prikaži kod",
+        "Parameters" => "Parametri",
+        "Returns" => "Povratni tip",
+        "Event" => "Događaj",
+        "Macro|Line" => "Red",
+        "Optional" => "Opcioni",
+        "Found" => "Pronađeno",
+        "Not found" => "Nije pronađeno",
+        "VBA function {name} ({module}, line {line}) — macros are not run in GridCraft, so it cannot be calculated yet." => {
+            "VBA funkcija {name} ({module}, red {line}) — makroi se još ne izvršavaju, pa izračunavanje nije dostupno."
+        }
+        "Function {name} was not found in this file's macros." => "Funkcija {name} nije pronađena u makroima ove datoteke.",
+        "Could not read the VBA project" => "Nije moguće pročitati VBA projekat",
+
         "too many VBA signature parts" => "Previše delova VBA potpisa",
         "too many macro buttons" => "Previše dugmadi makroa",
         "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {

@@ -492,6 +492,7 @@ fn show_formulas(s: &mut Session, p: &Json) -> Result<Json> {
 
 fn error_checking(s: &mut Session, _: &Json) -> Result<Json> {
     let d = s.doc()?;
+    let analysis = crate::macros::project(&d.wb);
     let mut out = Vec::new();
     for (si, sh) in d.wb.sheets.iter().enumerate() {
         for (c, cell) in sh.cells.iter() {
@@ -508,7 +509,8 @@ fn error_checking(s: &mut Session, _: &Json) -> Result<Json> {
             } else {
                 ("staleCache", "Stale cached value (Manual)", "Calculate the sheet or workbook.", String::new())
             };
-            out.push(json!({"sheet": sh.name, "cell": c.a1(), "error": error.map(|e| e.as_str()).unwrap_or("notCalculated"),
+            let udf = (error == Some(CellError::Name)).then(|| crate::macros::udf_diagnostic_with(analysis.as_ref(), &d.wb, si, cell)).flatten();
+            out.push(json!({"sheet": sh.name, "cell": c.a1(), "udf": udf, "error": error.map(|e| e.as_str()).unwrap_or("notCalculated"),
                 "cause": cause, "reason": reason, "suggestion": suggestion, "symbol": symbol,
                 "formula": cell.formula.as_ref().map(|f| format!("={}", f.text))}));
             if out.len() >= 10_000 {
@@ -527,12 +529,20 @@ fn error_checking(s: &mut Session, _: &Json) -> Result<Json> {
                 continue;
             };
             let (cause, reason, suggestion, symbol) = diagnostic(&d.wb, si, cell, error);
-            out.push(json!({"sheet": sh.name, "cell": c.a1(), "error": error.as_str(), "cause": cause,
+            let udf = (error == CellError::Name).then(|| crate::macros::udf_diagnostic_with(analysis.as_ref(), &d.wb, si, cell)).flatten();
+            out.push(json!({"sheet": sh.name, "cell": c.a1(), "udf": udf, "error": error.as_str(), "cause": cause,
                 "reason": reason, "suggestion": suggestion, "symbol": symbol,
                 "formula": cell.formula.as_ref().map(|f| format!("={}", f.text))}));
         }
         if out.len() >= 10_000 {
             break;
+        }
+    }
+    for entry in &mut out {
+        if let Some(udf) = entry.get("udf").and_then(Json::as_object).cloned()
+            && let Some(entry) = entry.as_object_mut()
+        {
+            entry.extend(udf);
         }
     }
     out.sort_by(|a, b| a["cause"].as_str().cmp(&b["cause"].as_str()));
@@ -573,7 +583,7 @@ fn diagnostic(wb: &Workbook, sheet: usize, cell: &Cell, error: CellError) -> (&'
                         && !locals.contains(&name.to_ascii_uppercase())
                         && wb.name(name, sheet).is_none() =>
                 {
-                    let udf = name.to_ascii_uppercase().starts_with("_XLUDF.") || wb.vba_project.is_some();
+                    let udf = wb.vba_project.is_some();
                     cause = Some(if udf {
                         ("missingUdf", "Missing VBA UDF (macro required)", "Use a supported formula; VBA macros are never executed.", name.clone())
                     } else {
