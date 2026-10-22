@@ -3,6 +3,23 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "too many VBA signature parts" => "Zu viele VBA-Signaturteile",
+        "too many macro buttons" => "Zu viele Makroschaltflächen",
+        "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {
+            "Die digitale Makrosignatur der .xls-Datei bleibt beim Speichern als .xlsm nicht erhalten; die Makros sind dann nicht signiert."
+        }
+        "Some VBA signature relationships could not be preserved; the saved macros may be unsigned." => {
+            "Einige VBA-Signaturbeziehungen konnten nicht erhalten werden; die gespeicherten Makros sind möglicherweise nicht signiert."
+        }
+        "The VBA project has changed. Its digital signature will be removed; the saved macros will be unsigned." => {
+            "Das VBA-Projekt wurde geändert. Seine digitale Signatur wird entfernt; die gespeicherten Makros sind nicht signiert."
+        }
+        "This format cannot preserve VBA macros. The saved file will not contain the macros." => {
+            "Dieses Format erhält keine VBA-Makros. Die gespeicherte Datei enthält keine Makros."
+        }
+        "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
+            "Dieses Format erhält weder VBA-Makros noch deren digitale Signaturen. Die gespeicherte Datei enthält weder die Makros noch deren Signaturen."
+        }
         "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
             "Aus einer Excel 97-2003-Arbeitsmappe (.xls) importiert: Werte, Formeln, Zahlenformate, verbundene Zellen, Spaltenbreiten, Zeilenhöhen und definierte Namen wurden gelesen. Schriftarten, Füllungen, Rahmen, Diagramme, Bilder, Kommentare und andere Funktionen werden noch nicht importiert. Speichern Sie als .xlsx; das Speichern als .xls wird nicht unterstützt."
         }

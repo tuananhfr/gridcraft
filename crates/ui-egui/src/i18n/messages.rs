@@ -57,6 +57,9 @@ fn translate_at(lang: Language, text: &str, depth: usize) -> Cow<'_, str> {
         }
         return Cow::Owned(out);
     }
+    if text.contains('\n') && depth < MAX_DEPTH {
+        return Cow::Owned(text.split('\n').map(|line| translate_at(lang, line, depth + 1)).collect::<Vec<_>>().join("\n"));
+    }
     Cow::Borrowed(text)
 }
 

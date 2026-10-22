@@ -22,6 +22,7 @@ mod drawing;
 mod feature_bags;
 mod fmla;
 pub mod limits;
+mod macro_buttons;
 mod ods;
 mod package;
 mod passthrough;
@@ -35,6 +36,7 @@ mod tables;
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;
 mod theme;
+mod vba;
 mod write;
 mod xls;
 mod xlsb;
@@ -51,6 +53,7 @@ pub use csv::{MAX_CSV_BYTES, read_csv, write_csv, write_csv_limited};
 pub use ods::read_ods;
 pub use package::Packing;
 pub use passthrough::rebase_links;
+pub use vba::{DROPPED_SIGNATURE, LEGACY_SIGNATURE};
 pub use xls::read_xls;
 pub use xlsb::read_xlsb;
 
@@ -144,6 +147,11 @@ pub fn write_xlsx_as(wb: &Workbook, kind: XlsxKind) -> Result<Vec<u8>, IoError> 
 /// [`write_xlsx_as`] with the parts deflated as `packing` says; the parts themselves are the same.
 pub fn write_xlsx_packed(wb: &Workbook, kind: XlsxKind, packing: Packing) -> Result<Vec<u8>, IoError> {
     write::write_xlsx(wb, kind, packing)
+}
+
+/// Internal recovery package: records save warnings so they survive a process restart.
+pub fn write_xlsx_draft(wb: &Workbook, kind: XlsxKind, warnings: &[String]) -> Result<Vec<u8>, IoError> {
+    write::write_with_warnings(wb, kind, Packing::Fast, warnings)
 }
 
 /// CSV import options.

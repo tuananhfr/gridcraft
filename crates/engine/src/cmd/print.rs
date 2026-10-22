@@ -1553,12 +1553,13 @@ fn build_pdf(s: &Session, p: &Json, cmd: &str) -> Result<(Vec<u8>, usize)> {
 
 pub(crate) fn export_pdf(s: &mut Session, p: &Json) -> Result<Json> {
     let (bytes, pages) = build_pdf(s, p, "file.exportPdf")?;
+    let warnings = crate::io::save_warnings(&s.doc()?.wb, "pdf");
     match str_param(p, "path").filter(|x| !x.is_empty()) {
         Some(path) => {
             crate::io::write_file(path, &bytes)?;
-            Ok(json!({"pages": pages, "bytes": bytes.len(), "path": path}))
+            Ok(json!({"pages": pages, "bytes": bytes.len(), "path": path, "warnings": warnings}))
         }
-        None => Ok(json!({"pages": pages, "bytes": bytes.len(), "base64": crate::io::base64_encode(&bytes)})),
+        None => Ok(json!({"pages": pages, "bytes": bytes.len(), "base64": crate::io::base64_encode(&bytes), "warnings": warnings})),
     }
 }
 

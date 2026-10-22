@@ -194,6 +194,49 @@ fn rename_first_sheet(wb: &mut Workbook, path: &str) {
     }
 }
 
+pub use gridcraft_xlsx::{DROPPED_SIGNATURE, LEGACY_SIGNATURE};
+pub const UNSIGNED_MACROS: &str = "The VBA project has changed. Its digital signature will be removed; the saved macros will be unsigned.";
+pub const REMOVED_MACROS: &str = "This format cannot preserve VBA macros. The saved file will not contain the macros.";
+pub const REMOVED_SIGNED_MACROS: &str =
+    "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures.";
+
+/// Warnings for every save/export frontend. JSON retains the entire model.
+pub fn save_warnings(wb: &Workbook, target: &str) -> Vec<String> {
+    let name = if target.contains('.') { target.to_string() } else { format!("x.{target}") };
+    let signed = wb.legacy_vba_signature || wb.vba_signatures.is_some() || wb.vba_signature_loss;
+    let keeps_macros = FileKind::from_path(&name) == Some(FileKind::Json) || gridcraft_xlsx::XlsxKind::from_path(&name).is_macro_enabled();
+    if !keeps_macros {
+        // One warning covers the macros and any signature they had.
+        return match (wb.vba_project.is_some() || signed, signed) {
+            (false, _) => vec![],
+            (true, false) => vec![REMOVED_MACROS.into()],
+            (true, true) => vec![REMOVED_SIGNED_MACROS.into()],
+        };
+    }
+    let mut warnings = Vec::new();
+    if wb.legacy_vba_signature {
+        warnings.push(gridcraft_xlsx::LEGACY_SIGNATURE.into());
+    }
+    if wb.vba_signature_loss {
+        warnings.push(gridcraft_xlsx::DROPPED_SIGNATURE.into());
+    }
+    // JSON keeps the stored signature whatever the project bytes are.
+    if FileKind::from_path(&name) != Some(FileKind::Json) && wb.vba_signatures.as_ref().is_some_and(|s| !s.matches(wb.vba_project.as_deref())) {
+        warnings.push(UNSIGNED_MACROS.into());
+    }
+    warnings
+}
+
+#[derive(Debug)]
+pub struct SaveOutput {
+    pub bytes: Vec<u8>,
+    pub warnings: Vec<String>,
+}
+
+pub fn save_with_warnings(wb: &Workbook, path: &str) -> Result<SaveOutput> {
+    Ok(SaveOutput { bytes: save_bytes(wb, path)?, warnings: save_warnings(wb, path) })
+}
+
 /// Encodes a workbook in the format chosen by `path`'s extension.
 pub fn save_bytes(wb: &Workbook, path: &str) -> Result<Vec<u8>> {
     // An unknown or missing extension is refused rather than written as an XLSX under that name:
@@ -231,7 +274,7 @@ pub fn save_bytes_as(wb: &Workbook, path: &str, kind: FileKind) -> Result<Vec<u8
 pub fn save_xlsx_fast(wb: &Workbook, name: &str) -> Result<Vec<u8>> {
     let kind = gridcraft_xlsx::XlsxKind::from_path(name);
     let kind = if kind.is_macro_enabled() { kind } else { gridcraft_xlsx::XlsxKind::Workbook };
-    gridcraft_xlsx::write_xlsx_packed(wb, kind, gridcraft_xlsx::Packing::Fast).map_err(|e| EngineError::Other(e.to_string()))
+    gridcraft_xlsx::write_xlsx_draft(wb, kind, &save_warnings(wb, name)).map_err(|e| EngineError::Other(e.to_string()))
 }
 
 /// The workbook extension a document named `name` keeps when saved: a macro-enabled name
@@ -247,7 +290,9 @@ pub fn workbook_ext(name: &str) -> &'static str {
 /// Saving `wb` as the workbook file `name` would leave its VBA project out: an XLSX-family name
 /// that isn't macro-enabled. Exports (CSV, web page, PDF) are copies and don't count.
 pub fn drops_macros(wb: &Workbook, name: &str) -> bool {
-    wb.vba_project.is_some() && FileKind::from_path(name) == Some(FileKind::Xlsx) && !gridcraft_xlsx::XlsxKind::from_path(name).is_macro_enabled()
+    wb.vba_project.is_some()
+        && FileKind::from_path(name) == Some(FileKind::Xlsx)
+        && save_warnings(wb, name).iter().any(|w| w == REMOVED_MACROS || w == REMOVED_SIGNED_MACROS)
 }
 
 /// [`save_bytes`] for the file at `path`: relative paths to linked workbooks are rewritten for

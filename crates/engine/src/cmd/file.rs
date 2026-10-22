@@ -96,12 +96,14 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
     if crate::io::FileKind::from_path(&name).is_none() && gridcraft_xlsx::sniff(&bytes) == gridcraft_xlsx::Format::Xlsx {
         doc.content_kind = Some(crate::io::FileKind::Xlsx);
     }
+    let legacy_signature = doc.wb.legacy_vba_signature;
     let i = s.add_document(doc)?;
     // The decrypted-workbook notice is for the info bar, not a message box.
     let shown: Vec<&str> = warnings.iter().map(String::as_str).filter(|w| *w != crate::io::DECRYPTED_NOTICE).collect();
     if legacy {
         let message = if s.doc()?.wb.vba_project.is_some() { crate::legacy::OPENED_MACROS } else { crate::legacy::OPENED };
-        s.ui_requests.push(crate::UiRequest::Message(message.into()));
+        let message = if legacy_signature { format!("{message}\n{}", gridcraft_xlsx::LEGACY_SIGNATURE) } else { message.into() };
+        s.ui_requests.push(crate::UiRequest::Message(message));
     } else if !shown.is_empty() {
         let mut message = shown.iter().take(5).copied().collect::<Vec<_>>().join("\n\n");
         if shown.len() > 5 {
@@ -138,13 +140,14 @@ fn save(s: &mut Session, p: &Json) -> Result<Json> {
         Some(kind) => crate::io::save_bytes_as(wb, &path, kind)?,
         None => crate::io::save_bytes(wb, &path)?,
     };
+    let warnings = crate::io::save_warnings(wb, &path);
     crate::io::write_file(&path, &bytes)?;
     // Only a full-fidelity format clears the dirty flag and becomes the document's file.
     if matches!(kind, Some(crate::io::FileKind::Xlsx | crate::io::FileKind::Json)) {
         d.saved = d.wb.clone();
         d.path = Some(path.clone());
     }
-    Ok(json!({"path": path, "bytes": bytes.len()}))
+    Ok(json!({"path": path, "bytes": bytes.len(), "warnings": warnings}))
 }
 
 fn save_as(s: &mut Session, p: &Json) -> Result<Json> {
@@ -159,9 +162,10 @@ fn save_bytes(s: &mut Session, p: &Json) -> Result<Json> {
     let d = s.doc()?;
     let title = d.display_title();
     let fmt = str_param(p, "format").unwrap_or_else(|| crate::io::workbook_ext(&title));
-    let bytes = crate::io::save_bytes(&d.wb, &format!("x.{fmt}"))?;
+    let output = crate::io::save_with_warnings(&d.wb, &format!("x.{fmt}"))?;
+    let bytes = output.bytes;
     let name = format!("{}.{fmt}", std::path::Path::new(&d.display_title()).file_stem().and_then(|x| x.to_str()).unwrap_or("Book"));
-    Ok(json!({"name": name, "base64": crate::io::base64_encode(&bytes), "bytes": bytes.len()}))
+    Ok(json!({"name": name, "base64": crate::io::base64_encode(&bytes), "bytes": bytes.len(), "warnings": output.warnings}))
 }
 
 fn close(s: &mut Session, p: &Json) -> Result<Json> {
@@ -184,9 +188,9 @@ fn export(s: &mut Session, p: &Json, ext: &str) -> Result<Json> {
         wb.active_sheet = target_sheet(s, p)?;
     }
     let target = if path.ends_with(&format!(".{ext}")) { path.clone() } else { format!("{path}.{ext}") };
-    let bytes = crate::io::save_bytes(&wb, &target)?;
-    crate::io::write_file(&target, &bytes)?;
-    Ok(json!({"path": target, "bytes": bytes.len()}))
+    let output = crate::io::save_with_warnings(&wb, &target)?;
+    crate::io::write_file(&target, &output.bytes)?;
+    Ok(json!({"path": target, "bytes": output.bytes.len(), "warnings": output.warnings}))
 }
 
 fn properties(s: &mut Session, p: &Json) -> Result<Json> {

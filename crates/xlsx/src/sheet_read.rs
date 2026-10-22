@@ -39,7 +39,7 @@ struct RowState {
 
 const MAX_HYPERLINK_CELLS: u64 = 10_000;
 
-pub fn read_sheet(cx: &mut Ctx<'_>, part: &str, name: &str) -> Result<Sheet, IoError> {
+pub fn read_sheet(cx: &mut Ctx<'_>, part: &str, name: &str) -> Result<(Sheet, Vec<gridcraft_model::MacroButton>), IoError> {
     let bytes = cx.pkg.read(part)?.ok_or_else(|| IoError::Format(format!("missing part {part}")))?;
     let rels = cx.pkg.rels(part)?;
     let mut sheet = Sheet::new(name);
@@ -219,7 +219,8 @@ pub fn read_sheet(cx: &mut Ctx<'_>, part: &str, name: &str) -> Result<Sheet, IoE
             }
         }
     }
-    Ok(sheet)
+    let buttons = crate::macro_buttons::read(cx, &root, &rels)?;
+    Ok((sheet, buttons))
 }
 
 /// A protection password hash: the iterated attributes (`algorithmName`, `hashValue`,

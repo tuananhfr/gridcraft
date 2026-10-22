@@ -186,6 +186,28 @@ pub fn set_current(ctx: &egui::Context, language: Language) {
 /// English label → Japanese. Keys are the exact interface strings (command ids, file names and
 /// document text are never translated); anything absent falls back to English.
 const JAPANESE: &[(&str, &str)] = &[
+    ("too many VBA signature parts", "VBA 署名のパーツが多すぎます"),
+    ("too many macro buttons", "マクロボタンが多すぎます"),
+    (
+        "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned.",
+        ".xls ファイルのマクロのデジタル署名は .xlsm として保存すると保持されず、マクロは未署名になります。",
+    ),
+    (
+        "Some VBA signature relationships could not be preserved; the saved macros may be unsigned.",
+        "一部の VBA 署名の関連付けを保持できませんでした。保存したマクロは未署名になる可能性があります。",
+    ),
+    (
+        "The VBA project has changed. Its digital signature will be removed; the saved macros will be unsigned.",
+        "VBA プロジェクトが変更されました。デジタル署名は削除され、保存したマクロは未署名になります。",
+    ),
+    (
+        "This format cannot preserve VBA macros. The saved file will not contain the macros.",
+        "この形式は VBA マクロを保持できません。保存したファイルにマクロは含まれません。",
+    ),
+    (
+        "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures.",
+        "この形式は VBA マクロとデジタル署名を保持できません。保存したファイルにマクロと署名は含まれません。",
+    ),
     (
         "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.",
         "Excel 97-2003 ブック（.xls）から値、数式、数値書式、結合セル、列幅、行の高さ、定義された名前を読み込みました。フォント、塗りつぶし、罫線、グラフ、画像、コメントなどの機能はまだインポートされません。.xlsx として保存してください。.xls の保存はサポートされていません。",

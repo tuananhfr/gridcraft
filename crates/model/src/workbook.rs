@@ -85,6 +85,48 @@ pub struct DocProps {
     pub description: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MacroButtonKind {
+    FormControl,
+    ActiveX,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MacroButton {
+    pub sheet: usize,
+    pub name: String,
+    pub caption: String,
+    pub macro_name: String,
+    pub kind: MacroButtonKind,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VbaSignaturePart {
+    pub name: String,
+    pub relationship_type: String,
+    pub content_type: String,
+    #[serde(with = "crate::b64")]
+    pub data: Vec<u8>,
+}
+
+/// The original relationship bytes are kept because signature formats must not be rewritten.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VbaSignatures {
+    pub project_part: String,
+    #[serde(with = "crate::b64")]
+    pub project_sha256: Vec<u8>,
+    #[serde(with = "crate::b64")]
+    pub relationships: Vec<u8>,
+    pub parts: Vec<VbaSignaturePart>,
+}
+
+impl VbaSignatures {
+    pub fn matches(&self, project: Option<&[u8]>) -> bool {
+        use sha2::{Digest, Sha256};
+        project.is_some_and(|bytes| Sha256::digest(bytes).as_slice() == self.project_sha256)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Workbook {
     pub sheets: Vec<Arc<Sheet>>,
@@ -109,6 +151,15 @@ pub struct Workbook {
     /// macros it arrived with. base64 in JSON. `None` = the workbook has no macros.
     #[serde(default, with = "crate::b64::opt")]
     pub vba_project: Option<Vec<u8>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vba_signatures: Option<VbaSignatures>,
+    /// Root-stream XLS signatures cannot be safely converted to OOXML signatures.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub legacy_vba_signature: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub vba_signature_loss: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub macro_buttons: Vec<MacroButton>,
     /// Field separator of the CSV this workbook was read from, so saving it as CSV writes the same
     /// separator back (a `;` file stays a `;` file). `None` = not read from CSV: CSV saves use `,`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -145,6 +196,10 @@ impl Workbook {
             custom_lists: vec![],
             cell_styles: vec![],
             vba_project: None,
+            vba_signatures: None,
+            legacy_vba_signature: false,
+            vba_signature_loss: false,
+            macro_buttons: vec![],
             csv_delimiter: None,
             preserved: None,
             source_dir: None,
@@ -305,5 +360,47 @@ mod tests {
         assert!(wb.check_sheet_name("a/b", None).is_err());
         assert!(wb.check_sheet_name(&"x".repeat(32), None).is_err());
         assert!(wb.check_sheet_name("Budget 2026", None).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod macro_metadata_tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+
+    #[test]
+    fn vba_signatures_and_macro_buttons_serde_use_base64_and_default_when_absent() {
+        let mut wb = Workbook::new();
+        let empty = serde_json::to_value(&wb).unwrap();
+        assert!(empty.get("macro_buttons").is_none());
+        assert!(empty.get("vba_signatures").is_none());
+        wb.vba_project = Some(b"VBA".to_vec());
+        wb.vba_signatures = Some(VbaSignatures {
+            project_part: "xl/vbaProject.bin".into(),
+            project_sha256: Sha256::digest(b"VBA").to_vec(),
+            relationships: b"rels".to_vec(),
+            parts: vec![VbaSignaturePart {
+                name: "xl/signature.bin".into(),
+                relationship_type: "urn:sig".into(),
+                content_type: "application/signature".into(),
+                data: vec![0, 255],
+            }],
+        });
+        wb.legacy_vba_signature = true;
+        wb.macro_buttons.push(MacroButton {
+            sheet: 0,
+            name: "Button1".into(),
+            caption: "Run".into(),
+            macro_name: "Module1.Run".into(),
+            kind: MacroButtonKind::FormControl,
+        });
+        let json = serde_json::to_value(&wb).unwrap();
+        assert_eq!(json["vba_project"], "VkJB");
+        assert_eq!(json["vba_signatures"]["parts"][0]["data"], "AP8=");
+        let back: Workbook = serde_json::from_value(json).unwrap();
+        assert_eq!((&back.vba_project, &back.vba_signatures, &back.macro_buttons), (&wb.vba_project, &wb.vba_signatures, &wb.macro_buttons));
+        assert!(back.legacy_vba_signature && !back.vba_signature_loss);
+        assert!(back.vba_signatures.as_ref().unwrap().matches(back.vba_project.as_deref()));
+        assert!(serde_json::from_value::<Workbook>(empty).unwrap().macro_buttons.is_empty());
     }
 }

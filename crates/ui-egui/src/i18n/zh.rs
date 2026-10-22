@@ -2,6 +2,21 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "too many VBA signature parts" => "VBA 签名部件过多",
+        "too many macro buttons" => "宏按钮过多",
+        "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {
+            "将 .xls 文件保存为 .xlsm 时不会保留宏的数字签名；宏将处于未签名状态。"
+        }
+        "Some VBA signature relationships could not be preserved; the saved macros may be unsigned." => {
+            "部分 VBA 签名关系无法保留；保存的宏可能未签名。"
+        }
+        "The VBA project has changed. Its digital signature will be removed; the saved macros will be unsigned." => {
+            "VBA 项目已更改。其数字签名将被删除；保存的宏将未签名。"
+        }
+        "This format cannot preserve VBA macros. The saved file will not contain the macros." => "此格式无法保留 VBA 宏。保存的文件将不包含宏。",
+        "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
+            "此格式无法保留 VBA 宏及其数字签名。保存的文件将不包含宏及其签名。"
+        }
         "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
             "已从 Excel 97-2003 工作簿（.xls）导入值、公式、数字格式、合并单元格、列宽、行高和定义的名称。字体、填充、边框、图表、图片、批注和其他功能尚未导入。请另存为 .xlsx；不支持保存 .xls。"
         }

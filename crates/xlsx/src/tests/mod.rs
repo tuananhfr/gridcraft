@@ -7,6 +7,7 @@ mod encrypted_tests;
 mod fixtures;
 mod ink_roundtrip;
 mod literal_category_roundtrip;
+mod macro_buttons;
 mod malformed;
 mod ods_tests;
 mod package_limits;
@@ -17,6 +18,7 @@ mod roundtrip;
 mod sheet_names;
 mod smooth_roundtrip;
 mod trendline_roundtrip;
+mod vba_signatures;
 mod xls_tests;
 mod xlsb_tests;
 

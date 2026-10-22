@@ -5,6 +5,23 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "too many VBA signature parts" => "Có quá nhiều phần chữ ký VBA",
+        "too many macro buttons" => "Có quá nhiều nút macro",
+        "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {
+            "Chữ ký số của macro trong tệp .xls không được giữ khi lưu .xlsm; macro sẽ chưa được ký"
+        }
+        "Some VBA signature relationships could not be preserved; the saved macros may be unsigned." => {
+            "Không giữ được một số quan hệ chữ ký VBA; macro trong tệp đã lưu có thể chưa được ký."
+        }
+        "The VBA project has changed. Its digital signature will be removed; the saved macros will be unsigned." => {
+            "Dự án VBA đã thay đổi. Chữ ký số sẽ bị xóa; macro trong tệp đã lưu sẽ chưa được ký."
+        }
+        "This format cannot preserve VBA macros. The saved file will not contain the macros." => {
+            "Định dạng này không giữ được macro VBA. Tệp đã lưu sẽ không chứa macro."
+        }
+        "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
+            "Định dạng này không giữ được macro VBA và chữ ký số của macro. Tệp đã lưu sẽ không chứa macro và chữ ký."
+        }
         "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
             "Đã nhập sổ làm việc Excel 97–2003 (.xls): giá trị, công thức, định dạng số, ô gộp, độ rộng cột, chiều cao hàng và tên đã định nghĩa. Phông chữ, màu nền, đường viền, biểu đồ, ảnh, chú thích và các tính năng khác chưa được nhập. Hãy lưu dạng .xlsx; không hỗ trợ lưu .xls."
         }

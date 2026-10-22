@@ -3,6 +3,23 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "too many VBA signature parts" => "Muitas partes de assinatura VBA",
+        "too many macro buttons" => "Muitos botões de macro",
+        "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {
+            "A assinatura digital das macros do arquivo .xls não é preservada ao salvar como .xlsm; as macros ficarão sem assinatura."
+        }
+        "Some VBA signature relationships could not be preserved; the saved macros may be unsigned." => {
+            "Algumas relações de assinatura VBA não puderam ser preservadas; as macros salvas podem ficar sem assinatura."
+        }
+        "The VBA project has changed. Its digital signature will be removed; the saved macros will be unsigned." => {
+            "O projeto VBA mudou. Sua assinatura digital será removida; as macros salvas ficarão sem assinatura."
+        }
+        "This format cannot preserve VBA macros. The saved file will not contain the macros." => {
+            "Este formato não preserva macros VBA. O arquivo salvo não conterá as macros."
+        }
+        "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
+            "Este formato não preserva macros VBA nem suas assinaturas digitais. O arquivo salvo não conterá as macros nem suas assinaturas."
+        }
         "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
             "Importado de uma pasta de trabalho Excel 97-2003 (.xls): valores, fórmulas, formatos numéricos, células mescladas, larguras de coluna, alturas de linha e nomes definidos foram lidos. Fontes, preenchimentos, bordas, gráficos, imagens, comentários e outros recursos ainda não são importados. Salve como .xlsx; salvar .xls não é compatível."
         }

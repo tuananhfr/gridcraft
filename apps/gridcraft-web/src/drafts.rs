@@ -95,7 +95,7 @@ impl Drafts {
     }
 
     /// Puts and removes drafts as the planner says. Call at the end of every frame.
-    pub fn after_frame(&mut self, app: &SheetApp, ctx: &egui::Context) {
+    pub fn after_frame(&mut self, app: &mut SheetApp, ctx: &egui::Context) {
         // Looked up every frame: the shell may be absent, and a missing one is never cached.
         let Some(store) = store() else { return };
         if !self.ready_sent {
@@ -106,6 +106,8 @@ impl Drafts {
         if let Ok(mut shared) = self.shared.try_borrow_mut() {
             for (uid, wb, cost) in shared.flushed.drain(..) {
                 self.planner.record_put(uid, &wb, now, cost);
+                let name = app.session.documents().iter().find(|d| d.uid == uid).map(|d| drafts::draft_name(&d.display_title())).unwrap_or_default();
+                app.show_draft_warnings(uid, &gridcraft_engine::io::save_warnings(&wb, &name));
             }
         }
         let docs = app.draft_docs();
@@ -116,6 +118,7 @@ impl Drafts {
         for d in docs.iter().filter(|d| plan.put.contains(&d.uid)) {
             let cost = put(&store, &self.planner.key(d.uid), &d.name, &d.wb);
             self.planner.record_put(d.uid, &d.wb, now, cost);
+            app.show_draft_warnings(d.uid, &gridcraft_engine::io::save_warnings(&d.wb, &d.name));
         }
         if plan.waiting {
             ctx.request_repaint_after(std::time::Duration::from_secs(1));

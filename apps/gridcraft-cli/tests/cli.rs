@@ -191,3 +191,22 @@ fn check_rejects_matching_formula_errors() {
     let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(report["files"][0]["calc"]["errors"], 1);
 }
+
+#[test]
+fn vba_signature_convert_and_run_print_save_warnings_to_stderr() {
+    let dir = tmpdir("vba-signature");
+    let source = dir.join("signed.json");
+    let mut wb = gridcraft_engine::model::Workbook::new();
+    wb.vba_project = Some(b"synthetic project".to_vec());
+    wb.legacy_vba_signature = true;
+    std::fs::write(&source, serde_json::to_vec(&wb).unwrap()).unwrap();
+    for args in [
+        vec!["convert".to_string(), source.to_string_lossy().into_owned(), dir.join("out.xlsm").to_string_lossy().into_owned()],
+        vec!["run".into(), "--in".into(), source.to_string_lossy().into_owned(), "--out".into(), dir.join("out.xlsx").to_string_lossy().into_owned()],
+    ] {
+        let output = bin().args(args).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(String::from_utf8_lossy(&output.stderr).contains("digital signature"));
+    }
+    std::fs::remove_dir_all(dir).unwrap();
+}
