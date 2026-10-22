@@ -13,6 +13,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Cancel" => "취소",
         "Checking for a newer version…" => "새 버전 확인 중…",
         "Download new version" => "새 버전 다운로드",
+        "Install now" => "지금 설치",
         "Update now" => "지금 업데이트",
         "Remind me later" => "나중에 알림",
         "Skip this version" => "이 버전 건너뛰기",

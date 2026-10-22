@@ -15,6 +15,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Bảng tính – ERPCons {version} is available" => "Đã có Bảng tính – ERPCons {version}",
         "Checking for a newer version…" => "Đang kiểm tra phiên bản mới hơn…",
         "Download new version" => "Tải bản mới",
+        "Install now" => "Cài đặt ngay",
         "Update now" => "Cập nhật ngay",
         "Remind me later" => "Nhắc sau",
         "Skip this version" => "Bỏ qua phiên bản này",

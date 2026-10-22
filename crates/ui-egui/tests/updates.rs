@@ -22,6 +22,7 @@ struct Fake {
     skipped: Mutex<Option<String>>,
     downloads: AtomicUsize,
     installed: AtomicBool,
+    installs: AtomicUsize,
     fail_download: AtomicBool,
     wait_download: AtomicBool,
     check_error: AtomicBool,
@@ -40,6 +41,7 @@ impl Default for Fake {
             skipped: Mutex::new(None),
             downloads: AtomicUsize::new(0),
             installed: AtomicBool::new(false),
+            installs: AtomicUsize::new(0),
             fail_download: AtomicBool::new(false),
             wait_download: AtomicBool::new(false),
             check_error: AtomicBool::new(false),
@@ -78,6 +80,7 @@ impl UpdateHook for Fake {
         if cancel.load(Ordering::Relaxed) { Err("cancelled".into()) } else { Ok(()) }
     }
     fn install_and_restart(&self) -> Result<(), String> {
+        self.installs.fetch_add(1, Ordering::SeqCst);
         self.installed.store(true, Ordering::SeqCst);
         Ok(())
     }
@@ -350,6 +353,113 @@ fn windows_msi_ready_notice_explains_uac_before_installing() {
 }
 
 #[test]
+fn windows_msi_waits_for_click_and_installs_once() {
+    let fake = Arc::new(Fake { windows_msi: true, ..Fake::default() });
+    let mut h = harness(fake.clone());
+    wait_for(&mut h, "Update now");
+    h.get_by_label("Update now").click();
+    wait_for(&mut h, "Install now");
+    std::thread::sleep(std::time::Duration::from_millis(5100));
+    h.run_steps(5);
+    assert_eq!(fake.installs.load(Ordering::SeqCst), 0);
+    h.get_by_label("Install now").click();
+    h.get_by_label("Install now").click();
+    h.run_steps(8);
+    assert_eq!(fake.installs.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn windows_msi_cancel_clears_ready_and_forced_check_downloads_again() {
+    let fake = Arc::new(Fake { windows_msi: true, ..Fake::default() });
+    let mut h = harness(fake.clone());
+    wait_for(&mut h, "Update now");
+    h.get_by_label("Update now").click();
+    wait_for(&mut h, "Install now");
+    h.get_by_label("Cancel").click();
+    h.run_steps(5);
+    assert!(h.query_by_label("Install now").is_none());
+    h.state_mut().check_for_updates();
+    wait_for(&mut h, "Update now");
+    assert!(fake.forced.load(Ordering::SeqCst));
+    assert_eq!(fake.calls.load(Ordering::SeqCst), 2);
+    h.get_by_label("Update now").click();
+    wait_for(&mut h, "Install now");
+    assert_eq!(fake.downloads.load(Ordering::SeqCst), 2);
+    assert_eq!(fake.installs.load(Ordering::SeqCst), 0);
+    drop(h);
+    assert_eq!(fake.installs.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn windows_msi_install_click_guards_edits_made_during_download() {
+    let fake = Arc::new(Fake { windows_msi: true, ..Fake::default() });
+    fake.wait_download.store(true, Ordering::SeqCst);
+    let mut h = harness(fake.clone());
+    wait_for(&mut h, "Update now");
+    h.get_by_label("Update now").click();
+    wait_for(&mut h, "Cancel");
+    edit(h.state_mut());
+    fake.wait_download.store(false, Ordering::SeqCst);
+    wait_for(&mut h, "Install now");
+    assert!(h.state().dialog.is_none());
+    h.get_by_label("Install now").click();
+    wait_for(&mut h, "Do you want to save the changes");
+    assert_eq!(fake.installs.load(Ordering::SeqCst), 0);
+    h.get_by_label("Cancel").click();
+    h.run_steps(8);
+    assert!(h.state().session.documents().iter().any(|doc| doc.is_dirty()));
+    assert_eq!(fake.installs.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn closing_app_while_msi_waits_never_installs() {
+    let fake = Arc::new(Fake { windows_msi: true, ..Fake::default() });
+    let mut h = harness(fake.clone());
+    wait_for(&mut h, "Update now");
+    h.get_by_label("Update now").click();
+    wait_for(&mut h, "Install now");
+    assert!(h.state_mut().confirm_quit());
+    h.run_steps(8);
+    drop(h);
+    assert_eq!(fake.installs.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn non_msi_still_auto_installs_after_download() {
+    let fake = Arc::new(Fake::default());
+    let mut h = harness(fake.clone());
+    wait_for(&mut h, "Update now");
+    h.get_by_label("Update now").click();
+    wait_for(&mut h, "The app will close and reopen after updating");
+    assert!(h.query_by_label("Install now").is_none());
+    assert_eq!(fake.installs.load(Ordering::SeqCst), 0);
+    for _ in 0..400 {
+        h.run_steps(2);
+        if fake.installs.load(Ordering::SeqCst) > 0 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(fake.installs.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn windows_msi_waiting_notice_screenshot() {
+    let Some(dir) = std::env::var_os("GRIDCRAFT_UPDATE_SCREENSHOTS") else { return };
+    let dir = std::path::PathBuf::from(dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let fake = Arc::new(Fake { windows_msi: true, ..Fake::default() });
+    let mut h = harness(fake);
+    h.state_mut().ui.language = gridcraft_ui_egui::i18n::Language::Vi;
+    h.state_mut().ui.dark = false;
+    h.state_mut().ui.system_theme = false;
+    wait_for(&mut h, "Cập nhật ngay");
+    h.get_by_label("Cập nhật ngay").click();
+    wait_for(&mut h, "Cài đặt ngay");
+    h.render().unwrap().save(dir.join("update-msi-waiting-light.png")).unwrap();
+}
+
+#[test]
 fn every_update_label_is_translated_in_every_interface_language() {
     let keys = [
         "The update check stopped unexpectedly",
@@ -365,6 +475,7 @@ fn every_update_label_is_translated_in_every_interface_language() {
         "Checking for a newer version…",
         "Download new version",
         "Update now",
+        "Install now",
         "Remind me later",
         "Skip this version",
         "What's new",

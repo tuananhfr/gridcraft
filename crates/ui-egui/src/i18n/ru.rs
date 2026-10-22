@@ -13,6 +13,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Cancel" => "Отмена",
         "Checking for a newer version…" => "Проверка новой версии…",
         "Download new version" => "Скачать новую версию",
+        "Install now" => "Установить сейчас",
         "Update now" => "Обновить сейчас",
         "Remind me later" => "Напомнить позже",
         "Skip this version" => "Пропустить эту версию",

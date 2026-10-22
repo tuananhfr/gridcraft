@@ -192,8 +192,8 @@ impl SheetApp {
                     match result {
                         Ok(()) => {
                             self.updates.ready = true;
-                            let delay = if self.updates.offer.as_ref().is_some_and(|offer| offer.windows_msi) { 5000.0 } else { 800.0 };
-                            self.updates.ready_at = Some(crate::now_ms() + delay);
+                            self.updates.ready_at =
+                                if self.updates.offer.as_ref().is_some_and(|offer| offer.windows_msi) { None } else { Some(crate::now_ms() + 800.0) };
                             let key = if self.updates.offer.as_ref().is_some_and(|offer| offer.windows_msi) {
                                 "The app will close, Windows will ask for installation permission — choose Yes — then the app will reopen automatically"
                             } else {
@@ -219,7 +219,7 @@ impl SheetApp {
 
     pub(crate) fn request_update(&mut self, ctx: &egui::Context) {
         ctx.request_repaint();
-        if self.printing.busy() || self.dialog.is_some() {
+        if self.printing.busy() || self.dialog.is_some() || self.updates.awaiting_save {
             return;
         }
         self.updates.awaiting_save = true;
@@ -374,7 +374,20 @@ pub(crate) fn dialog(app: &mut SheetApp, ctx: &egui::Context) {
                             later = ui.button(language.tr("Close")).clicked();
                         } else if app.updates.ready {
                             if app.updates.ready_at.is_none() {
-                                update = ui.button(language.tr("Retry")).clicked();
+                                if app.updates.offer.as_ref().is_some_and(|offer| offer.windows_msi) {
+                                    if !app.updates.awaiting_save {
+                                        update = ui
+                                            .add(
+                                                egui::Button::new(egui::RichText::new(language.tr("Install now")).color(t.window).strong())
+                                                    .fill(t.accent)
+                                                    .corner_radius(16),
+                                            )
+                                            .clicked();
+                                        later = ui.button(language.tr("Cancel")).clicked();
+                                    }
+                                } else {
+                                    update = ui.button(language.tr("Retry")).clicked();
+                                }
                             }
                         } else if let Some(offer) = &app.updates.offer {
                             if offer.download_page_only {
@@ -382,7 +395,13 @@ pub(crate) fn dialog(app: &mut SheetApp, ctx: &egui::Context) {
                                     notes = Some(offer.notes_url.clone());
                                 }
                             } else {
-                                update = ui.button(language.tr("Update now")).clicked();
+                                update = ui
+                                    .add(
+                                        egui::Button::new(egui::RichText::new(language.tr("Update now")).color(t.window).strong())
+                                            .fill(t.accent)
+                                            .corner_radius(16),
+                                    )
+                                    .clicked();
                             }
                             later = ui.button(language.tr("Remind me later")).clicked();
                             skip = ui.button(language.tr("Skip this version")).clicked();
@@ -406,6 +425,9 @@ pub(crate) fn dialog(app: &mut SheetApp, ctx: &egui::Context) {
         app.open_update_url(&url);
     }
     if later {
+        if app.updates.ready {
+            app.cancel_update_prompt();
+        }
         app.updates.open = false;
     }
     if skip {

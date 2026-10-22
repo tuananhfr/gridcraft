@@ -197,6 +197,7 @@ const JAPANESE: &[(&str, &str)] = &[
     ("Cancel", "キャンセル"),
     ("Checking for a newer version…", "新しいバージョンを確認中…"),
     ("Download new version", "新しいバージョンをダウンロード"),
+    ("Install now", "今すぐインストール"),
     ("Update now", "今すぐ更新"),
     ("Remind me later", "後で通知"),
     ("Skip this version", "このバージョンをスキップ"),

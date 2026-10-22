@@ -1,6 +1,6 @@
 # ERPCons changes
 
-- (desktop) Add signed self-updates with automatic checks, translated Help notices, save-before-update guards, download cancellation and retry, and Windows installation permission guidance.
+- (desktop) Add signed self-updates with automatic checks, translated Help notices, save-before-update guards, download cancellation and retry, and Windows installation permission guidance; MSI updates wait for Install now or Cancel.
 
 - (desktop) Use the ERPCons app icon for macOS document types and offer XLSB/ODS imports in Windows Default apps alongside the existing file associations.
 

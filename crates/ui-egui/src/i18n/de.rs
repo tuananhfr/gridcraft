@@ -14,6 +14,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Cancel" => "Abbrechen",
         "Checking for a newer version…" => "Suche nach einer neueren Version…",
         "Download new version" => "Neue Version herunterladen",
+        "Install now" => "Jetzt installieren",
         "Update now" => "Jetzt aktualisieren",
         "Remind me later" => "Später erinnern",
         "Skip this version" => "Diese Version überspringen",
