@@ -11,7 +11,7 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!(query "sheet.read", "Read Range", [], None, "{range?: \"A1:D10\" (default: used range), sheet?, formulas?: bool, formatted?: bool} → rows of values", has_doc, read),
         cmd!(query "cell.get", "Get Cell", [], None, "{cell?, sheet?} → value, formula, display text, style, comment, link", has_doc, cell_get),
         cmd!(query "selection.stats", "Selection Statistics", [], None, "{} → count, sum, average, min, max", has_doc, sel_stats),
-        cmd!(query "history.list", "Undo History", [], None, "{} → undo/redo labels", has_doc, history),
+        cmd!(query "history.list", "Undo History", [], None, "{} → undo/redo entries (label, transactionId, timestamp)", has_doc, history),
         cmd!(query "app.commands", "List Commands", [], None, "{search?} → ids, labels, params", always, list_commands),
     ]
 }
@@ -70,8 +70,8 @@ fn inspect(s: &mut Session, _: &Json) -> Result<Json> {
         "names": wb.names.iter().map(|n| json!({"name": n.name, "refersTo": format!("={}", n.formula), "scope": n.scope})).collect::<Vec<_>>(),
         "calcMode": format!("{:?}", wb.calc.mode),
         "notCalculated": d.calc.not_calculated.len(),
-        "undo": d.undo.iter().rev().take(20).map(|e| e.label.clone()).collect::<Vec<_>>(),
-        "redo": d.redo.iter().rev().take(20).map(|e| e.label.clone()).collect::<Vec<_>>(),
+        "undo": d.undo.iter().rev().take(20).map(|e| json!({"label": e.label, "transactionId": e.transaction_id, "timestamp": e.timestamp})).collect::<Vec<_>>(),
+        "redo": d.redo.iter().rev().take(20).map(|e| json!({"label": e.label, "transactionId": e.transaction_id, "timestamp": e.timestamp})).collect::<Vec<_>>(),
         "theme": wb.theme.name,
         "mode": format!("{:?}", s.mode),
     }))
@@ -151,7 +151,7 @@ fn sel_stats(s: &mut Session, _: &Json) -> Result<Json> {
 fn history(s: &mut Session, _: &Json) -> Result<Json> {
     let d = s.doc()?;
     Ok(
-        json!({"undo": d.undo.iter().rev().map(|e| e.label.clone()).collect::<Vec<_>>(), "redo": d.redo.iter().rev().map(|e| e.label.clone()).collect::<Vec<_>>()}),
+        json!({"undo": d.undo.iter().rev().map(|e| json!({"label": e.label, "transactionId": e.transaction_id, "timestamp": e.timestamp})).collect::<Vec<_>>(), "redo": d.redo.iter().rev().map(|e| json!({"label": e.label, "transactionId": e.transaction_id, "timestamp": e.timestamp})).collect::<Vec<_>>()}),
     )
 }
 

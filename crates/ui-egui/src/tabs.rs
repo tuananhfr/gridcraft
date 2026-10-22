@@ -256,9 +256,15 @@ pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
                         ui.add_space(12.0);
                         ui.label(egui::RichText::new(lang.tr("Macros preserved (not executed)")).font(theme::ui_font(12.5)).color(t.danger));
                     }
-                    if d.wb.calc.mode == gridcraft_engine::model::CalcMode::Manual && fits(ui, lang.tr("Calculate")) {
+                    if !d.calc.stale.is_empty() && fits(ui, lang.tr("Recalculation needed")) {
                         ui.add_space(12.0);
-                        ui.label(egui::RichText::new(lang.tr("Calculate")).font(theme::ui_font(12.5)).color(t.text_dim));
+                        ui.label(egui::RichText::new(lang.tr("Recalculation needed")).font(theme::ui_font(12.5)).color(t.text_dim));
+                    }
+                    if (!d.calc.not_calculated.is_empty() || workbook_has_errors(ui, d))
+                        && fits(ui, lang.tr("Calculation has errors"))
+                    {
+                        ui.add_space(12.0);
+                        ui.label(egui::RichText::new(lang.tr("Calculation has errors")).font(theme::ui_font(12.5)).color(t.danger));
                     }
                     if !d.calc.circular.is_empty() {
                         let (si, c) = d.calc.circular[0];
@@ -412,6 +418,20 @@ fn fit_in(available: f32, base: f32, widths: &[f32], order: &[usize]) -> Vec<boo
 
 fn text_width(ui: &Ui, text: &str) -> f32 {
     ui.painter().layout_no_wrap(text.to_string(), theme::ui_font(12.5), egui::Color32::WHITE).size().x
+}
+
+/// Whether any cell or spill holds an error, cached per workbook snapshot: scanning every cell each frame stalls big files.
+fn workbook_has_errors(ui: &egui::Ui, d: &gridcraft_engine::DocState) -> bool {
+    let key = (d.uid, d.revision, std::sync::Arc::as_ptr(&d.wb) as usize);
+    let id = egui::Id::new("gridcraft.workbook_has_errors");
+    if let Some((cached, has)) = ui.data(|m| m.get_temp::<((u64, u64, usize), bool)>(id))
+        && cached == key
+    {
+        return has;
+    }
+    let has = d.wb.sheets.iter().any(|sh| sh.cells.iter().any(|(_, cell)| cell.value.is_error()) || sh.spill.values().any(|value| value.is_error()));
+    ui.data_mut(|m| m.insert_temp(id, (key, has)));
+    has
 }
 
 #[cfg(test)]

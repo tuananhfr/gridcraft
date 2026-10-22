@@ -208,7 +208,7 @@ pub fn handle(app: &mut SheetApp, ctx: &egui::Context, method: &str, p: &Json) -
             }
             ok(Json::Array(filter_commands(v, s("search"))))
         }
-        "engine.journal" => ok(json!(app.session.journal.iter().map(|(id, p)| json!({"command": id, "params": p})).collect::<Vec<_>>())),
+        "engine.journal" => ok(json!(app.session.journal_records())),
         "document.inspect" | "sheet.read" | "cell.get" | "selection.stats" => wrap(app.session.run(method, p.clone())),
         "ui.inspect" => ok(inspect(app, ctx)),
         "ui.ribbon" => {

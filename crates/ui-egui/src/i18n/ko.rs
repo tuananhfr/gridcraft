@@ -2,6 +2,38 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
+            "Excel 97-2003 통합 문서(.xls)에서 값, 수식, 숫자 형식, 병합된 셀, 열 너비, 행 높이 및 정의된 이름을 읽었습니다. 글꼴, 채우기, 테두리, 차트, 그림, 메모 및 기타 기능은 아직 가져오지 않습니다. .xlsx로 저장하세요. .xls 저장은 지원되지 않습니다."
+        }
+        "Data validation in .xls files is not imported yet." => ".xls 파일의 데이터 유효성 검사는 아직 가져오지 않습니다.",
+        "Pictures, charts and shapes in .xls files are not imported yet." => ".xls 파일의 그림, 차트 및 도형은 아직 가져오지 않습니다.",
+        "Cell comments in .xls files are not imported yet." => ".xls 파일의 셀 메모는 아직 가져오지 않습니다.",
+        "Conditional formatting in .xls files is not imported yet." => ".xls 파일의 조건부 서식은 아직 가져오지 않습니다.",
+        "Some defined names use references to other workbooks (external links) and were skipped." => {
+            "다른 통합 문서(외부 링크)를 참조하는 일부 정의된 이름을 건너뛰었습니다."
+        }
+        "Calculate Selection" => "선택 영역 계산",
+        "Recalculation needed" => "다시 계산 필요",
+        "Calculation has errors" => "오류가 남아 있음",
+        "Cause" => "원인",
+        "Suggestion" => "제안",
+        "Unknown function" => "알 수 없는 함수",
+        "Missing VBA UDF (macro required)" => "VBA 함수 누락(매크로 필요)",
+        "Undefined name" => "정의되지 않은 이름",
+        "External reference" => "외부 참조",
+        "Circular reference" => "순환 참조",
+        "Stale cached value (Manual)" => "오래된 캐시 값(수동)",
+        "Correct the formula and calculate again." => "수식을 수정하고 다시 계산하세요.",
+        "Remove the circular reference or enable iterative calculation." => "순환 참조를 제거하거나 반복 계산을 사용하세요.",
+        "Open the source workbook and update the reference." => "원본 통합 문서를 열고 참조를 업데이트하세요.",
+        "Use a supported formula; VBA macros are never executed." => "지원되는 수식을 사용하세요. VBA 매크로는 실행되지 않습니다.",
+        "Check the function name or use a supported function." => "함수 이름을 확인하거나 지원되는 함수를 사용하세요.",
+        "Define the name or correct its spelling." => "이름을 정의하거나 철자를 수정하세요.",
+        "Calculate the sheet or workbook." => "시트 또는 통합 문서를 계산하세요.",
+        "Import Details" => "가져오기 세부 정보",
+        "{count} items in this file were handled differently. First: {detail}" => {
+            "이 파일의 {count}개 항목이 다르게 처리되었습니다. 첫 번째: {detail}"
+        }
         "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
             "수식을 읽을 수 없습니다 — 표시된 값은 파일의 이전 값이며 다시 계산되지 않았습니다"
         }

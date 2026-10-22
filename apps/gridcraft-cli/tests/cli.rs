@@ -110,6 +110,7 @@ fn convert_xlsx_csv_roundtrip() {
     ]);
     ok(&["convert", xlsx.to_str().unwrap(), csv.to_str().unwrap()]);
     let text = std::fs::read_to_string(&csv).unwrap();
+    let text = text.strip_prefix('\u{feff}').expect("CSV is written with a UTF-8 BOM");
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines, ["Name,Qty", "apple,3", "\"pear, green\",4", "total,7"], "{text}");
     ok(&["convert", csv.to_str().unwrap(), back.to_str().unwrap()]);
@@ -173,4 +174,20 @@ fn check_exit_codes_and_json() {
     assert_eq!(run(&["check"]).status.code(), Some(2));
     assert_eq!(run(&["check", book_s, "--tolerance", "x"]).status.code(), Some(2));
     assert_eq!(run(&["check", book_s, "--bogus"]).status.code(), Some(2));
+}
+
+#[test]
+fn check_rejects_matching_formula_errors() {
+    let dir = tmpdir("check-errors");
+    let path = dir.join("errors.xlsx");
+    let mut wb = gridcraft_engine::model::Workbook::new();
+    let mut cell = gridcraft_engine::model::Cell::formula(gridcraft_engine::model::Formula::new("NOSUCHFN()"));
+    cell.value = gridcraft_engine::core::Value::Error(gridcraft_engine::core::CellError::Name);
+    wb.sheet_mut(0).unwrap().cells.set(gridcraft_engine::core::CellRef::new(0, 0), cell);
+    let bytes = gridcraft_engine::io::save_bytes(&wb, "errors.xlsx").unwrap();
+    std::fs::write(&path, bytes).unwrap();
+    let output = run(&["check", path.to_str().unwrap(), "--json"]);
+    assert_eq!(output.status.code(), Some(1), "{}", String::from_utf8_lossy(&output.stdout));
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["files"][0]["calc"]["errors"], 1);
 }

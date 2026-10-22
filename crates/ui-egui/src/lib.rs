@@ -318,6 +318,7 @@ pub struct SheetApp {
     pub toast: Option<(String, f64)>,
     /// Dismissible info bar under the ribbon (open-time notices).
     pub notice: Option<Notice>,
+    pub(crate) import_warnings: Vec<String>,
     font_notice_pending: std::collections::HashSet<u64>,
     circular_notice_pending: std::collections::HashSet<u64>,
     calculation_notice_seen: std::collections::HashSet<u64>,
@@ -436,6 +437,7 @@ impl SheetApp {
             message: None,
             toast: None,
             notice: None,
+            import_warnings: Vec::new(),
             font_notice_pending: Default::default(),
             circular_notice_pending,
             calculation_notice_seen: Default::default(),
@@ -519,7 +521,7 @@ impl SheetApp {
         let r = self.run_command(id, params);
         if r.is_ok() {
             self.circular_notice_after_edit(before);
-            if id == "formulas.calculateNow" || id == "formulas.calculateSheet" {
+            if matches!(id, "formulas.calculateNow" | "formulas.calculateSheet" | "formulas.calculateSelection") {
                 self.show_calculation_notice(true);
             } else if id != "file.open" {
                 self.clear_calculation_notice_if_resolved();
@@ -1016,6 +1018,7 @@ impl SheetApp {
     /// most important one (a preserved VBA project outranks, say, a skipped optional part).
     /// Kept deliberately generic: any open-time warning can reach the user this way.
     pub fn show_open_warnings(&mut self, r: &Json) {
+        self.import_warnings.clear();
         let Some(list) = r.get("warnings").and_then(Json::as_array) else {
             self.notice = None;
             return;
@@ -1026,6 +1029,7 @@ impl SheetApp {
             self.notice = None;
             return;
         }
+        self.import_warnings = msgs.iter().map(|msg| (*msg).to_string()).collect();
         let vba: Vec<&str> = msgs.iter().copied().filter(|m| m.to_lowercase().contains("macro") || m.contains("VBA")).collect();
         if !vba.is_empty() {
             self.notice =
@@ -1038,11 +1042,17 @@ impl SheetApp {
             }
         } else {
             let text = if msgs.len() == 1 {
-                msgs[0].to_string()
+                self.ui.language.tr_message(msgs.first().copied().unwrap_or_default()).into_owned()
             } else {
-                format!("{} items in this file were handled differently. First: {}", msgs.len(), msgs[0])
+                self.ui
+                    .language
+                    .tr("{count} items in this file were handled differently. First: {detail}")
+                    .replace("{count}", &msgs.len().to_string())
+                    .replace("{detail}", &self.ui.language.tr_message(msgs.first().copied().unwrap_or_default()))
             };
-            self.notice = Some(Notice { text, kind: NoticeKind::Info, action: None });
+            // A single warning is already shown in full; details only add the items the summary hides.
+            let action = (msgs.len() > 1).then(|| ("Import Details".into(), "importWarnings".into()));
+            self.notice = Some(Notice { text, kind: NoticeKind::Info, action });
         }
     }
 
@@ -1589,5 +1599,70 @@ fn autosave_extensions() {
     }
     for path in ["Untitled", "a.csv", "a.xlsx.bak", "a.xltm"] {
         assert!(!autosave_path(path));
+    }
+}
+
+#[cfg(test)]
+mod calculation_catalogue_tests {
+    use super::*;
+
+    #[test]
+    fn calculation_and_import_labels_exist_in_every_catalogue() {
+        for language in i18n::Language::ALL {
+            if language == i18n::Language::En {
+                continue;
+            }
+            for label in [
+                "Calculate Selection",
+                "Recalculation needed",
+                "Calculation has errors",
+                "Unknown function",
+                "Missing VBA UDF (macro required)",
+                "Undefined name",
+                "External reference",
+                "Circular reference",
+                "Stale cached value (Manual)",
+                "Correct the formula and calculate again.",
+                "Remove the circular reference or enable iterative calculation.",
+                "Open the source workbook and update the reference.",
+                "Use a supported formula; VBA macros are never executed.",
+                "Check the function name or use a supported function.",
+                "Define the name or correct its spelling.",
+                "Calculate the sheet or workbook.",
+                "Import Details",
+                "{count} items in this file were handled differently. First: {detail}",
+                "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.",
+                "Data validation in .xls files is not imported yet.",
+                "Pictures, charts and shapes in .xls files are not imported yet.",
+                "Cell comments in .xls files are not imported yet.",
+                "Conditional formatting in .xls files is not imported yet.",
+                "Some defined names use references to other workbooks (external links) and were skipped.",
+            ] {
+                assert_ne!(language.tr(label), label, "{language:?}: {label}");
+            }
+        }
+    }
+
+    #[test]
+    fn vietnamese_import_notice_translates_summary_and_all_six_items() {
+        let mut app = SheetApp::new(Session::new(), Default::default());
+        app.ui.language = i18n::Language::Vi;
+        let warnings = json!([
+            "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.",
+            "Data validation in .xls files is not imported yet.",
+            "Pictures, charts and shapes in .xls files are not imported yet.",
+            "Cell comments in .xls files are not imported yet.",
+            "Conditional formatting in .xls files is not imported yet.",
+            "Some defined names use references to other workbooks (external links) and were skipped.",
+        ]);
+        app.show_open_warnings(&json!({"warnings": warnings}));
+        let notice = app.notice.as_ref().unwrap();
+        assert!(notice.text.starts_with("Có 6 mục trong tệp được xử lý khác."));
+        assert!(!notice.text.contains("Imported from"));
+        assert_eq!(app.import_warnings.len(), 6);
+        for warning in &app.import_warnings {
+            assert_ne!(app.ui.language.tr_message(warning), warning.as_str());
+        }
+        assert_eq!(notice.action.as_ref().unwrap().1, "importWarnings");
     }
 }

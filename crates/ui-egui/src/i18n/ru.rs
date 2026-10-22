@@ -2,6 +2,38 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
+            "Импортировано из книги Excel 97–2003 (.xls): прочитаны значения, формулы, числовые форматы, объединённые ячейки, ширина столбцов, высота строк и определённые имена. Шрифты, заливки, границы, диаграммы, изображения, комментарии и другие возможности пока не импортируются. Сохраните как .xlsx; сохранение .xls не поддерживается."
+        }
+        "Data validation in .xls files is not imported yet." => "Проверка данных в файлах .xls пока не импортируется.",
+        "Pictures, charts and shapes in .xls files are not imported yet." => "Изображения, диаграммы и фигуры в файлах .xls пока не импортируются.",
+        "Cell comments in .xls files are not imported yet." => "Комментарии ячеек в файлах .xls пока не импортируются.",
+        "Conditional formatting in .xls files is not imported yet." => "Условное форматирование в файлах .xls пока не импортируется.",
+        "Some defined names use references to other workbooks (external links) and were skipped." => {
+            "Некоторые определённые имена со ссылками на другие книги (внешними связями) пропущены."
+        }
+        "Calculate Selection" => "Вычислить выделение",
+        "Recalculation needed" => "Требуется пересчёт",
+        "Calculation has errors" => "Остались ошибки",
+        "Cause" => "Причина",
+        "Suggestion" => "Рекомендация",
+        "Unknown function" => "Неизвестная функция",
+        "Missing VBA UDF (macro required)" => "Отсутствует функция VBA (нужен макрос)",
+        "Undefined name" => "Неопределённое имя",
+        "External reference" => "Внешняя ссылка",
+        "Circular reference" => "Циклическая ссылка",
+        "Stale cached value (Manual)" => "Устаревшее значение кэша (вручную)",
+        "Correct the formula and calculate again." => "Исправьте формулу и повторите расчёт.",
+        "Remove the circular reference or enable iterative calculation." => "Удалите циклическую ссылку или включите итеративные вычисления.",
+        "Open the source workbook and update the reference." => "Откройте исходную книгу и обновите ссылку.",
+        "Use a supported formula; VBA macros are never executed." => "Используйте поддерживаемую формулу; макросы VBA никогда не выполняются.",
+        "Check the function name or use a supported function." => "Проверьте имя функции или используйте поддерживаемую функцию.",
+        "Define the name or correct its spelling." => "Определите имя или исправьте его написание.",
+        "Calculate the sheet or workbook." => "Пересчитайте лист или книгу.",
+        "Import Details" => "Сведения об импорте",
+        "{count} items in this file were handled differently. First: {detail}" => {
+            "В этом файле иначе обработано элементов: {count}. Первый: {detail}"
+        }
         "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
             "Не удалось прочитать формулу — показано старое значение из файла, которое не было пересчитано"
         }

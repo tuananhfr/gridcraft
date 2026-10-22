@@ -71,7 +71,7 @@ impl Backend for Headless {
                 self.execute(&id, p)
             }
             "engine.commands" => Ok(self.commands(&params)),
-            "engine.journal" => Ok(Value::Array(self.session.journal.iter().map(|(id, p)| json!({"command": id, "params": p})).collect())),
+            "engine.journal" => Ok(Value::Array(self.session.journal_records())),
             m if m.starts_with("ui.") || m.starts_with("app.screenshot") => Err(format!("{m}: {NO_UI}")),
             // Read-only engine methods (`document.inspect`, `sheet.read`, `cell.get`, …) are
             // commands with the same id.

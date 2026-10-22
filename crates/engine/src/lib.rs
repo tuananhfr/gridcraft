@@ -64,6 +64,9 @@ pub type Result<T> = std::result::Result<T, EngineError>;
 
 #[derive(Clone, Debug)]
 pub struct HistoryEntry {
+    pub transaction_id: u64,
+    pub timestamp: u64,
+    pub(crate) stale: std::collections::BTreeSet<(usize, CellRef)>,
     pub label: String,
     pub wb: Arc<Workbook>,
     pub selection: Selection,
@@ -109,6 +112,7 @@ pub struct DocState {
     pub path: Option<String>,
     pub saved: Arc<Workbook>,
     pub revision: u64,
+    next_transaction_id: u64,
     pub uid: u64,
     pub title: String,
     /// Per-sheet selection memory.
@@ -131,7 +135,8 @@ pub const TOO_MANY_DOCUMENTS: &str = "You can have up to 10 documents open. Clos
 impl DocState {
     pub fn new(mut wb: Workbook, path: Option<String>, title: String) -> DocState {
         let mut calc = Calc::new();
-        calc.recalc_all(&mut wb);
+        // Manual workbooks retain the producer's caches on open, including volatile formulas.
+        calc.structural_changed(&mut wb);
         let wb = Arc::new(wb);
         let sel = Selection::at(wb.active().map(|s| s.view_active).unwrap_or_default());
         DocState {
@@ -143,6 +148,7 @@ impl DocState {
             redo: vec![],
             path,
             revision: 1,
+            next_transaction_id: 1,
             uid: NEXT_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             title,
             sheet_selections: vec![],
@@ -249,6 +255,12 @@ pub struct Session {
     pub mode: Mode,
     /// Commands run so far, without their passwords or opened files ([`cmd::journal_entry_params`]).
     pub journal: Vec<(String, Json)>,
+    journal_metadata: Vec<(u64, u64)>,
+    execution_depth: usize,
+    transaction_undoable: bool,
+    transaction_journal: Option<(String, Json)>,
+    /// Override the Unix millisecond clock for deterministic hosts and tests.
+    pub history_clock: Option<fn() -> u64>,
     /// What `edit.repeat` (F4) runs: the last repeatable command, with params that work on the
     /// selection. Any other edit of the workbook clears it, as typing does in Excel.
     pub last_repeatable: Option<(String, Json)>,
@@ -282,6 +294,17 @@ impl Session {
     pub fn new() -> Session {
         Session::default()
     }
+    pub fn journal_records(&self) -> Vec<Json> {
+        self.journal
+            .iter()
+            .enumerate()
+            .map(|(i, (id, params))| {
+                let (transaction_id, timestamp) = self.journal_metadata.get(i).copied().unwrap_or_default();
+                serde_json::json!({"command": id, "params": params, "transactionId": transaction_id, "timestamp": timestamp})
+            })
+            .collect()
+    }
+
     pub fn documents(&self) -> &[DocState] {
         &self.docs
     }
@@ -372,45 +395,70 @@ impl Session {
         if let Err(why) = (spec.enabled)(self) {
             return Err(EngineError::Disabled(id.to_string(), why));
         }
-        let before = self.active().map(|d| (d.uid, d.wb.clone(), d.selection.clone()));
+        let before = self.active().map(|d| (d.uid, d.wb.clone(), d.selection.clone(), d.calc.stale.clone()));
         let params = if params.is_null() { Json::Object(Default::default()) } else { params };
+        let outermost = self.execution_depth == 0;
+        if outermost {
+            self.transaction_undoable = false;
+            self.transaction_journal = None;
+        }
+        self.transaction_undoable |= spec.undoable;
+        if spec.journal && self.transaction_journal.is_none() {
+            self.transaction_journal = Some((id.to_string(), cmd::journal_entry_params(id, &params)));
+        }
+        self.execution_depth = self.execution_depth.saturating_add(1);
+        let timestamp = self.history_clock.map(|clock| clock()).unwrap_or_else(|| gridcraft_core::date::unix_now_ms().unwrap_or(0.0).max(0.0) as u64);
+        let transaction_id = self.active().map(|d| d.next_transaction_id).unwrap_or(0);
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (spec.run)(self, &params)));
+        self.execution_depth = self.execution_depth.saturating_sub(1);
         let result = match result {
             Ok(r) => r,
             Err(p) => {
                 let msg =
                     p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_else(|| "panic".into());
                 // Restore the workbook as it was.
-                if let Some((uid, wb, sel)) = &before
+                if let Some((uid, wb, sel, stale)) = &before
                     && let Some(d) = self.docs.iter_mut().find(|d| d.uid == *uid)
                 {
                     d.wb = wb.clone();
                     d.selection = sel.clone();
                     d.calc.rebuild(&d.wb);
+                    d.calc.stale = stale.clone();
                 }
                 return Err(EngineError::Internal(id.to_string(), msg));
             }
         };
-        if spec.journal && result.is_ok() {
-            self.journal.push((id.to_string(), cmd::journal_entry_params(id, &params)));
+        if outermost
+            && result.is_ok()
+            && let Some(entry) = self.transaction_journal.take()
+        {
+            self.journal_metadata.truncate(self.journal.len());
+            self.journal_metadata.push((transaction_id, timestamp));
+            if let Some(d) = self.active_mut() {
+                d.next_transaction_id = d.next_transaction_id.saturating_add(1);
+            }
+            self.journal.push(entry);
             if self.journal.len() > 10_000 {
                 self.journal.drain(..5_000);
+                self.journal_metadata.drain(..5_000);
             }
         }
         if spec.undoable && result.is_ok() {
-            let changed = before.as_ref().is_some_and(|(uid, wb, _)| self.docs.iter().any(|d| d.uid == *uid && !Arc::ptr_eq(&d.wb, wb)));
+            let changed = before.as_ref().is_some_and(|(uid, wb, _, _)| self.docs.iter().any(|d| d.uid == *uid && !Arc::ptr_eq(&d.wb, wb)));
             if cmd::edit::is_repeatable(id) {
                 self.last_repeatable = Some((id.to_string(), cmd::edit::retargeted(&params)));
             } else if changed {
                 self.last_repeatable = None;
             }
         }
-        if spec.undoable
-            && let Some((uid, wb, sel)) = before
+        if outermost
+            && self.transaction_undoable
+            && let Some((uid, wb, sel, stale)) = before
             && let Some(d) = self.docs.iter_mut().find(|d| d.uid == uid)
             && !Arc::ptr_eq(&d.wb, &wb)
         {
-            d.undo.push(HistoryEntry { label: spec.label.trim_end_matches('…').to_string(), wb, selection: sel });
+            d.next_transaction_id = d.next_transaction_id.max(transaction_id.saturating_add(1));
+            d.undo.push(HistoryEntry { transaction_id, timestamp, stale, label: spec.label.trim_end_matches('…').to_string(), wb, selection: sel });
             if d.undo.len() > UNDO_LIMIT {
                 d.undo.remove(0);
             }

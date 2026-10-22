@@ -37,8 +37,8 @@ fn unparsed_cache_notice_opens_error_checking_and_clears_after_edit() {
     }
     h.get_by_label(Language::Vi.tr("Error Checking")).click();
     h.run_steps(3);
-    assert!(h.query_by_label("Sheet1!A1: Công thức không đọc được — giá trị hiển thị là giá trị cũ trong tệp, chưa được tính lại").is_some());
-    assert!(h.query_by_label("Sheet1!B1: Phụ thuộc ô chưa tính được").is_some());
+    assert!(h.query_by_label("Công thức không đọc được — giá trị hiển thị là giá trị cũ trong tệp, chưa được tính lại").is_some());
+    assert!(h.query_by_label("Phụ thuộc ô chưa tính được").is_some());
     if let Some(dir) = std::env::var_os("GRIDCRAFT_PARSE_SCREENSHOTS") {
         h.render().unwrap().save(std::path::Path::new(&dir).join("unparsed-errors.png")).unwrap();
     }

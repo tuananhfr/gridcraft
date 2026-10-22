@@ -27,6 +27,19 @@ pub fn icon_button(ui: &mut Ui, icon: Icon, color: Color32, tip: &str, size: egu
     resp.on_hover_text(tr(ui, tip))
 }
 
+/// An icon button with egui disabled interaction and accessibility state.
+pub fn enabled_icon_button(ui: &mut Ui, enabled: bool, icon: Icon, tip: &str, size: egui::Vec2) -> Response {
+    ui.add_enabled_ui(enabled, |ui| {
+        let t = Tokens::get(ui.ctx());
+        let response = icon_button(ui, icon, if enabled { t.text_dim } else { t.text_disabled }, tip, size);
+        // Translate outside the closure: egui calls it while holding the context lock that `tr` needs.
+        let label = tr(ui, tip).to_owned();
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &label));
+        response
+    })
+    .inner
+}
+
 /// A toggle-able small button (e.g. Bold) showing a checked state.
 pub fn toggle_button(ui: &mut Ui, icon: Icon, on: bool, tip: &str) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(26.0, 24.0), Sense::click());

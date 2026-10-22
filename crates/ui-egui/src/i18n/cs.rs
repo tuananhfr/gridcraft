@@ -2,6 +2,38 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
+            "Importováno ze sešitu Excel 97–2003 (.xls): načteny hodnoty, vzorce, číselné formáty, sloučené buňky, šířky sloupců, výšky řádků a definované názvy. Písma, výplně, ohraničení, grafy, obrázky, komentáře a další funkce se zatím neimportují. Uložte jako .xlsx; ukládání .xls není podporováno."
+        }
+        "Data validation in .xls files is not imported yet." => "Ověřování dat v souborech .xls se zatím neimportuje.",
+        "Pictures, charts and shapes in .xls files are not imported yet." => "Obrázky, grafy a obrazce v souborech .xls se zatím neimportují.",
+        "Cell comments in .xls files are not imported yet." => "Komentáře buněk v souborech .xls se zatím neimportují.",
+        "Conditional formatting in .xls files is not imported yet." => "Podmíněné formátování v souborech .xls se zatím neimportuje.",
+        "Some defined names use references to other workbooks (external links) and were skipped." => {
+            "Některé definované názvy s odkazy na jiné sešity (externí odkazy) byly přeskočeny."
+        }
+        "Calculate Selection" => "Přepočítat výběr",
+        "Recalculation needed" => "Je nutný přepočet",
+        "Calculation has errors" => "Zbývají chyby",
+        "Cause" => "Příčina",
+        "Suggestion" => "Návrh",
+        "Unknown function" => "Neznámá funkce",
+        "Missing VBA UDF (macro required)" => "Chybí funkce VBA (vyžaduje makro)",
+        "Undefined name" => "Nedefinovaný název",
+        "External reference" => "Externí odkaz",
+        "Circular reference" => "Cyklický odkaz",
+        "Stale cached value (Manual)" => "Zastaralá hodnota mezipaměti (Ručně)",
+        "Correct the formula and calculate again." => "Opravte vzorec a přepočítejte jej.",
+        "Remove the circular reference or enable iterative calculation." => "Odstraňte cyklický odkaz nebo povolte iterační výpočty.",
+        "Open the source workbook and update the reference." => "Otevřete zdrojový sešit a aktualizujte odkaz.",
+        "Use a supported formula; VBA macros are never executed." => "Použijte podporovaný vzorec; makra VBA se nikdy nespouštějí.",
+        "Check the function name or use a supported function." => "Zkontrolujte název funkce nebo použijte podporovanou funkci.",
+        "Define the name or correct its spelling." => "Definujte název nebo opravte jeho zápis.",
+        "Calculate the sheet or workbook." => "Přepočítejte list nebo sešit.",
+        "Import Details" => "Podrobnosti importu",
+        "{count} items in this file were handled differently. First: {detail}" => {
+            "{count} položek v tomto souboru bylo zpracováno jinak. První: {detail}"
+        }
         "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
             "Vzorec nelze přečíst — zobrazená hodnota je původní hodnota ze souboru a nebyla přepočítána"
         }

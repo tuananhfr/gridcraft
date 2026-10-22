@@ -641,14 +641,24 @@ fn undo(s: &mut Session, p: &Json) -> Result<Json> {
     let now = d.wb.clone();
     for _ in 0..steps {
         let Some(e) = d.undo.pop() else { break };
-        let cur = crate::HistoryEntry { label: e.label.clone(), wb: d.wb.clone(), selection: d.selection.clone() };
+        let cur = crate::HistoryEntry {
+            transaction_id: e.transaction_id,
+            timestamp: e.timestamp,
+            stale: d.calc.stale.clone(),
+            label: e.label.clone(),
+            wb: d.wb.clone(),
+            selection: d.selection.clone(),
+        };
         d.redo.push(cur);
         label = e.label.clone();
         d.wb = e.wb;
         d.selection = e.selection;
+        d.calc.stale = e.stale;
     }
     super::extra::keep_watch_list(&now, &mut d.wb);
+    let stale = std::mem::take(&mut d.calc.stale);
     d.calc.rebuild(&d.wb);
+    d.calc.stale = stale;
     d.revision += 1;
     Ok(json!({"undone": label}))
 }
@@ -660,14 +670,24 @@ fn redo(s: &mut Session, p: &Json) -> Result<Json> {
     let now = d.wb.clone();
     for _ in 0..steps {
         let Some(e) = d.redo.pop() else { break };
-        let cur = crate::HistoryEntry { label: e.label.clone(), wb: d.wb.clone(), selection: d.selection.clone() };
+        let cur = crate::HistoryEntry {
+            transaction_id: e.transaction_id,
+            timestamp: e.timestamp,
+            stale: d.calc.stale.clone(),
+            label: e.label.clone(),
+            wb: d.wb.clone(),
+            selection: d.selection.clone(),
+        };
         d.undo.push(cur);
         label = e.label.clone();
         d.wb = e.wb;
         d.selection = e.selection;
+        d.calc.stale = e.stale;
     }
     super::extra::keep_watch_list(&now, &mut d.wb);
+    let stale = std::mem::take(&mut d.calc.stale);
     d.calc.rebuild(&d.wb);
+    d.calc.stale = stale;
     d.revision += 1;
     Ok(json!({"redone": label}))
 }

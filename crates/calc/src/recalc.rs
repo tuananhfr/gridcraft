@@ -387,6 +387,8 @@ pub struct Calc {
     pub circular: Vec<Key>,
     pub last_recalc_cells: usize,
     pub not_calculated: HashMap<Key, NotCalculated>,
+    /// Formula caches invalidated by edits since their last calculation.
+    pub stale: std::collections::BTreeSet<Key>,
 }
 
 impl Default for Calc {
@@ -398,6 +400,7 @@ impl Default for Calc {
             circular: vec![],
             last_recalc_cells: 0,
             not_calculated: HashMap::default(),
+            stale: Default::default(),
         }
     }
 }
@@ -407,6 +410,7 @@ struct PassHost<'a> {
     exprs: &'a HashMap<Key, std::sync::Arc<Expr>>,
     results: HashMap<Key, Value>,
     pending: HashSet<Key>,
+    scheduled: HashSet<Key>,
     in_progress: HashSet<Key>,
     /// New spills found during the pass: anchor → array.
     spills: HashMap<Key, std::sync::Arc<Array>>,
@@ -441,6 +445,7 @@ impl<'a> PassHost<'a> {
             exprs,
             results: HashMap::with_capacity_and_hasher(exprs.len(), Default::default()),
             pending: exprs.keys().copied().collect(),
+            scheduled: exprs.keys().copied().collect(),
             in_progress: HashSet::default(),
             spills: HashMap::default(),
             used: HashMap::default(),
@@ -471,7 +476,7 @@ fn spill_blocked(host: &PassHost<'_>, (sheet, anchor): Key, a: &Array) -> bool {
     let own = sh.spill_ranges.get(&anchor);
     let spilled_over = |c: CellRef| {
         !own.is_some_and(|o| o.contains(c))
-            && sh.spill_ranges.iter().any(|(o, r)| *o != anchor && r.contains(c) && !host.exprs.contains_key(&(sheet, *o)))
+            && sh.spill_ranges.iter().any(|(o, r)| *o != anchor && r.contains(c) && !host.scheduled.contains(&(sheet, *o)))
     };
     end.row >= gridcraft_core::MAX_ROWS
         || end.col >= gridcraft_core::MAX_COLS
@@ -502,6 +507,7 @@ impl PassHost<'_> {
         let Some(expr) = self.exprs.get(&k) else {
             return self.wb.sheet(k.0).map(|s| s.value(k.1)).unwrap_or_default();
         };
+        self.scheduled.insert(k);
         if self.in_progress.contains(&k) || self.depth > 2000 {
             self.cycle = true;
             if self.iterate {
@@ -686,6 +692,24 @@ impl Host for PassHost<'_> {
         if self.pending.contains(&k) || self.results.contains_key(&k) {
             return self.compute(k);
         }
+        let old_anchor = self
+            .wb
+            .sheet(sheet)
+            .and_then(|sh| sh.spill_ranges.iter().find(|(anchor, range)| **anchor != c && range.contains(c)).map(|(anchor, _)| (sheet, *anchor)));
+        if let Some(anchor) = old_anchor
+            && (self.pending.contains(&anchor) || self.results.contains_key(&anchor))
+        {
+            let value = self.compute(anchor);
+            if value.is_error() {
+                return value;
+            }
+            return self
+                .spills
+                .get(&anchor)
+                .and_then(|arr| arr.get((c.row - anchor.1.row) as usize, (c.col - anchor.1.col) as usize))
+                .cloned()
+                .unwrap_or_default();
+        }
         // A cell covered by a spill computed in this pass.
         for (anchor, arr) in &self.spills {
             if anchor.0 == sheet && c.row >= anchor.1.row && c.col >= anchor.1.col {
@@ -703,7 +727,8 @@ impl Host for PassHost<'_> {
     fn range_values(&mut self, sheet: usize, range: RangeRef) -> Vec<Value> {
         let (h, w) = (range.height() as usize, range.width() as usize);
         let mut out = vec![Value::Empty; h * w];
-        let Some(sh) = self.wb.sheet(sheet) else { return out };
+        let wb = self.wb;
+        let Some(sh) = wb.sheet(sheet) else { return out };
         // Sparse walk: only stored cells; formula cells that are (or were) dirty go through
         // `compute`, constants are copied straight from the store.
         let mut formulas: Vec<(usize, CellRef)> = Vec::new();
@@ -715,13 +740,15 @@ impl Host for PassHost<'_> {
                 *slot = cell.value.clone();
             }
         }
-        for (c, v) in sh.spill.range(range.start..=range.end) {
+        for (c, _) in sh.spill.range(range.start..=range.end) {
             if range.contains(*c) {
+                // The spill's anchor can be a precedent outside the requested range.
+                let value = self.cell_value(sheet, *c);
                 let i = (c.row - range.start.row) as usize * w + (c.col - range.start.col) as usize;
                 if let Some(slot) = out.get_mut(i)
                     && slot.is_empty()
                 {
-                    *slot = v.clone();
+                    *slot = value;
                 }
             }
         }
@@ -840,7 +867,32 @@ impl Calc {
             }
         }
         self.graph.settle();
+        self.circular.retain(|k| self.graph.nodes.contains_key(k));
         self.refresh_not_calculated(wb);
+        self.stale = self.graph.nodes.keys().copied().collect();
+        self.last_recalc_cells = 0;
+    }
+
+    /// Structural edits invalidate references even when calculation is deferred.
+    pub fn structural_changed(&mut self, wb: &mut Workbook) {
+        if wb.calc.mode == CalcMode::Manual {
+            self.rebuild(wb);
+        } else {
+            self.recalc_all(wb);
+        }
+    }
+
+    /// Reads formulas on other sheets from their current cached values.
+    pub fn recalc_sheet(&mut self, wb: &mut Workbook, sheet: usize) {
+        let keys: Vec<Key> = self.graph.nodes.keys().copied().filter(|k| k.0 == sheet).collect();
+        let scope = keys.iter().copied().collect();
+        self.run_scoped(wb, keys, Some(scope), false);
+    }
+
+    /// Evaluates selected formulas and follows only the precedents they actually read.
+    pub fn recalc_selection(&mut self, wb: &mut Workbook, sheet: usize, ranges: &[RangeRef]) {
+        let keys = self.graph.nodes.keys().copied().filter(|k| k.0 == sheet && ranges.iter().any(|r| r.contains(k.1))).collect();
+        self.run_scoped(wb, keys, Some(HashSet::default()), true);
     }
 
     /// Recalculates every formula (F9 / Ctrl+Alt+F9, and after loading).
@@ -881,17 +933,19 @@ impl Calc {
                         }
                         cleared.push((k.0, r));
                     }
+                    // Only a value cached from the file is kept for an unparsable formula; a typed one has none.
+                    if let Some(cell) = wb.sheet_mut(k.0).and_then(|s| s.cells.get_mut(k.1))
+                        && cell.formula.is_some()
+                        && cell.value.is_empty()
+                    {
+                        cell.value = Value::Error(CellError::Name);
+                    }
                 }
             }
         }
         self.graph.settle();
+        self.circular.retain(|k| self.graph.nodes.contains_key(k));
         self.refresh_not_calculated(wb);
-        if wb.calc.mode == CalcMode::Manual {
-            // Only the edited formulas themselves are evaluated.
-            let own: Vec<Key> = changed.iter().copied().filter(|k| self.graph.nodes.contains_key(k)).collect();
-            self.run(wb, own, false);
-            return;
-        }
         let mut seeds: Vec<Key> = changed.to_vec();
         let mut emptied: Vec<Key> = Vec::new();
         // Typing into (or clearing) a cell a dynamic array spills over (or would spill over)
@@ -935,6 +989,12 @@ impl Calc {
         }
         let t0 = prof_now();
         let dirty = self.dirty_closure(wb, &seeds);
+        if wb.calc.mode == CalcMode::Manual {
+            self.stale.retain(|k| self.graph.nodes.contains_key(k));
+            self.stale.extend(dirty);
+            self.last_recalc_cells = 0;
+            return;
+        }
         let t1 = prof_now();
         let n = dirty.len();
         self.run(wb, dirty, false);
@@ -967,7 +1027,7 @@ impl Calc {
         }
     }
 
-    fn dirty_closure(&self, _wb: &Workbook, seeds: &[Key]) -> Vec<Key> {
+    fn dirty_closure(&self, wb: &Workbook, seeds: &[Key]) -> Vec<Key> {
         let mut seen: HashSet<Key> = HashSet::default();
         let mut queue: VecDeque<Key> = VecDeque::new();
         for k in seeds {
@@ -991,6 +1051,9 @@ impl Calc {
         while let Some(k) = queue.pop_front() {
             deps.clear();
             self.graph.dependents(k.0, k.1, &mut deps);
+            if let Some(range) = wb.sheet(k.0).and_then(|sh| sh.spill_ranges.get(&k.1)) {
+                self.graph.dependents_of_range(k.0, *range, &mut deps);
+            }
             for d in deps.drain(..) {
                 if seen.insert(d) {
                     queue.push_back(d);
@@ -1001,8 +1064,13 @@ impl Calc {
     }
 
     /// Evaluates the dirty set and writes results (and spills) back.
-    fn run(&mut self, wb: &mut Workbook, mut dirty: Vec<Key>, full: bool) {
+    fn run(&mut self, wb: &mut Workbook, dirty: Vec<Key>, _full: bool) {
+        self.run_scoped(wb, dirty, None, false);
+    }
+
+    fn run_scoped(&mut self, wb: &mut Workbook, mut dirty: Vec<Key>, mut scope: Option<HashSet<Key>>, precedents: bool) {
         self.last_recalc_cells = 0;
+        let mut evaluated = HashSet::default();
         let mut dynamic_again = !self.graph.dynamic.is_empty();
         for _round in 0..8 {
             if dirty.is_empty() {
@@ -1011,7 +1079,8 @@ impl Calc {
             // Row-major order is a good topological guess; on-demand evaluation fixes the rest.
             dirty.sort_by_key(|(s, c)| (*s, c.row, c.col));
             let mut exprs: HashMap<Key, std::sync::Arc<Expr>> = HashMap::with_capacity_and_hasher(dirty.len(), Default::default());
-            for k in &dirty {
+            let eligible: Vec<Key> = if precedents { self.graph.nodes.keys().copied().collect() } else { dirty.clone() };
+            for k in &eligible {
                 if let Some(e) = wb.sheet(k.0).and_then(|s| s.cell(k.1)).and_then(|c| c.formula.as_ref()).and_then(|f| f.expr_arc()) {
                     exprs.insert(*k, e);
                 }
@@ -1021,6 +1090,9 @@ impl Calc {
             let tp = prof_now();
             let (results, spills, cycles, not_calculated) = {
                 let mut host = PassHost::new(wb, &exprs, &mut rng, now);
+                if precedents {
+                    host.scheduled = dirty.iter().copied().collect();
+                }
                 host.iterate = wb.calc.iterative;
                 host.not_calculated = self.not_calculated.clone();
                 for k in &dirty {
@@ -1040,18 +1112,34 @@ impl Calc {
                 eprintln!("  eval {} formulas {:.1} ms", results.len(), prof_now() - tp);
             }
             let tw = prof_now();
-            self.last_recalc_cells = results.keys().filter(|k| !self.not_calculated.contains_key(*k)).count();
-            self.circular = cycles;
+            evaluated.extend(results.keys().copied().filter(|k| !self.not_calculated.contains_key(k)));
+            self.last_recalc_cells = evaluated.len();
+            if precedents && let Some(allowed) = &mut scope {
+                allowed.extend(results.keys().copied());
+                dirty.extend(results.keys().copied());
+                dirty.sort_unstable();
+                dirty.dedup();
+            }
+            self.circular.retain(|k| !dirty.contains(k));
+            self.circular.extend(cycles);
+            for k in &dirty {
+                self.stale.remove(k);
+            }
             // Write back.
             let mut spill_changes: Vec<Key> = Vec::new();
             let mut freed: Vec<(usize, RangeRef)> = Vec::new();
+            let mut value_changes = Vec::new();
             for (k, v) in results {
                 let Some(sheet) = wb.sheet_mut(k.0) else { continue };
                 if let Some(cell) = sheet.cells.get_mut(k.1)
                     && cell.value != v
                 {
                     cell.value = v;
+                    value_changes.push(k);
                 }
+            }
+            if !value_changes.is_empty() {
+                self.stale.extend(self.dirty_closure(wb, &value_changes));
             }
             for k in &dirty {
                 let new = spills.get(k);
@@ -1118,9 +1206,6 @@ impl Calc {
                     }
                 }
             }
-            if full {
-                // Everything was already evaluated once; spill dependents need another pass.
-            }
             if std::env::var_os("GRIDCRAFT_PROFILE").is_some() {
                 eprintln!("  write-back {:.1} ms", prof_now() - tw);
             }
@@ -1129,7 +1214,12 @@ impl Calc {
             if spill_changes.is_empty() {
                 break;
             }
-            dirty = self.dirty_closure(wb, &spill_changes);
+            let affected = self.dirty_closure(wb, &spill_changes);
+            self.stale.extend(affected.iter().copied());
+            dirty = affected.into_iter().filter(|k| scope.as_ref().is_none_or(|allowed| allowed.contains(k))).collect();
+        }
+        for k in evaluated {
+            self.stale.remove(&k);
         }
     }
 }

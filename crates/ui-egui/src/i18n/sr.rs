@@ -2,6 +2,38 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
+            "Uvezeno iz Excel 97–2003 radne sveske (.xls): pročitane su vrednosti, formule, formati brojeva, spojene ćelije, širine kolona, visine redova i definisana imena. Fontovi, ispune, ivice, grafikoni, slike, komentari i druge funkcije se još ne uvoze. Sačuvajte kao .xlsx; čuvanje .xls nije podržano."
+        }
+        "Data validation in .xls files is not imported yet." => "Validacija podataka iz .xls datoteka se još ne uvozi.",
+        "Pictures, charts and shapes in .xls files are not imported yet." => "Slike, grafikoni i oblici iz .xls datoteka se još ne uvoze.",
+        "Cell comments in .xls files are not imported yet." => "Komentari ćelija iz .xls datoteka se još ne uvoze.",
+        "Conditional formatting in .xls files is not imported yet." => "Uslovno oblikovanje iz .xls datoteka se još ne uvozi.",
+        "Some defined names use references to other workbooks (external links) and were skipped." => {
+            "Preskočena su neka definisana imena sa referencama na druge radne sveske (spoljne veze)."
+        }
+        "Calculate Selection" => "Izračunaj izbor",
+        "Recalculation needed" => "Potreban je ponovni proračun",
+        "Calculation has errors" => "Preostale su greške",
+        "Cause" => "Uzrok",
+        "Suggestion" => "Predlog",
+        "Unknown function" => "Nepoznata funkcija",
+        "Missing VBA UDF (macro required)" => "Nedostaje VBA funkcija (potreban makro)",
+        "Undefined name" => "Nedefinisano ime",
+        "External reference" => "Spoljna referenca",
+        "Circular reference" => "Kružna referenca",
+        "Stale cached value (Manual)" => "Zastarela keširana vrednost (Ručno)",
+        "Correct the formula and calculate again." => "Ispravite formulu i ponovo izračunajte.",
+        "Remove the circular reference or enable iterative calculation." => "Uklonite kružnu referencu ili omogućite iterativni proračun.",
+        "Open the source workbook and update the reference." => "Otvorite izvornu radnu svesku i ažurirajte referencu.",
+        "Use a supported formula; VBA macros are never executed." => "Koristite podržanu formulu; VBA makroi se nikada ne izvršavaju.",
+        "Check the function name or use a supported function." => "Proverite ime funkcije ili koristite podržanu funkciju.",
+        "Define the name or correct its spelling." => "Definišite ime ili ispravite njegov zapis.",
+        "Calculate the sheet or workbook." => "Izračunajte list ili radnu svesku.",
+        "Import Details" => "Detalji uvoza",
+        "{count} items in this file were handled differently. First: {detail}" => {
+            "U ovoj datoteci je drugačije obrađeno {count} stavki. Prva: {detail}"
+        }
         "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
             "Формула није могла да се прочита — приказана је стара вредност из датотеке која није поново израчуната"
         }

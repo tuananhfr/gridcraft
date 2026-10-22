@@ -5,6 +5,36 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
+            "Đã nhập sổ làm việc Excel 97–2003 (.xls): giá trị, công thức, định dạng số, ô gộp, độ rộng cột, chiều cao hàng và tên đã định nghĩa. Phông chữ, màu nền, đường viền, biểu đồ, ảnh, chú thích và các tính năng khác chưa được nhập. Hãy lưu dạng .xlsx; không hỗ trợ lưu .xls."
+        }
+        "Data validation in .xls files is not imported yet." => "Chưa nhập được quy tắc xác thực dữ liệu trong tệp .xls.",
+        "Pictures, charts and shapes in .xls files are not imported yet." => "Chưa nhập được ảnh, biểu đồ và hình dạng trong tệp .xls.",
+        "Cell comments in .xls files are not imported yet." => "Chưa nhập được chú thích ô trong tệp .xls.",
+        "Conditional formatting in .xls files is not imported yet." => "Chưa nhập được định dạng có điều kiện trong tệp .xls.",
+        "Some defined names use references to other workbooks (external links) and were skipped." => {
+            "Một số tên đã định nghĩa tham chiếu tới sổ làm việc khác (liên kết ngoài) nên đã bị bỏ qua."
+        }
+        "Calculate Selection" => "Tính vùng chọn",
+        "Recalculation needed" => "Cần tính lại",
+        "Calculation has errors" => "Còn lỗi",
+        "Cause" => "Nguyên nhân",
+        "Suggestion" => "Gợi ý",
+        "Unknown function" => "Hàm không xác định",
+        "Missing VBA UDF (macro required)" => "Thiếu hàm VBA (cần macro)",
+        "Undefined name" => "Tên chưa được định nghĩa",
+        "External reference" => "Tham chiếu ngoài",
+        "Circular reference" => "Tham chiếu vòng",
+        "Stale cached value (Manual)" => "Giá trị lưu đệm đã cũ (Thủ công)",
+        "Correct the formula and calculate again." => "Sửa công thức rồi tính lại.",
+        "Remove the circular reference or enable iterative calculation." => "Bỏ tham chiếu vòng hoặc bật tính toán lặp.",
+        "Open the source workbook and update the reference." => "Mở sổ làm việc nguồn và cập nhật tham chiếu.",
+        "Use a supported formula; VBA macros are never executed." => "Dùng công thức được hỗ trợ; macro VBA không bao giờ được chạy.",
+        "Check the function name or use a supported function." => "Kiểm tra tên hàm hoặc dùng hàm được hỗ trợ.",
+        "Define the name or correct its spelling." => "Định nghĩa tên hoặc sửa chính tả.",
+        "Calculate the sheet or workbook." => "Tính lại trang tính hoặc sổ làm việc.",
+        "Import Details" => "Chi tiết nhập tệp",
+        "{count} items in this file were handled differently. First: {detail}" => "Có {count} mục trong tệp được xử lý khác. Mục đầu tiên: {detail}",
         "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
             "Công thức không đọc được — giá trị hiển thị là giá trị cũ trong tệp, chưa được tính lại"
         }
@@ -226,7 +256,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Evaluate Formula" => "Đánh giá Công thức",
         "Watch Window" => "Cửa sổ Theo dõi",
         "Calculation\nOptions" => "Tùy chọn\nTính toán",
-        "Calculate Now" => "Tính Ngay",
+        "Calculate Now" => "Tính toán lại",
         "Calculate Sheet" => "Tính Trang tính",
         "Automatic" => "Tự động",
         "Automatic Except for Data Tables" => "Tự động Trừ Bảng Dữ liệu",
@@ -515,7 +545,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Align Left" => "Căn trái",
         "Align Right" => "Căn phải",
         "Bottom Align" => "Căn dưới",
-        "Calculate Now (F9)" => "Tính Ngay (F9)",
+        "Calculate Now (F9)" => "Tính toán lại (F9)",
         "Calculate Sheet (⇧F9)" => "Tính Trang tính (⇧F9)",
         "Calculation Options" => "Tùy chọn Tính toán",
         "Cell Styles" => "Kiểu Ô",

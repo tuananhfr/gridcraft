@@ -10,7 +10,7 @@ use crate::keymap::Shortcut;
 use crate::keytips::keytip_table;
 use crate::theme::{self, Tokens};
 use crate::title_fit::{Optional, TitleFit};
-use crate::widgets::{big_button, color_palette, icon_button, small_button, split_button, toggle_button, tr};
+use crate::widgets::{big_button, color_palette, enabled_icon_button, icon_button, small_button, split_button, toggle_button, tr};
 
 pub const TABS: &[&str] = &["Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Automate"];
 
@@ -44,6 +44,7 @@ pub const TITLE_BAR_LAYOUT: &str = "gridcraft.title_bar_layout";
 pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let ch = TITLE_CONTROL_H;
+    let touch_history = app.narrow.is_narrow() || app.grid.touch.active;
     egui::Panel::top("title_bar").exact_size(TITLE_BAR_H).frame(egui::Frame::NONE.fill(t.window)).show(ui, |ui| {
         let rect = ui.max_rect();
         // Dragging the empty title area moves the window.
@@ -88,10 +89,10 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
             }
             let can_undo = app.session.active().is_some_and(|d| !d.undo.is_empty());
             let can_redo = app.session.active().is_some_and(|d| !d.redo.is_empty());
-            if icon_button(ui, Icon::Undo, if can_undo { t.text_dim } else { t.text_disabled }, "Undo (⌘Z)", vec2(26.0, ch)).clicked() && can_undo {
+            if !touch_history && enabled_icon_button(ui, can_undo, Icon::Undo, "Undo (⌘Z)", vec2(26.0, ch)).clicked() {
                 app.run_or_alert("edit.undo", json!({}));
             }
-            if fit.shows(Optional::UndoList) {
+            if !touch_history && fit.shows(Optional::UndoList) {
                 let undo_list = icon_button(ui, Icon::Chevron, t.text_dim, "Undo list", vec2(14.0, ch));
                 egui::Popup::menu(&undo_list).show(|ui| {
                     let labels: Vec<String> =
@@ -106,10 +107,7 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
                     }
                 });
             }
-            if fit.shows(Optional::Redo)
-                && icon_button(ui, Icon::Redo, if can_redo { t.text_dim } else { t.text_disabled }, "Redo (⌘Y)", vec2(26.0, ch)).clicked()
-                && can_redo
-            {
+            if !touch_history && enabled_icon_button(ui, can_redo, Icon::Redo, "Redo (⌘Y)", vec2(26.0, ch)).clicked() {
                 app.run_or_alert("edit.redo", json!({}));
             }
             let more = icon_button(ui, Icon::More, t.text_dim, "More commands", vec2(26.0, ch));
@@ -200,6 +198,23 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
             ui.data_mut(|d| d.insert_temp(egui::Id::new(TITLE_BAR_LAYOUT), (left, right.response.rect, title_rect)));
         });
     });
+    if touch_history {
+        egui::Panel::top("touch_history").exact_size(44.0).frame(egui::Frame::NONE.fill(t.window)).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let undo =
+                    enabled_icon_button(ui, app.session.active().is_some_and(|d| !d.undo.is_empty()), Icon::Undo, "Undo (⌘Z)", vec2(44.0, 44.0));
+                let redo =
+                    enabled_icon_button(ui, app.session.active().is_some_and(|d| !d.redo.is_empty()), Icon::Redo, "Redo (⌘Y)", vec2(44.0, 44.0));
+                ui.data_mut(|d| d.insert_temp(egui::Id::new("gridcraft.history_layout"), (undo.rect, redo.rect, undo.enabled(), redo.enabled())));
+                if undo.clicked() {
+                    app.run_or_alert("edit.undo", json!({}));
+                }
+                if redo.clicked() {
+                    app.run_or_alert("edit.redo", json!({}));
+                }
+            });
+        });
+    }
 }
 
 /// A narrow window's title bar: the controls that fit without overlapping (see [`TitleFit`]).
@@ -1983,6 +1998,12 @@ fn formulas(app: &mut SheetApp, ui: &mut Ui) {
         control_keytip(app, ui, &__k, "formulas.calculateSheet");
         if __k.clicked() {
             act(app, "formulas.calculateSheet", json!({}));
+        }
+        let selection = small_button(ui, Icon::Calc, "Calculate Selection", "Calculate Selection", false);
+        let label = tr(ui, "Calculate Selection").to_string();
+        selection.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
+        if selection.clicked() {
+            act(app, "formulas.calculateSelection", json!({}));
         }
     });
 }

@@ -734,6 +734,7 @@ impl Dialog {
                     json!({"chart": id, "range": eq(&range), "range0": eq(&range), "categories": eq(&cats), "categories0": eq(&cats), "names": names, "remove": []}),
                 )
             }
+            "importWarnings" => Dialog::custom("importWarnings", "Import Details", json!({})),
             "journal" => Dialog::custom("journal", "Action Journal", json!({})),
             "macros" => {
                 let mut d = Dialog::custom("macros", "Macros", json!({}));
@@ -1049,6 +1050,8 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
     let width = match d.name.as_str() {
         "formatCells" => 560.0,
         "about" => 660.0,
+        "errorChecking" => 800.0_f32.min((ctx.content_rect().width() - 40.0).max(280.0)),
+        "importWarnings" => 600.0,
         "insertFunction" | "commandSearch" | "shortcuts" | "nameManager" | "manageRules" | "journal" | "agents" | "macros" => 520.0,
         "recommendedCharts" => 600.0,
         "analysisToolPak" => 420.0,
@@ -1100,19 +1103,40 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                         }
                     });
                 }
+                "importWarnings" => {
+                    egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                        for warning in &app.import_warnings {
+                            ui.label(app.ui.language.tr_message(warning).as_ref());
+                            ui.separator();
+                        }
+                    });
+                }
                 "macros" => macros(ui, &mut d, app),
                 "errorChecking" => {
                     egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
                         if let Some(errors) = d.result.as_ref().and_then(|r| r.get("errors")).and_then(Json::as_array) {
-                            for error in errors {
-                                let sheet = error.get("sheet").and_then(Json::as_str).unwrap_or_default();
-                                let cell = error.get("cell").and_then(Json::as_str).unwrap_or_default();
-                                let reason = error.get("reason").or_else(|| error.get("error")).and_then(Json::as_str).unwrap_or_default();
-                                ui.label(format!("{sheet}!{cell}: {}", app.ui.language.tr(reason)));
-                                if let Some(formula) = error.get("formula").and_then(Json::as_str) {
-                                    ui.monospace(formula);
-                                }
-                            }
+                            let column_width = ((ui.available_width() - 32.0) / 4.0).max(60.0);
+                            egui::Grid::new("calculation_diagnostics")
+                                .striped(true)
+                                .num_columns(4)
+                                .min_col_width(column_width)
+                                .max_col_width(column_width)
+                                .show(ui, |ui| {
+                                    for heading in ["Cell", "Cause", "Formula", "Suggestion"] {
+                                        ui.strong(app.ui.language.tr(heading));
+                                    }
+                                    ui.end_row();
+                                    for error in errors {
+                                        let text = |key| error.get(key).and_then(Json::as_str).unwrap_or_default();
+                                        ui.label(format!("{}!{}", text("sheet"), text("cell")));
+                                        let reason = app.ui.language.tr(text("reason"));
+                                        let symbol = text("symbol");
+                                        ui.label(if symbol.is_empty() { reason.to_string() } else { format!("{reason}: {symbol}") });
+                                        ui.add(egui::Label::new(egui::RichText::new(text("formula")).monospace()).wrap());
+                                        ui.label(app.ui.language.tr(text("suggestion")));
+                                        ui.end_row();
+                                    }
+                                });
                         }
                         if let Some(circular) = d.result.as_ref().and_then(|r| r.get("circular")).and_then(Json::as_array) {
                             for reference in circular.iter().filter_map(Json::as_str) {

@@ -1,7 +1,7 @@
 //! Formulas tab: AutoSum, Insert Function, names, auditing, calculation.
 
-use gridcraft_core::{CellRef, RangeRef};
-use gridcraft_model::{CalcMode, DefinedName, Formula};
+use gridcraft_core::{CellError, CellRef, RangeRef};
+use gridcraft_model::{CalcMode, Cell, DefinedName, Formula};
 use serde_json::{Value as Json, json};
 
 use super::*;
@@ -55,7 +55,8 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!(query "formulas.evaluateFormula", "Evaluate Formula", ["Formulas", "Formula Auditing"], None, "{cell?, formula?} → steps", has_doc, evaluate_formula),
         cmd!(query "formulas.evaluate", "Evaluate", [], None, "{formula: \"=SUM(A1:A3)\", cell?} → value without changing the sheet", has_doc, evaluate),
         cmd!(noundo "formulas.calculateNow", "Calculate Now", ["Formulas", "Calculation"], Some("F9"), "{}", has_doc, calc_now),
-        cmd!(noundo "formulas.calculateSheet", "Calculate Sheet", ["Formulas", "Calculation"], Some("Shift+F9"), "{}", has_doc, calc_now),
+        cmd!(noundo "formulas.calculateSelection", "Calculate Selection", ["Formulas", "Calculation"], None, "{}", has_doc, calc_selection),
+        cmd!(noundo "formulas.calculateSheet", "Calculate Sheet", ["Formulas", "Calculation"], Some("Shift+F9"), "{}", has_doc, calc_sheet),
         cmd!(
             "formulas.calculationOptions",
             "Calculation Options",
@@ -494,22 +495,101 @@ fn error_checking(s: &mut Session, _: &Json) -> Result<Json> {
     let mut out = Vec::new();
     for (si, sh) in d.wb.sheets.iter().enumerate() {
         for (c, cell) in sh.cells.iter() {
-            if let Some(state) = d.calc.not_calculated.get(&(si, c)) {
-                out.push(json!({"sheet": sh.name, "cell": c.a1(), "error": "notCalculated", "reason": state.reason(),
-                    "formula": cell.formula.as_ref().map(|f| format!("={}", f.text))}));
-            } else if let Some(e) = cell.value.as_error() {
-                out.push(
-                    json!({"sheet": sh.name, "cell": c.a1(), "error": e.as_str(), "formula": cell.formula.as_ref().map(|f| format!("={}", f.text))}),
-                );
+            let state = d.calc.not_calculated.get(&(si, c));
+            let stale = d.calc.stale.contains(&(si, c));
+            let error = cell.value.as_error();
+            if state.is_none() && error.is_none() && !stale {
+                continue;
             }
+            let (cause, reason, suggestion, symbol) = if let Some(state) = state {
+                ("unparsedFormula", state.reason(), "Correct the formula and calculate again.", String::new())
+            } else if let Some(error) = error {
+                diagnostic(&d.wb, si, cell, error)
+            } else {
+                ("staleCache", "Stale cached value (Manual)", "Calculate the sheet or workbook.", String::new())
+            };
+            out.push(json!({"sheet": sh.name, "cell": c.a1(), "error": error.map(|e| e.as_str()).unwrap_or("notCalculated"),
+                "cause": cause, "reason": reason, "suggestion": suggestion, "symbol": symbol,
+                "formula": cell.formula.as_ref().map(|f| format!("={}", f.text))}));
             if out.len() >= 10_000 {
                 break;
             }
         }
+        for (c, value) in &sh.spill {
+            if out.len() >= 10_000 {
+                break;
+            }
+            let Some(error) = value.as_error() else {
+                continue;
+            };
+            let anchor = sh.spill_ranges.iter().find(|(_, range)| range.contains(*c)).and_then(|(anchor, _)| sh.cell(*anchor));
+            let Some(cell) = anchor else {
+                continue;
+            };
+            let (cause, reason, suggestion, symbol) = diagnostic(&d.wb, si, cell, error);
+            out.push(json!({"sheet": sh.name, "cell": c.a1(), "error": error.as_str(), "cause": cause,
+                "reason": reason, "suggestion": suggestion, "symbol": symbol,
+                "formula": cell.formula.as_ref().map(|f| format!("={}", f.text))}));
+        }
+        if out.len() >= 10_000 {
+            break;
+        }
     }
+    out.sort_by(|a, b| a["cause"].as_str().cmp(&b["cause"].as_str()));
     let circ: Vec<String> =
         d.calc.circular.iter().map(|(si, c)| format!("{}!{}", d.wb.sheet(*si).map(|s| s.name.clone()).unwrap_or_default(), c.a1())).collect();
-    Ok(json!({"errors": out, "circular": circ, "notCalculated": d.calc.not_calculated.len()}))
+    Ok(json!({"errors": out, "circular": circ, "notCalculated": d.calc.not_calculated.len(), "stale": d.calc.stale.len()}))
+}
+
+fn diagnostic(wb: &Workbook, sheet: usize, cell: &Cell, error: CellError) -> (&'static str, &'static str, &'static str, String) {
+    if error == CellError::Circ {
+        return ("circularReference", "Circular reference", "Remove the circular reference or enable iterative calculation.", String::new());
+    }
+    let mut cause = None;
+    if let Some(expr) = cell.formula.as_ref().and_then(|f| f.expr()) {
+        let mut locals = std::collections::HashSet::new();
+        expr.walk(&mut |e| {
+            if let gridcraft_formula::Expr::Call(name, args) = e {
+                for (i, arg) in args.iter().take(args.len().saturating_sub(1)).enumerate() {
+                    if (name == "LAMBDA" || (name == "LET" && i % 2 == 0))
+                        && let gridcraft_formula::Expr::Name(local) = arg
+                    {
+                        locals.insert(local.to_ascii_uppercase());
+                    }
+                }
+            }
+        });
+        expr.walk(&mut |e| {
+            if cause.is_some() {
+                return;
+            }
+            match e {
+                gridcraft_formula::Expr::Ref(r) if r.sheet_name().is_some_and(|n| n.contains('[')) => {
+                    cause = Some(("externalReference", "External reference", "Open the source workbook and update the reference.", String::new()));
+                }
+                gridcraft_formula::Expr::Call(name, _)
+                    if error == CellError::Name
+                        && !gridcraft_calc::is_known_function(name)
+                        && !locals.contains(&name.to_ascii_uppercase())
+                        && wb.name(name, sheet).is_none() =>
+                {
+                    let udf = name.to_ascii_uppercase().starts_with("_XLUDF.") || wb.vba_project.is_some();
+                    cause = Some(if udf {
+                        ("missingUdf", "Missing VBA UDF (macro required)", "Use a supported formula; VBA macros are never executed.", name.clone())
+                    } else {
+                        ("unknownFunction", "Unknown function", "Check the function name or use a supported function.", name.clone())
+                    });
+                }
+                gridcraft_formula::Expr::Name(name)
+                    if error == CellError::Name && !locals.contains(&name.to_ascii_uppercase()) && wb.name(name, sheet).is_none() =>
+                {
+                    cause = Some(("undefinedName", "Undefined name", "Define the name or correct its spelling.", name.clone()));
+                }
+                _ => {}
+            }
+        });
+    }
+    cause.unwrap_or(("formulaError", error.as_str(), "Correct the formula and calculate again.", String::new()))
 }
 
 fn evaluate_formula(s: &mut Session, p: &Json) -> Result<Json> {
@@ -552,11 +632,50 @@ fn evaluate(s: &mut Session, p: &Json) -> Result<Json> {
 }
 
 fn calc_now(s: &mut Session, _: &Json) -> Result<Json> {
+    calculate(s, 0)
+}
+
+fn calc_sheet(s: &mut Session, _: &Json) -> Result<Json> {
+    calculate(s, 1)
+}
+
+fn calc_selection(s: &mut Session, _: &Json) -> Result<Json> {
+    calculate(s, 2)
+}
+
+fn calculate(s: &mut Session, scope: u8) -> Result<Json> {
     let d = s.doc_mut()?;
     let mut wb = (*d.wb).clone();
-    d.calc.recalc_all(&mut wb);
+    match scope {
+        1 => {
+            let sheet = wb.active_sheet;
+            d.calc.recalc_sheet(&mut wb, sheet);
+        }
+        2 => {
+            let sheet = wb.active_sheet;
+            d.calc.recalc_selection(&mut wb, sheet, &d.selection.ranges);
+        }
+        _ => d.calc.recalc_all(&mut wb),
+    }
     d.wb = std::sync::Arc::new(wb);
-    Ok(json!({"cells": d.calc.last_recalc_cells, "notCalculated": d.calc.not_calculated.len()}))
+    d.revision = d.revision.saturating_add(1);
+    let errors: usize =
+        d.wb.sheets
+            .iter()
+            .map(|sh| sh.cells.iter().filter(|(_, cell)| cell.value.is_error()).count() + sh.spill.values().filter(|value| value.is_error()).count())
+            .sum();
+    let uncalculated = d.calc.not_calculated.len();
+    let stale = d.calc.stale.len();
+    let status = if errors > 0 {
+        "error"
+    } else if uncalculated > 0 || stale > 0 {
+        "partial"
+    } else {
+        "complete"
+    };
+    Ok(json!({"status": status, "calculated": d.calc.last_recalc_cells, "errors": errors,
+        "uncalculated": uncalculated, "stale": stale, "revision": d.revision,
+        "cells": d.calc.last_recalc_cells, "notCalculated": uncalculated}))
 }
 
 fn calc_options(s: &mut Session, p: &Json) -> Result<Json> {

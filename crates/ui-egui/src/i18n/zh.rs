@@ -2,6 +2,36 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
+            "已从 Excel 97-2003 工作簿（.xls）导入值、公式、数字格式、合并单元格、列宽、行高和定义的名称。字体、填充、边框、图表、图片、批注和其他功能尚未导入。请另存为 .xlsx；不支持保存 .xls。"
+        }
+        "Data validation in .xls files is not imported yet." => "尚未导入 .xls 文件中的数据验证。",
+        "Pictures, charts and shapes in .xls files are not imported yet." => "尚未导入 .xls 文件中的图片、图表和形状。",
+        "Cell comments in .xls files are not imported yet." => "尚未导入 .xls 文件中的单元格批注。",
+        "Conditional formatting in .xls files is not imported yet." => "尚未导入 .xls 文件中的条件格式。",
+        "Some defined names use references to other workbooks (external links) and were skipped." => {
+            "已跳过一些引用其他工作簿（外部链接）的定义名称。"
+        }
+        "Calculate Selection" => "计算所选区域",
+        "Recalculation needed" => "需要重新计算",
+        "Calculation has errors" => "仍有错误",
+        "Cause" => "原因",
+        "Suggestion" => "建议",
+        "Unknown function" => "未知函数",
+        "Missing VBA UDF (macro required)" => "缺少 VBA 函数（需要宏）",
+        "Undefined name" => "未定义的名称",
+        "External reference" => "外部引用",
+        "Circular reference" => "循环引用",
+        "Stale cached value (Manual)" => "缓存值已过期（手动）",
+        "Correct the formula and calculate again." => "请修正公式后重新计算。",
+        "Remove the circular reference or enable iterative calculation." => "请删除循环引用或启用迭代计算。",
+        "Open the source workbook and update the reference." => "请打开源工作簿并更新引用。",
+        "Use a supported formula; VBA macros are never executed." => "请使用支持的公式；VBA 宏永远不会执行。",
+        "Check the function name or use a supported function." => "请检查函数名称或使用支持的函数。",
+        "Define the name or correct its spelling." => "请定义名称或修正拼写。",
+        "Calculate the sheet or workbook." => "请计算工作表或工作簿。",
+        "Import Details" => "导入详情",
+        "{count} items in this file were handled differently. First: {detail}" => "此文件中有 {count} 个项目采用了不同的处理方式。首项：{detail}",
         "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
             "无法读取公式 — 显示的是文件中的旧值，尚未重新计算"
         }

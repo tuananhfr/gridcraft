@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: add scoped sheet/selection calculation and Manual cache deferral, report calculation errors and translated diagnostics/import notices without executing VBA, reject erroneous CLI checks, and provide disabled 44-point Undo/Redo controls with transaction IDs/timestamps, grouped range edits and save-preserved history. A typed formula that cannot be parsed shows #NAME? again (only a cached file value is kept).
+
 - Both: GRID-02 marks unreadable formulas and their dependents as not calculated while retaining cached values, with translated grid diagnostics and Error Checking notices; GRID-10 preserves legacy .xls VBA projects when saving as .xlsm and warns about unconverted macro buttons.
 
 - Point the website links (About, installers, release notes) to https://office.erpcons.ai; app ids keep the `vn.erpcons.*` form.

@@ -2,6 +2,42 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
+            "Importé depuis un classeur Excel 97-2003 (.xls) : valeurs, formules, formats numériques, cellules fusionnées, largeurs de colonne, hauteurs de ligne et noms définis ont été lus. Les polices, remplissages, bordures, graphiques, images, commentaires et autres fonctionnalités ne sont pas encore importés. Enregistrez en .xlsx ; l’enregistrement en .xls n’est pas pris en charge."
+        }
+        "Data validation in .xls files is not imported yet." => "La validation des données des fichiers .xls n’est pas encore importée.",
+        "Pictures, charts and shapes in .xls files are not imported yet." => {
+            "Les images, graphiques et formes des fichiers .xls ne sont pas encore importés."
+        }
+        "Cell comments in .xls files are not imported yet." => "Les commentaires de cellule des fichiers .xls ne sont pas encore importés.",
+        "Conditional formatting in .xls files is not imported yet." => "La mise en forme conditionnelle des fichiers .xls n’est pas encore importée.",
+        "Some defined names use references to other workbooks (external links) and were skipped." => {
+            "Certains noms définis utilisant des références à d’autres classeurs (liens externes) ont été ignorés."
+        }
+        "Calculate Selection" => "Calculer la sélection",
+        "Recalculation needed" => "Recalcul nécessaire",
+        "Calculation has errors" => "Des erreurs subsistent",
+        "Cause" => "Cause",
+        "Suggestion" => "Suggestion",
+        "Unknown function" => "Fonction inconnue",
+        "Missing VBA UDF (macro required)" => "Fonction VBA manquante (macro requise)",
+        "Undefined name" => "Nom non défini",
+        "External reference" => "Référence externe",
+        "Circular reference" => "Référence circulaire",
+        "Stale cached value (Manual)" => "Valeur en cache périmée (Manuel)",
+        "Correct the formula and calculate again." => "Corrigez la formule puis recalculez.",
+        "Remove the circular reference or enable iterative calculation." => "Supprimez la référence circulaire ou activez le calcul itératif.",
+        "Open the source workbook and update the reference." => "Ouvrez le classeur source et actualisez la référence.",
+        "Use a supported formula; VBA macros are never executed." => {
+            "Utilisez une formule prise en charge ; les macros VBA ne sont jamais exécutées."
+        }
+        "Check the function name or use a supported function." => "Vérifiez le nom de la fonction ou utilisez une fonction prise en charge.",
+        "Define the name or correct its spelling." => "Définissez le nom ou corrigez son orthographe.",
+        "Calculate the sheet or workbook." => "Calculez la feuille ou le classeur.",
+        "Import Details" => "Détails de l’importation",
+        "{count} items in this file were handled differently. First: {detail}" => {
+            "{count} éléments de ce fichier ont été traités différemment. Premier : {detail}"
+        }
         "The formula could not be read — the displayed value is the old value from the file and has not been recalculated" => {
             "La formule n’a pas pu être lue — la valeur affichée est l’ancienne valeur du fichier et n’a pas été recalculée"
         }
