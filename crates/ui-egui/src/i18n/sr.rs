@@ -2,6 +2,37 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
+            "Ова радна свеска садржи VBA макрое. Подржане макрое можете покренути уз сагласност у дијалогу Макрои. Формат .xlsm их чува, а .xlsx уклања."
+        }
+        "Macro|Run" => "Покрени",
+        "Macro|Completed" => "Завршено",
+        "Macro|Cancelled" => "Отказано",
+        "Macro|Start" => "Почетак",
+        "Macro|End" => "Крај",
+        "Macro|Abort" => "Прекини",
+        "Macro|Ignore" => "Занемари",
+        "Macro time limit (seconds)" => "Временско ограничење макроа (секунде)",
+        "Event — automatic execution is not supported" => "Догађај — аутоматско покретање није подржано",
+        "Macro running" => "Макро се извршава",
+        "Revoke macro consent" => "Опозови сагласност",
+        "Macro buttons" => "Дугмад макроа",
+        "Run log" => "Дневник извршавања",
+        "Macro refused" => "Макро одбијен",
+        "Macro failed" => "Макро није успео",
+        "Cells changed" => "Измењене ћелије",
+        "Steps" => "Кораци",
+        "Allow this macro?" => "Дозволити овај макро?",
+        "This level-1 macro can change cells. Consent lasts for this document session and can be revoked." => {
+            "Овај макро нивоа 1 може мењати ћелије. Опозива сагласност важи само за ову сесију документа."
+        }
+        "Allow and run" => "Дозволи и покрени",
+        "Macro changes were rolled back; the workbook is unchanged." => "Измене макроа су поништене; радна свеска није промењена.",
+        "Compatibility level {level} is not supported." => "Ниво компатибилности {level} није подржан.",
+        "Macro execution stopped." => "Извршавање макроа је заустављено.",
+        "GetOpenFilename returns False until file bindings are supported" => "GetOpenFilename враћа False док се не подрже везе датотека",
+        "Choose file…" => "Изабери датотеку…",
+        "This macro compatibility level is not supported" => "Овај ниво компатибилности макроа није подржан",
         "Macro|Yes" => "Da",
         "Macro|No" => "Ne",
 

@@ -2,6 +2,39 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
+            "Ce classeur contient des macros VBA. Exécutez les macros prises en charge depuis la boîte Macros avec votre consentement. Le format .xlsm les conserve ; .xlsx les supprime."
+        }
+        "Macro|Run" => "Exécuter",
+        "Macro|Completed" => "Terminé",
+        "Macro|Cancelled" => "Annulé",
+        "Macro|Start" => "Début",
+        "Macro|End" => "Fin",
+        "Macro|Abort" => "Abandonner",
+        "Macro|Ignore" => "Ignorer",
+        "Macro time limit (seconds)" => "Durée limite des macros (secondes)",
+        "Event — automatic execution is not supported" => "Événement — exécution automatique non prise en charge",
+        "Macro running" => "Macro en cours",
+        "Revoke macro consent" => "Révoquer le consentement",
+        "Macro buttons" => "Boutons de macro",
+        "Run log" => "Journal des exécutions",
+        "Macro refused" => "Macro refusée",
+        "Macro failed" => "Échec de la macro",
+        "Cells changed" => "Cellules modifiées",
+        "Steps" => "Étapes",
+        "Allow this macro?" => "Autoriser cette macro ?",
+        "This level-1 macro can change cells. Consent lasts for this document session and can be revoked." => {
+            "Cette macro de niveau 1 peut modifier les cellules. Le consentement révocable vaut uniquement pour cette session du document."
+        }
+        "Allow and run" => "Autoriser et exécuter",
+        "Macro changes were rolled back; the workbook is unchanged." => "Les modifications de la macro ont été annulées ; le classeur est inchangé.",
+        "Compatibility level {level} is not supported." => "Le niveau de compatibilité {level} n’est pas pris en charge.",
+        "Macro execution stopped." => "Exécution de la macro arrêtée.",
+        "GetOpenFilename returns False until file bindings are supported" => {
+            "GetOpenFilename renvoie False tant que les liaisons de fichiers ne sont pas prises en charge"
+        }
+        "Choose file…" => "Choisir un fichier…",
+        "This macro compatibility level is not supported" => "Ce niveau de compatibilité de macro n’est pas pris en charge",
         "Macro|Yes" => "Oui",
         "Macro|No" => "Non",
 

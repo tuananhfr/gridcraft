@@ -2,6 +2,37 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
+            "Эта книга содержит макросы VBA. Поддерживаемые макросы можно запускать с вашего согласия в окне макросов. Формат .xlsm сохраняет их, а .xlsx удаляет."
+        }
+        "Macro|Run" => "Запустить",
+        "Macro|Completed" => "Завершено",
+        "Macro|Cancelled" => "Отменено",
+        "Macro|Start" => "Начало",
+        "Macro|End" => "Конец",
+        "Macro|Abort" => "Прервать",
+        "Macro|Ignore" => "Игнорировать",
+        "Macro time limit (seconds)" => "Лимит времени макроса (секунды)",
+        "Event — automatic execution is not supported" => "Событие — автоматический запуск не поддерживается",
+        "Macro running" => "Макрос выполняется",
+        "Revoke macro consent" => "Отозвать согласие",
+        "Macro buttons" => "Кнопки макросов",
+        "Run log" => "Журнал запусков",
+        "Macro refused" => "Макрос отклонён",
+        "Macro failed" => "Ошибка макроса",
+        "Cells changed" => "Изменённые ячейки",
+        "Steps" => "Шаги",
+        "Allow this macro?" => "Разрешить этот макрос?",
+        "This level-1 macro can change cells. Consent lasts for this document session and can be revoked." => {
+            "Этот макрос уровня 1 может изменять ячейки. Согласие действует только в этом сеансе документа и может быть отозвано."
+        }
+        "Allow and run" => "Разрешить и запустить",
+        "Macro changes were rolled back; the workbook is unchanged." => "Изменения макроса отменены; книга не изменена.",
+        "Compatibility level {level} is not supported." => "Уровень совместимости {level} не поддерживается.",
+        "Macro execution stopped." => "Выполнение макроса остановлено.",
+        "GetOpenFilename returns False until file bindings are supported" => "GetOpenFilename возвращает False до поддержки привязки файлов",
+        "Choose file…" => "Выбрать файл…",
+        "This macro compatibility level is not supported" => "Этот уровень совместимости макроса не поддерживается",
         "Macro|Yes" => "Да",
         "Macro|No" => "Нет",
 

@@ -2,6 +2,37 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
+            "이 통합 문서에는 VBA 매크로가 포함되어 있습니다. 동의하면 매크로 대화 상자에서 지원되는 매크로를 실행할 수 있습니다. .xlsm으로 저장하면 유지되고 .xlsx로 저장하면 제거됩니다."
+        }
+        "Macro|Run" => "실행",
+        "Macro|Completed" => "완료",
+        "Macro|Cancelled" => "취소됨",
+        "Macro|Start" => "시작",
+        "Macro|End" => "종료",
+        "Macro|Abort" => "중단",
+        "Macro|Ignore" => "무시",
+        "Macro time limit (seconds)" => "매크로 시간 제한(초)",
+        "Event — automatic execution is not supported" => "이벤트 — 자동 실행은 지원되지 않습니다",
+        "Macro running" => "매크로 실행 중",
+        "Revoke macro consent" => "매크로 동의 철회",
+        "Macro buttons" => "매크로 버튼",
+        "Run log" => "실행 기록",
+        "Macro refused" => "매크로 거부됨",
+        "Macro failed" => "매크로 실패",
+        "Cells changed" => "변경된 셀",
+        "Steps" => "단계",
+        "Allow this macro?" => "이 매크로를 허용할까요?",
+        "This level-1 macro can change cells. Consent lasts for this document session and can be revoked." => {
+            "이 수준 1 매크로는 셀을 변경할 수 있습니다. 동의는 현재 문서 세션에만 적용되며 철회할 수 있습니다."
+        }
+        "Allow and run" => "허용 및 실행",
+        "Macro changes were rolled back; the workbook is unchanged." => "매크로 변경 사항이 취소되었습니다. 통합 문서는 변경되지 않았습니다.",
+        "Compatibility level {level} is not supported." => "호환성 수준 {level}은 지원되지 않습니다.",
+        "Macro execution stopped." => "매크로 실행이 중지되었습니다.",
+        "GetOpenFilename returns False until file bindings are supported" => "파일 바인딩이 지원될 때까지 GetOpenFilename은 False를 반환합니다",
+        "Choose file…" => "파일 선택…",
+        "This macro compatibility level is not supported" => "이 매크로 호환성 수준은 지원되지 않습니다",
         "Macro|Yes" => "예",
         "Macro|No" => "아니요",
 

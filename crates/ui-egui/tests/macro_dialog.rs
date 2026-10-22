@@ -67,12 +67,7 @@ fn macro_dialog_labels_source_and_narrow_layouts() {
     for width in [1440.0, 320.0, 375.0, 390.0] {
         let mut h = harness(width);
         assert_dialog_fits(&h, width);
-        for label in [
-            "Macro chưa được chạy trong Bảng tính; đây là phân tích chỉ đọc.",
-            "CalculateLoads — Module1",
-            "Xem mã",
-            "1 · Chạy được khi có trình chạy macro",
-        ] {
+        for label in ["CalculateLoads — Module1", "Xem mã", "1 · Chạy được khi có trình chạy macro"] {
             let rect = h.get_by_label(label).rect();
             assert!(rect.left() >= 0.0 && rect.right() <= width, "{width}: {label}: {rect:?}");
         }
@@ -83,7 +78,7 @@ fn macro_dialog_labels_source_and_narrow_layouts() {
         assert!(h.query_by_label("    1  Public Sub CalculateLoads()").is_some());
         let bounds = h.ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new(gridcraft_ui_egui::dialogs::MACRO_DIALOG_LAYOUT))).unwrap();
         assert!(bounds.contains_rect(h.get_by_label("    3  x = 2").rect()), "source must be visible at {width}");
-        assert!(h.query_by_label("Chạy").is_none());
+        assert_eq!(h.query_by_label("Chạy").is_some(), !cfg!(target_arch = "wasm32"));
     }
 }
 

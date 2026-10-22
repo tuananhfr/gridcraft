@@ -980,6 +980,11 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
 
 fn options(app: &mut SheetApp, ui: &mut Ui) {
     let lang = app.ui.language;
+    #[cfg(not(target_arch = "wasm32"))]
+    ui.horizontal_wrapped(|ui| {
+        ui.label(lang.tr("Macro time limit (seconds)"));
+        ui.add(egui::DragValue::new(&mut app.ui.macro_time_limit_seconds).range(1..=300));
+    });
     section(ui, lang, "Options|General");
     egui::Grid::new("backstage_options_general").num_columns(2).spacing(vec2(18.0, 10.0)).show(ui, |ui| {
         ui.label(lang.tr("Display theme"));

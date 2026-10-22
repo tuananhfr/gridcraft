@@ -4,6 +4,37 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
+            "Este libro contiene macros VBA. Ejecute las macros compatibles desde el diálogo Macros con su consentimiento. Guardar como .xlsm las conserva; .xlsx las elimina."
+        }
+        "Macro|Run" => "Ejecutar",
+        "Macro|Completed" => "Completado",
+        "Macro|Cancelled" => "Cancelado",
+        "Macro|Start" => "Inicio",
+        "Macro|End" => "Fin",
+        "Macro|Abort" => "Abortar",
+        "Macro|Ignore" => "Ignorar",
+        "Macro time limit (seconds)" => "Límite de macros (segundos)",
+        "Event — automatic execution is not supported" => "Evento — ejecución automática no compatible",
+        "Macro running" => "Macro en ejecución",
+        "Revoke macro consent" => "Revocar consentimiento",
+        "Macro buttons" => "Botones de macro",
+        "Run log" => "Registro de ejecución",
+        "Macro refused" => "Macro rechazada",
+        "Macro failed" => "Error de macro",
+        "Cells changed" => "Celdas modificadas",
+        "Steps" => "Pasos",
+        "Allow this macro?" => "¿Permitir esta macro?",
+        "This level-1 macro can change cells. Consent lasts for this document session and can be revoked." => {
+            "Esta macro de nivel 1 puede cambiar celdas. El consentimiento revocable solo dura esta sesión del documento."
+        }
+        "Allow and run" => "Permitir y ejecutar",
+        "Macro changes were rolled back; the workbook is unchanged." => "Se revirtieron los cambios de la macro; el libro no ha cambiado.",
+        "Compatibility level {level} is not supported." => "El nivel de compatibilidad {level} no está admitido.",
+        "Macro execution stopped." => "Ejecución de macro detenida.",
+        "GetOpenFilename returns False until file bindings are supported" => "GetOpenFilename devuelve False hasta admitir enlaces de archivos",
+        "Choose file…" => "Elegir archivo…",
+        "This macro compatibility level is not supported" => "Este nivel de compatibilidad de macro no está admitido",
         "Macro|Yes" => "Sí",
         "Macro|No" => "No",
 

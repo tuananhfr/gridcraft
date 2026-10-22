@@ -575,7 +575,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                     Value::Object(id) => {
                         let id = object_id(Value::Object(id))?;
                         let args = self.arguments(args).await?;
-                        return self.host.get_member(id, "", &args);
+                        return self.host.get_member_async(id, "", &args).await;
                     }
                     _ => {}
                 }
@@ -593,11 +593,11 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
             let args = self.arguments(args).await?;
             if let Some(value) = self.host.global(name) {
                 self.validate(&value)?;
-                return self.host.get_member(object_id(value)?, "", &args);
+                return self.host.get_member_async(object_id(value)?, "", &args).await;
             }
             match name.trim_end_matches('$') {
-                "msgbox" => return self.host.msg_box(&args),
-                "inputbox" => return self.host.input_box(&args),
+                "msgbox" => return self.host.msg_box_async(&args).await,
+                "inputbox" => return self.host.input_box_async(&args).await,
                 "createobject" | "getobject" => return self.host.create_object(name == "getobject", &args),
                 _ => {}
             }
@@ -645,7 +645,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                         return array.values.get(array.offset(&indices)?).cloned().ok_or_else(|| Error::runtime(9, "Subscript out of range"));
                     }
                     let args = self.arguments(args).await?;
-                    return self.host.get_member(object_id(value)?, "", &args);
+                    return self.host.get_member_async(object_id(value)?, "", &args).await;
                 }
                 let visible = i == self.frame()?.module || self.program.modules.get(i).and_then(|m| m.procedures.get(name)).is_some_and(|p| p.public);
                 if !visible {
@@ -656,7 +656,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
             }
             let id = object_id(Box::pin(self.eval(obj)).await?)?;
             let args = self.arguments(args).await?;
-            return if method { self.host.call_method(id, name, &args) } else { self.host.get_member(id, name, &args) };
+            return if method { self.host.call_method_async(id, name, &args).await } else { self.host.get_member_async(id, name, &args).await };
         }
         let value = Box::pin(self.eval(target)).await?;
         if let Value::Array(array) = value {
@@ -665,7 +665,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
         }
         let id = object_id(value)?;
         let args = self.arguments(args).await?;
-        self.host.get_member(id, "", &args)
+        self.host.get_member_async(id, "", &args).await
     }
     async fn eval_scalar(&mut self, expression: &Expr) -> Result<Value> {
         let value = Box::pin(self.eval(expression)).await?;

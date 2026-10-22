@@ -3,6 +3,39 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
+            "Diese Arbeitsmappe enthält VBA-Makros. Unterstützte Makros können mit Ihrer Zustimmung im Makrodialog ausgeführt werden. .xlsm erhält sie; .xlsx entfernt sie."
+        }
+        "Macro|Run" => "Ausführen",
+        "Macro|Completed" => "Abgeschlossen",
+        "Macro|Cancelled" => "Abgebrochen",
+        "Macro|Start" => "Beginn",
+        "Macro|End" => "Ende",
+        "Macro|Abort" => "Abbrechen",
+        "Macro|Ignore" => "Ignorieren",
+        "Macro time limit (seconds)" => "Makrozeitlimit (Sekunden)",
+        "Event — automatic execution is not supported" => "Ereignis — automatische Ausführung wird nicht unterstützt",
+        "Macro running" => "Makro läuft",
+        "Revoke macro consent" => "Makrozustimmung widerrufen",
+        "Macro buttons" => "Makroschaltflächen",
+        "Run log" => "Ausführungsprotokoll",
+        "Macro refused" => "Makro abgelehnt",
+        "Macro failed" => "Makro fehlgeschlagen",
+        "Cells changed" => "Geänderte Zellen",
+        "Steps" => "Schritte",
+        "Allow this macro?" => "Dieses Makro zulassen?",
+        "This level-1 macro can change cells. Consent lasts for this document session and can be revoked." => {
+            "Dieses Makro der Stufe 1 kann Zellen ändern. Die widerrufbare Zustimmung gilt nur für diese Dokumentsitzung."
+        }
+        "Allow and run" => "Zulassen und ausführen",
+        "Macro changes were rolled back; the workbook is unchanged." => "Makroänderungen wurden zurückgesetzt; die Arbeitsmappe ist unverändert.",
+        "Compatibility level {level} is not supported." => "Kompatibilitätsstufe {level} wird nicht unterstützt.",
+        "Macro execution stopped." => "Makroausführung angehalten.",
+        "GetOpenFilename returns False until file bindings are supported" => {
+            "GetOpenFilename gibt bis zur Unterstützung von Dateibindungen False zurück"
+        }
+        "Choose file…" => "Datei auswählen…",
+        "This macro compatibility level is not supported" => "Diese Makrokompatibilitätsstufe wird nicht unterstützt",
         "Macro|Yes" => "Ja",
         "Macro|No" => "Nein",
 

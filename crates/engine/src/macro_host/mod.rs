@@ -43,7 +43,18 @@ struct RunOutput {
     result: gridcraft_vbarun::Result<gridcraft_vbarun::Value>,
     steps: u64,
 }
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Default)]
+pub(crate) struct MacroInteraction {
+    request: Option<(String, Json)>,
+    response: Option<Json>,
+}
+#[cfg(not(target_arch = "wasm32"))]
+type Interaction = std::rc::Rc<std::cell::RefCell<MacroInteraction>>;
+
 pub struct MacroTask {
+    #[cfg(not(target_arch = "wasm32"))]
+    interaction: Option<Interaction>,
     future: Pin<Box<dyn Future<Output = RunOutput>>>,
     uid: u64,
     original: Arc<Workbook>,
@@ -51,6 +62,20 @@ pub struct MacroTask {
     cancellation: Arc<AtomicBool>,
     log_index: usize,
     finished: bool,
+}
+#[cfg(not(target_arch = "wasm32"))]
+impl MacroTask {
+    pub fn cancel(&self) {
+        self.cancellation.store(true, Ordering::Relaxed);
+    }
+    pub fn take_prompt(&mut self) -> Option<(String, Json)> {
+        self.interaction.as_ref()?.borrow_mut().request.take()
+    }
+    pub fn answer_prompt(&mut self, response: Json) {
+        if let Some(interaction) = &self.interaction {
+            interaction.borrow_mut().response = Some(response);
+        }
+    }
 }
 impl Drop for MacroTask {
     fn drop(&mut self) {
@@ -149,6 +174,13 @@ fn execution_program(project: &gridcraft_vba::Project) -> gridcraft_vbarun::Resu
 impl Session {
     /// Starts a suspended transaction; the UI calls `step_macro` once per frame.
     pub fn start_macro(&mut self, name: &str, options: MacroOptions) -> Result<MacroTask> {
+        self.start_macro_internal(name, options, false)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn start_macro_interactive(&mut self, name: &str, options: MacroOptions) -> Result<MacroTask> {
+        self.start_macro_internal(name, options, true)
+    }
+    fn start_macro_internal(&mut self, name: &str, options: MacroOptions, _interactive: bool) -> Result<MacroTask> {
         let doc = self.doc()?;
         if doc.macro_state.running.load(Ordering::Relaxed) {
             return Err(failure("A macro is already running"));
@@ -235,9 +267,17 @@ impl Session {
             cancellation: cancellation.clone(),
             ..Limits::default()
         };
+        #[cfg(not(target_arch = "wasm32"))]
+        let interaction = _interactive.then(Interaction::default);
+        #[cfg(not(target_arch = "wasm32"))]
+        let host_interaction = interaction.clone();
         let future = Box::pin(async move {
             let mut host = host::ExcelHost::new(isolated);
             host.set_analysis(analysis);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                host.interaction = host_interaction;
+            }
             host.set_budget(limits.cancellation.clone(), options.wall_ms.clamp(1, 300_000), limits.max_memory_bytes, clock.clone());
             let mut interpreter = Interpreter::new(&program, host, clock, limits);
             interpreter.set_quantum(options.instructions_per_frame);
@@ -245,7 +285,17 @@ impl Session {
             let steps = interpreter.steps();
             RunOutput { host: interpreter.host, result, steps }
         });
-        Ok(MacroTask { future, uid, original, running, cancellation, log_index, finished: false })
+        Ok(MacroTask {
+            #[cfg(not(target_arch = "wasm32"))]
+            interaction,
+            future,
+            uid,
+            original,
+            running,
+            cancellation,
+            log_index,
+            finished: false,
+        })
     }
     fn push_macro_log(&mut self, entry: Json) -> Result<usize> {
         let state = &mut self.doc_mut()?.macro_state;

@@ -21,6 +21,8 @@ enum ExcelObject {
     Global(String),
 }
 pub(crate) struct ExcelHost {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub interaction: Option<super::Interaction>,
     pub session: Session,
     objects: Vec<ExcelObject>,
     pub messages: Vec<String>,
@@ -68,6 +70,8 @@ fn cap(range: RangeRef) -> Result<()> {
 impl ExcelHost {
     pub fn new(session: Session) -> Self {
         Self {
+            #[cfg(not(target_arch = "wasm32"))]
+            interaction: None,
             session,
             objects: vec![ExcelObject::Application],
             messages: vec![],
@@ -627,6 +631,30 @@ impl ExcelHost {
         };
         self.object(ExcelObject::Sheet(si))
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn prompt(&mut self, name: &str, args: &[Argument]) -> Result<Json> {
+        let interaction = self.interaction.clone().ok_or_else(|| invalid("No interactive macro host"))?;
+        let prompt = arg(args, 0, "Prompt").map(Value::text).transpose()?.unwrap_or_default();
+        if prompt.len() > 64 * 1024 {
+            return Err(invalid("VBA sandbox limit: prompt length"));
+        }
+        interaction.borrow_mut().request = Some((
+            name.into(),
+            json!({
+                "prompt":prompt,
+                "buttons":if name == "macro.msgBox" { number(args,1,"Buttons",0)? } else { 0 },
+                "title":arg(args,if name == "macro.inputBox" {1} else {2},"Title").map(Value::text).transpose()?,
+                "default":arg(args,2,"Default").map(Value::text).transpose()?
+            }),
+        ));
+        loop {
+            self.check_budget()?;
+            if let Some(response) = interaction.borrow_mut().response.take() {
+                return Ok(response);
+            }
+            gridcraft_vbarun::yield_once().await;
+        }
+    }
     fn notice(&mut self, name: &str, args: &[Argument], message: &str) {
         let bytes = args.iter().fold(message.len(), |n, a| n.saturating_add(a.value.memory()));
         if self.edit_bytes.saturating_add(bytes) > self.max_edit_bytes {
@@ -650,6 +678,46 @@ impl ExcelHost {
     }
 }
 impl Host for ExcelHost {
+    async fn msg_box_async(&mut self, args: &[Argument]) -> Result<Value> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.interaction.is_some() {
+            let response = self.prompt("macro.msgBox", args).await?;
+            return Ok(Value::Long(response.as_i64().and_then(|n| i32::try_from(n).ok()).unwrap_or(2)));
+        }
+        self.msg_box(args)
+    }
+    async fn input_box_async(&mut self, args: &[Argument]) -> Result<Value> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.interaction.is_some() {
+            let response = self.prompt("macro.inputBox", args).await?;
+            return Ok(Value::String(response.as_str().unwrap_or_default().into()));
+        }
+        self.input_box(args)
+    }
+    async fn call_method_async(&mut self, id: Object, name: &str, args: &[Argument]) -> Result<Value> {
+        self.get_member_async(id, name, args).await
+    }
+    async fn get_member_async(&mut self, id: Object, name: &str, args: &[Argument]) -> Result<Value> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.interaction.is_some() {
+            let object = self.resolve(id)?;
+            let member = match &object {
+                ExcelObject::Global(global) if name.is_empty() => global.as_str(),
+                _ => name,
+            };
+            if matches!(object, ExcelObject::Application | ExcelObject::Global(_)) {
+                if member.eq_ignore_ascii_case("inputbox") {
+                    return self.input_box_async(args).await;
+                }
+                if member.eq_ignore_ascii_case("getopenfilename") {
+                    self.prompt("macro.filePicker", args).await?;
+                    self.log("GetOpenFilename returns False until file bindings are supported");
+                    return Ok(Value::Boolean(false));
+                }
+            }
+        }
+        self.get_member(id, name, args)
+    }
     async fn set_member_async(&mut self, id: Object, name: &str, args: &[Argument], value: Value) -> Result<()> {
         let name = name.to_ascii_lowercase();
         let object = self.resolve(id)?;
@@ -799,6 +867,8 @@ impl Host for ExcelHost {
             "activeworkbook" | "thisworkbook" | "activesheet" | "activecell" | "selection" | "worksheetfunction" => self.application(&name, &[]).ok(),
             "sheets" | "worksheets" | "cells" | "rows" | "columns" => self.application(&name, &[]).ok(),
             "range" | "union" | "intersect" => self.object(ExcelObject::Global(name)).ok(),
+            #[cfg(not(target_arch = "wasm32"))]
+            "getopenfilename" => self.object(ExcelObject::Global(name)).ok(),
             _ => None,
         }
     }

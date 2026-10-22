@@ -67,6 +67,18 @@ impl Argument {
 /// All external effects are explicitly delegated; the default host grants no capabilities.
 #[allow(async_fn_in_trait)]
 pub trait Host {
+    async fn get_member_async(&mut self, obj: Object, name: &str, args: &[Argument]) -> Result<Value> {
+        self.get_member(obj, name, args)
+    }
+    async fn call_method_async(&mut self, obj: Object, name: &str, args: &[Argument]) -> Result<Value> {
+        self.call_method(obj, name, args)
+    }
+    async fn msg_box_async(&mut self, args: &[Argument]) -> Result<Value> {
+        self.msg_box(args)
+    }
+    async fn input_box_async(&mut self, args: &[Argument]) -> Result<Value> {
+        self.input_box(args)
+    }
     async fn set_member_async(&mut self, obj: Object, name: &str, args: &[Argument], value: Value) -> Result<()> {
         self.set_member(obj, name, args, value)
     }

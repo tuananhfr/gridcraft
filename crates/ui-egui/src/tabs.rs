@@ -252,9 +252,10 @@ pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
                 crate::save_status::status_label(app, ui, &t);
                 if let Some(d) = app.session.active() {
                     let lang = app.ui.language;
-                    if d.wb.vba_project.is_some() && fits(ui, lang.tr("Macros preserved (not executed)")) {
+                    let macro_status = if cfg!(target_arch = "wasm32") { "Macros preserved (not executed)" } else { "Macros" };
+                    if d.wb.vba_project.is_some() && fits(ui, lang.tr(macro_status)) {
                         ui.add_space(12.0);
-                        ui.label(egui::RichText::new(lang.tr("Macros preserved (not executed)")).font(theme::ui_font(12.5)).color(t.danger));
+                        ui.label(egui::RichText::new(lang.tr(macro_status)).font(theme::ui_font(12.5)).color(t.danger));
                     }
                     if !d.calc.stale.is_empty() && fits(ui, lang.tr("Recalculation needed")) {
                         ui.add_space(12.0);

@@ -2,6 +2,37 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
+            "此工作簿包含 VBA 宏。经您同意，可从“宏”对话框运行受支持的宏。另存为 .xlsm 会保留宏，另存为 .xlsx 会删除宏。"
+        }
+        "Macro|Run" => "运行",
+        "Macro|Completed" => "已完成",
+        "Macro|Cancelled" => "已取消",
+        "Macro|Start" => "开始",
+        "Macro|End" => "结束",
+        "Macro|Abort" => "中止",
+        "Macro|Ignore" => "忽略",
+        "Macro time limit (seconds)" => "宏时间限制（秒）",
+        "Event — automatic execution is not supported" => "事件 — 暂不支持自动运行",
+        "Macro running" => "宏正在运行",
+        "Revoke macro consent" => "撤销宏运行许可",
+        "Macro buttons" => "宏按钮",
+        "Run log" => "运行日志",
+        "Macro refused" => "宏已拒绝",
+        "Macro failed" => "宏运行失败",
+        "Cells changed" => "已更改单元格",
+        "Steps" => "步骤",
+        "Allow this macro?" => "允许运行此宏？",
+        "This level-1 macro can change cells. Consent lasts for this document session and can be revoked." => {
+            "此级别 1 宏可以更改单元格。许可仅在当前文档会话有效，并且可以撤销。"
+        }
+        "Allow and run" => "允许并运行",
+        "Macro changes were rolled back; the workbook is unchanged." => "宏更改已回滚；工作簿保持不变。",
+        "Compatibility level {level} is not supported." => "不支持兼容性级别 {level}。",
+        "Macro execution stopped." => "宏执行已停止。",
+        "GetOpenFilename returns False until file bindings are supported" => "在支持文件绑定之前，GetOpenFilename 返回 False",
+        "Choose file…" => "选择文件…",
+        "This macro compatibility level is not supported" => "不支持此宏兼容性级别",
         "Macro|Yes" => "是",
         "Macro|No" => "否",
 

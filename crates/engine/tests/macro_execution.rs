@@ -372,3 +372,56 @@ fn optional_parameters_are_runnable_and_required_parameters_are_refused() {
     assert_eq!(s.doc().unwrap().wb, original);
     assert_eq!(s.doc().unwrap().undo.len(), 1);
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn interactive_prompts_suspend_then_use_responses_atomically() {
+    let mut s =
+        session("Sub Main()\nRange(\"A1\").Value=InputBox(\"Value\",\"Title\",\"seed\")\nRange(\"A2\").Value=MsgBox(\"Continue?\",vbYesNo)\nEnd Sub");
+    consent(&mut s);
+    let mut task = s.start_macro_interactive("Main", MacroOptions::default()).unwrap();
+    assert!(s.step_macro(&mut task).unwrap().is_none());
+    assert_eq!(task.take_prompt().unwrap().0, "macro.inputBox");
+    assert_eq!(value(&s, "A1"), Value::Empty);
+    task.answer_prompt(json!("chosen"));
+    for _ in 0..10 {
+        assert!(s.step_macro(&mut task).unwrap().is_none());
+        if let Some((kind, _)) = task.take_prompt() {
+            assert_eq!(kind, "macro.msgBox");
+            break;
+        }
+    }
+    task.answer_prompt(json!(6));
+    let result = loop {
+        if let Some(result) = s.step_macro(&mut task).unwrap() {
+            break result;
+        }
+    };
+    assert_eq!(result["status"], "completed");
+    assert_eq!(value(&s, "A1"), Value::Text("chosen".into()));
+    assert_eq!(value(&s, "A2"), Value::Number(6.0));
+    assert_eq!(s.doc().unwrap().undo.len(), 1);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn cancelling_an_interactive_prompt_rolls_back() {
+    let mut s = session("Sub Main()\nRange(\"A1\").Value=9\nMsgBox \"Wait\"\nEnd Sub");
+    consent(&mut s);
+    let mut task = s.start_macro_interactive("Main", MacroOptions::default()).unwrap();
+    for _ in 0..10 {
+        assert!(s.step_macro(&mut task).unwrap().is_none());
+        if task.take_prompt().is_some() {
+            break;
+        }
+    }
+    task.cancel();
+    let result = loop {
+        if let Some(result) = s.step_macro(&mut task).unwrap() {
+            break result;
+        }
+    };
+    assert_eq!(result["status"], "cancelled");
+    assert_eq!(value(&s, "A1"), Value::Empty);
+    assert!(s.doc().unwrap().undo.is_empty());
+}

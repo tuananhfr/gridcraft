@@ -1143,7 +1143,11 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                         }
                     });
                 }
-                "macros" => crate::macro_dialog::show(ui, &mut d),
+                "macros" => {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    crate::macro_runtime::controls(app, ui, &d);
+                    crate::macro_dialog::show(ui, &mut d);
+                },
                 "errorChecking" => {
                     egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
                         if let Some(errors) = d.result.as_ref().and_then(|r| r.get("errors")).and_then(Json::as_array) {

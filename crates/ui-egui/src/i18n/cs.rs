@@ -2,6 +2,37 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
+            "Tento sešit obsahuje makra VBA. Podporovaná makra lze s vaším souhlasem spustit v dialogu Makra. Uložení jako .xlsm je zachová; .xlsx je odstraní."
+        }
+        "Macro|Run" => "Spustit",
+        "Macro|Completed" => "Dokončeno",
+        "Macro|Cancelled" => "Zrušeno",
+        "Macro|Start" => "Začátek",
+        "Macro|End" => "Konec",
+        "Macro|Abort" => "Přerušit",
+        "Macro|Ignore" => "Ignorovat",
+        "Macro time limit (seconds)" => "Časový limit maker (sekundy)",
+        "Event — automatic execution is not supported" => "Událost — automatické spouštění není podporováno",
+        "Macro running" => "Makro běží",
+        "Revoke macro consent" => "Odvolat souhlas s makry",
+        "Macro buttons" => "Tlačítka maker",
+        "Run log" => "Protokol spuštění",
+        "Macro refused" => "Makro odmítnuto",
+        "Macro failed" => "Makro selhalo",
+        "Cells changed" => "Změněné buňky",
+        "Steps" => "Kroky",
+        "Allow this macro?" => "Povolit toto makro?",
+        "This level-1 macro can change cells. Consent lasts for this document session and can be revoked." => {
+            "Toto makro úrovně 1 může měnit buňky. Odvolatelný souhlas platí pouze pro tuto relaci dokumentu."
+        }
+        "Allow and run" => "Povolit a spustit",
+        "Macro changes were rolled back; the workbook is unchanged." => "Změny makra byly vráceny; sešit se nezměnil.",
+        "Compatibility level {level} is not supported." => "Úroveň kompatibility {level} není podporována.",
+        "Macro execution stopped." => "Provádění makra zastaveno.",
+        "GetOpenFilename returns False until file bindings are supported" => "GetOpenFilename vrací False, dokud nebudou podporovány vazby souborů",
+        "Choose file…" => "Vybrat soubor…",
+        "This macro compatibility level is not supported" => "Tato úroveň kompatibility makra není podporována",
         "Macro|Yes" => "Ano",
         "Macro|No" => "Ne",
 

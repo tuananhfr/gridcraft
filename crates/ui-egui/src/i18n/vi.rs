@@ -5,6 +5,37 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
+            "Sổ tính này chứa macro VBA. Bạn có thể cho phép chạy các macro được hỗ trợ trong hộp Macro. Lưu dạng .xlsm để giữ macro; lưu dạng .xlsx sẽ xóa macro."
+        }
+        "Macro|Run" => "Chạy",
+        "Macro|Completed" => "Hoàn tất",
+        "Macro|Cancelled" => "Đã hủy",
+        "Macro|Start" => "Bắt đầu",
+        "Macro|End" => "Kết thúc",
+        "Macro|Abort" => "Hủy bỏ",
+        "Macro|Ignore" => "Bỏ qua",
+        "Macro time limit (seconds)" => "Giới hạn thời gian macro (giây)",
+        "Event — automatic execution is not supported" => "Sự kiện — chưa hỗ trợ tự chạy",
+        "Macro running" => "Đang chạy macro",
+        "Revoke macro consent" => "Thu hồi quyền chạy macro",
+        "Macro buttons" => "Nút macro",
+        "Run log" => "Nhật ký chạy",
+        "Macro refused" => "Từ chối chạy macro",
+        "Macro failed" => "Macro thất bại",
+        "Cells changed" => "Ô đã thay đổi",
+        "Steps" => "Số bước",
+        "Allow this macro?" => "Cho phép chạy macro này?",
+        "This level-1 macro can change cells. Consent lasts for this document session and can be revoked." => {
+            "Macro mức 1 này có thể thay đổi ô. Quyền chỉ có hiệu lực trong phiên tài liệu này và có thể thu hồi."
+        }
+        "Allow and run" => "Cho phép và chạy",
+        "Macro changes were rolled back; the workbook is unchanged." => "Đã hoàn tác thay đổi của macro; sổ tính không thay đổi.",
+        "Compatibility level {level} is not supported." => "Chưa hỗ trợ mức tương thích {level}.",
+        "Macro execution stopped." => "Đã dừng thực thi macro.",
+        "GetOpenFilename returns False until file bindings are supported" => "GetOpenFilename trả về False cho đến khi hỗ trợ liên kết tệp",
+        "Choose file…" => "Chọn tệp…",
+        "This macro compatibility level is not supported" => "Chưa hỗ trợ mức tương thích của macro này",
         "Macro|Yes" => "Có",
         "Macro|No" => "Không",
 
