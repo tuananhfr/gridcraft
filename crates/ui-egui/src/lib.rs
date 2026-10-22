@@ -322,6 +322,7 @@ pub struct SheetApp {
     font_notice_pending: std::collections::HashSet<u64>,
     circular_notice_pending: std::collections::HashSet<u64>,
     calculation_notice_seen: std::collections::HashSet<u64>,
+    draft_warning_seen: std::collections::HashSet<(u64, String)>,
     calculation_notice_line: Option<String>,
     pub services: Services,
     pending_saves: Vec<PendingSave>,
@@ -441,6 +442,7 @@ impl SheetApp {
             font_notice_pending: Default::default(),
             circular_notice_pending,
             calculation_notice_seen: Default::default(),
+            draft_warning_seen: Default::default(),
             calculation_notice_line: None,
             services,
             pending_saves: Vec::new(),
@@ -513,6 +515,32 @@ impl SheetApp {
             names.extend(d.wb.sheets.iter().flat_map(|sh| sh.shapes.iter().filter_map(|s| s.format.font.clone())));
         }
         names
+    }
+
+    /// Show each recovery/AutoSave warning once per document.
+    pub fn show_draft_warnings(&mut self, uid: u64, warnings: &[String]) {
+        self.draft_warning_seen.retain(|(uid, _)| self.session.documents().iter().any(|d| d.uid == *uid));
+        let fresh = warnings.iter().filter(|w| self.draft_warning_seen.insert((uid, (*w).clone()))).cloned().collect::<Vec<_>>();
+        self.show_save_warnings(&fresh);
+    }
+
+    /// Append save warnings without hiding existing notices.
+    pub fn show_save_warnings(&mut self, warnings: &[String]) {
+        if warnings.is_empty() {
+            return;
+        }
+        let text = warnings.iter().map(|w| self.ui.language.tr(w)).collect::<Vec<_>>().join("\n");
+        if let Some(notice) = &mut self.notice {
+            for line in text.lines() {
+                if !notice.text.lines().any(|old| old == line) {
+                    notice.text.push('\n');
+                    notice.text.push_str(line);
+                }
+            }
+            notice.kind = NoticeKind::Warning;
+        } else {
+            self.notice = Some(Notice { text, kind: NoticeKind::Warning, action: None });
+        }
     }
 
     /// Runs an engine command (or a UI command) and handles UI requests it makes.
@@ -607,6 +635,16 @@ impl SheetApp {
             notify();
         }
         self.after_engine();
+        if id != "file.open"
+            && let Ok(result) = &r
+        {
+            let warnings = result
+                .get("warnings")
+                .and_then(Json::as_array)
+                .map(|a| a.iter().filter_map(Json::as_str).map(str::to_string).collect::<Vec<_>>())
+                .unwrap_or_default();
+            self.show_save_warnings(&warnings);
+        }
         // The new chart is selected, as after inserting any object, so Delete removes it, not its data.
         if id == "insert.chart"
             && let Ok(r) = &r
@@ -1038,6 +1076,12 @@ impl SheetApp {
                 let text = self.ui.language.tr(gridcraft_engine::legacy::BUTTONS);
                 if let Some(notice) = &mut self.notice {
                     notice.text = format!("{}\n{text}", self.ui.language.tr(VBA_NOTICE));
+                }
+            }
+            use gridcraft_engine::io::{DROPPED_SIGNATURE, LEGACY_SIGNATURE, UNSIGNED_MACROS};
+            for warning in vba.iter().filter(|w| [UNSIGNED_MACROS, LEGACY_SIGNATURE, DROPPED_SIGNATURE].contains(w)) {
+                if let Some(notice) = &mut self.notice {
+                    notice.text = format!("{}\n{}", self.ui.language.tr(&notice.text), self.ui.language.tr(warning));
                 }
             }
         } else {
@@ -1487,6 +1531,16 @@ impl SheetApp {
             self.store_view_state();
             let saved = self.session.run("file.save", json!({}));
             self.note_save_result(&saved);
+            if let Ok(result) = saved {
+                let warnings = result
+                    .get("warnings")
+                    .and_then(Json::as_array)
+                    .map(|a| a.iter().filter_map(Json::as_str).map(str::to_string).collect::<Vec<_>>())
+                    .unwrap_or_default();
+                if let Some(uid) = self.session.active().map(|d| d.uid) {
+                    self.show_draft_warnings(uid, &warnings);
+                }
+            }
         }
         // Window title.
         if let Some(d) = self.session.active() {

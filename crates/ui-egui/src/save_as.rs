@@ -77,6 +77,12 @@ fn stem(name: &str) -> &str {
 /// The [`DROP_MACROS`] dialog's body: save as `.xlsm` instead, save without the macros, or cancel.
 pub(crate) fn drop_macros_body(app: &mut SheetApp, ui: &mut egui::Ui, d: &Dialog, open: &mut bool) {
     ui.label(tr(ui, DROP_MACROS_TEXT));
+    if let Some(doc) = app.session.active() {
+        // The dialog text already says the macros go; only a signature needs adding.
+        for warning in gridcraft_engine::io::save_warnings(&doc.wb, "xlsx").iter().filter(|w| *w != gridcraft_engine::io::REMOVED_MACROS) {
+            ui.label(app.ui.language.tr(warning));
+        }
+    }
     ui.add_space(10.0);
     let path = d.values.get("path").and_then(Json::as_str).map(str::to_string);
     ui.horizontal_wrapped(|ui| {

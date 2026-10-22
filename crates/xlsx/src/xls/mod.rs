@@ -149,6 +149,11 @@ pub(crate) fn read_xls_with(bytes: &[u8], mut budget: Budget) -> Result<(Workboo
 
     let mut wb = Workbook::new();
     wb.sheets.clear();
+    wb.legacy_vba_signature =
+        ["\u{5}DigitalSignature", "\u{5}DigitalSignatureEx", "\u{5}DigitalSignatureExt"].iter().any(|name| cf.has_root_stream(name));
+    if wb.legacy_vba_signature {
+        report.warn(crate::vba::LEGACY_SIGNATURE);
+    }
     if cf.has_root_storage("_VBA_PROJECT_CUR") {
         wb.vba_project = vba_project(bytes)?;
     }
@@ -180,7 +185,7 @@ pub(crate) fn read_xls_with(bytes: &[u8], mut budget: Budget) -> Result<(Workboo
             continue;
         }
         wb.check_sheet_name(&bs.name, None).map_err(invalid)?;
-        let Some((mut sheet, calc)) = worksheet(&stream, bs, &g, &styles, &mut budget, &mut report)? else {
+        let Some((mut sheet, calc)) = worksheet(&stream, bs, &g, &styles, &mut budget, &mut report, (&mut wb.macro_buttons, wb.sheets.len()))? else {
             report.warn("Dialog sheets and unreadable sheets were skipped.");
             model_index.push(None);
             continue;
@@ -540,6 +545,7 @@ fn worksheet(
     styles: &[StyleId],
     budget: &mut Budget,
     report: &mut ReadReport,
+    buttons: (&mut Vec<gridcraft_model::MacroButton>, usize),
 ) -> Result<Option<(Sheet, CalcSettings)>, IoError> {
     if bs.pos >= stream.len() {
         return Err(invalid(format!("sheet '{}' points outside the Workbook stream", bs.name)));
@@ -581,6 +587,9 @@ fn worksheet(
             }
             _ if depth > 1 => continue,
             _ => {}
+        }
+        if rec.id == 0x005D {
+            read_button(&rec, g, buttons.1, buttons.0)?;
         }
         sheet_record(&rec, &mut st, budget, report)?;
     }
@@ -847,6 +856,55 @@ fn formula_cell(c: &mut Cursor<'_, '_>, st: &mut SheetState<'_>, budget: &mut Bu
         return Ok(());
     }
     st.attach(pos, &f, Mode::Cell, None);
+    Ok(())
+}
+
+fn read_button(rec: &Record<'_>, g: &Globals, sheet: usize, buttons: &mut Vec<gridcraft_model::MacroButton>) -> Result<(), IoError> {
+    let mut c = Cursor::new(&rec.parts);
+    if c.remaining() < 22 || c.u16()? != 0x15 || c.u16()? != 18 || c.u16()? != 7 {
+        return Ok(());
+    }
+    let object = c.u16()?;
+    c.skip(14)?;
+    let mut macro_name = String::new();
+    while c.remaining() >= 4 {
+        let ft = c.u16()?;
+        let len = usize::from(c.u16()?);
+        // A damaged OBJ only loses its macro name; the sheet still opens.
+        if len > c.remaining() {
+            break;
+        }
+        let mut data = Vec::with_capacity(len);
+        for _ in 0..len {
+            data.push(c.u8()?);
+        }
+        let slice = data.as_slice();
+        let mut sub = Cursor::new(std::slice::from_ref(&slice));
+        match ft {
+            0x04 if len >= 11 => {
+                let cce = usize::from(sub.u16()? & 0x7fff);
+                sub.skip(4)?;
+                if cce == 5 && matches!(sub.u8()?, 0x23 | 0x43 | 0x63) {
+                    let index = sub.u32()?.checked_sub(1).map(|n| n as usize);
+                    macro_name = index.and_then(|i| g.names.get(i)).map(|n| n.name.clone()).unwrap_or_default();
+                }
+            }
+            _ => {}
+        }
+        if ft == 0 {
+            break;
+        }
+    }
+    if buttons.len() >= MAX_NAMES {
+        return Err(IoError::TooLarge("too many macro buttons".into()));
+    }
+    buttons.push(gridcraft_model::MacroButton {
+        sheet,
+        name: format!("Button {object}"),
+        caption: String::new(),
+        macro_name,
+        kind: gridcraft_model::MacroButtonKind::FormControl,
+    });
     Ok(())
 }
 

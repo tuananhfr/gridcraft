@@ -2,6 +2,23 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "too many VBA signature parts" => "Trop de parties de signature VBA",
+        "too many macro buttons" => "Trop de boutons de macro",
+        "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {
+            "La signature numérique des macros du fichier .xls n’est pas conservée lors de l’enregistrement en .xlsm ; les macros ne seront pas signées."
+        }
+        "Some VBA signature relationships could not be preserved; the saved macros may be unsigned." => {
+            "Certaines relations de signature VBA n’ont pas pu être conservées ; les macros enregistrées pourraient ne pas être signées."
+        }
+        "The VBA project has changed. Its digital signature will be removed; the saved macros will be unsigned." => {
+            "Le projet VBA a changé. Sa signature numérique sera supprimée ; les macros enregistrées ne seront pas signées."
+        }
+        "This format cannot preserve VBA macros. The saved file will not contain the macros." => {
+            "Ce format ne conserve pas les macros VBA. Le fichier enregistré ne contiendra pas les macros."
+        }
+        "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
+            "Ce format ne conserve ni les macros VBA ni leurs signatures numériques. Le fichier enregistré ne contiendra ni les macros ni leurs signatures."
+        }
         "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
             "Importé depuis un classeur Excel 97-2003 (.xls) : valeurs, formules, formats numériques, cellules fusionnées, largeurs de colonne, hauteurs de ligne et noms définis ont été lus. Les polices, remplissages, bordures, graphiques, images, commentaires et autres fonctionnalités ne sont pas encore importés. Enregistrez en .xlsx ; l’enregistrement en .xls n’est pas pris en charge."
         }

@@ -546,3 +546,21 @@ fn invalid_sort_keys_are_invalid_params() {
     }
     ok(&mut s, "sort_range", json!({"range": "A1:A3", "keys": ["A", {"column": "A", "order": "desc"}]}));
 }
+
+#[test]
+fn vba_signature_headless_save_returns_structured_warnings() {
+    let mut wb = gridcraft_engine::model::Workbook::new();
+    wb.vba_project = Some(b"synthetic".to_vec());
+    wb.legacy_vba_signature = true;
+    let source = tmp("signature-source.json");
+    std::fs::write(&source, serde_json::to_vec(&wb).unwrap()).unwrap();
+    let mut s = server();
+    ok(&mut s, "open_workbook", json!({"path": source}));
+    for ext in ["xlsm", "xlsx"] {
+        let path = tmp(&format!("signature-output.{ext}"));
+        let result = ok(&mut s, "save_workbook", json!({"path": path}));
+        assert!(result["warnings"].as_array().unwrap().iter().any(|w| w.as_str().is_some_and(|s| s.contains("digital signature"))));
+        std::fs::remove_file(path).unwrap();
+    }
+    std::fs::remove_file(source).unwrap();
+}

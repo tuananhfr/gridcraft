@@ -2,6 +2,23 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "too many VBA signature parts" => "Příliš mnoho částí podpisu VBA",
+        "too many macro buttons" => "Příliš mnoho tlačítek maker",
+        "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {
+            "Digitální podpis maker v souboru .xls se při uložení jako .xlsm nezachová; makra budou nepodepsaná."
+        }
+        "Some VBA signature relationships could not be preserved; the saved macros may be unsigned." => {
+            "Některé vazby podpisů VBA se nepodařilo zachovat; uložená makra mohou být nepodepsaná."
+        }
+        "The VBA project has changed. Its digital signature will be removed; the saved macros will be unsigned." => {
+            "Projekt VBA se změnil. Jeho digitální podpis bude odstraněn; uložená makra budou nepodepsaná."
+        }
+        "This format cannot preserve VBA macros. The saved file will not contain the macros." => {
+            "Tento formát nezachovává makra VBA. Uložený soubor nebude obsahovat makra."
+        }
+        "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
+            "Tento formát nezachovává makra VBA ani jejich digitální podpisy. Uložený soubor nebude obsahovat makra ani jejich podpisy."
+        }
         "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
             "Importováno ze sešitu Excel 97–2003 (.xls): načteny hodnoty, vzorce, číselné formáty, sloučené buňky, šířky sloupců, výšky řádků a definované názvy. Písma, výplně, ohraničení, grafy, obrázky, komentáře a další funkce se zatím neimportují. Uložte jako .xlsx; ukládání .xls není podporováno."
         }

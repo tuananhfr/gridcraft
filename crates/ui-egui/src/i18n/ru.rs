@@ -2,6 +2,23 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "too many VBA signature parts" => "Слишком много частей подписи VBA",
+        "too many macro buttons" => "Слишком много кнопок макросов",
+        "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {
+            "Цифровая подпись макросов файла .xls не сохраняется при сохранении в .xlsm; макросы останутся неподписанными."
+        }
+        "Some VBA signature relationships could not be preserved; the saved macros may be unsigned." => {
+            "Некоторые связи подписей VBA не удалось сохранить; сохранённые макросы могут остаться неподписанными."
+        }
+        "The VBA project has changed. Its digital signature will be removed; the saved macros will be unsigned." => {
+            "Проект VBA изменён. Его цифровая подпись будет удалена; сохранённые макросы останутся неподписанными."
+        }
+        "This format cannot preserve VBA macros. The saved file will not contain the macros." => {
+            "Этот формат не сохраняет макросы VBA. Сохранённый файл не будет содержать макросы."
+        }
+        "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
+            "Этот формат не сохраняет макросы VBA и их цифровые подписи. Сохранённый файл не будет содержать макросы и их подписи."
+        }
         "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
             "Импортировано из книги Excel 97–2003 (.xls): прочитаны значения, формулы, числовые форматы, объединённые ячейки, ширина столбцов, высота строк и определённые имена. Шрифты, заливки, границы, диаграммы, изображения, комментарии и другие возможности пока не импортируются. Сохраните как .xlsx; сохранение .xls не поддерживается."
         }

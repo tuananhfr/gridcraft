@@ -220,6 +220,7 @@ impl Drafts {
             }
             self.planner.adopt(d.uid, &key, &d.wb, now);
             self.planner.record_put(d.uid, &d.wb, now, now_ms() - start);
+            app.show_draft_warnings(d.uid, &gridcraft_engine::io::save_warnings(&d.wb, &d.name));
         }
         if plan.waiting {
             ctx.request_repaint_after(std::time::Duration::from_secs(1));

@@ -166,7 +166,7 @@ impl eframe::App for WebShell {
             bridge.sync(&mut self.app);
         }
         if let Some(drafts) = &mut self.drafts {
-            drafts.after_frame(&self.app, ui.ctx());
+            drafts.after_frame(&mut self.app, ui.ctx());
         }
         self.dirty.set(self.app.session.documents().iter().any(|d| d.is_dirty()));
     }

@@ -2,6 +2,23 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "too many VBA signature parts" => "Previše delova VBA potpisa",
+        "too many macro buttons" => "Previše dugmadi makroa",
+        "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {
+            "Digitalni potpis makroa iz .xls datoteke se ne čuva pri čuvanju kao .xlsm; makroi će biti nepotpisani."
+        }
+        "Some VBA signature relationships could not be preserved; the saved macros may be unsigned." => {
+            "Neke veze VBA potpisa nisu sačuvane; sačuvani makroi možda neće biti potpisani."
+        }
+        "The VBA project has changed. Its digital signature will be removed; the saved macros will be unsigned." => {
+            "VBA projekat je promenjen. Njegov digitalni potpis će biti uklonjen; sačuvani makroi će biti nepotpisani."
+        }
+        "This format cannot preserve VBA macros. The saved file will not contain the macros." => {
+            "Ovaj format ne čuva VBA makroe. Sačuvana datoteka neće sadržati makroe."
+        }
+        "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
+            "Ovaj format ne čuva VBA makroe ni njihove digitalne potpise. Sačuvana datoteka neće sadržati makroe ni njihove potpise."
+        }
         "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
             "Uvezeno iz Excel 97–2003 radne sveske (.xls): pročitane su vrednosti, formule, formati brojeva, spojene ćelije, širine kolona, visine redova i definisana imena. Fontovi, ispune, ivice, grafikoni, slike, komentari i druge funkcije se još ne uvoze. Sačuvajte kao .xlsx; čuvanje .xls nije podržano."
         }

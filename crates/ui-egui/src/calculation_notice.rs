@@ -59,6 +59,13 @@ mod tests {
         for lang in Language::ALL.into_iter().filter(|lang| *lang != Language::En) {
             for text in [
                 MESSAGE,
+                gridcraft_engine::io::LEGACY_SIGNATURE,
+                gridcraft_engine::io::DROPPED_SIGNATURE,
+                gridcraft_engine::io::UNSIGNED_MACROS,
+                gridcraft_engine::io::REMOVED_MACROS,
+                gridcraft_engine::io::REMOVED_SIGNED_MACROS,
+                "too many VBA signature parts",
+                "too many macro buttons",
                 gridcraft_engine::calc::recalc::NotCalculated::Unparsed.reason(),
                 gridcraft_engine::calc::recalc::NotCalculated::Dependent.reason(),
                 gridcraft_engine::legacy::OPENED_MACROS,

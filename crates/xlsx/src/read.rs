@@ -219,12 +219,12 @@ pub fn read_xlsx(bytes: &[u8]) -> Result<(Workbook, ReadReport), IoError> {
             continue;
         }
         let name = unique_name(&wb, &name, i);
-        let mut sheet = match crate::sheet_read::read_sheet(&mut cx, &rel.target, &name) {
+        let (mut sheet, buttons) = match crate::sheet_read::read_sheet(&mut cx, &rel.target, &name) {
             Ok(s) => s,
             Err(IoError::TooLarge(m)) => return Err(IoError::TooLarge(m)),
             Err(e) => {
                 cx.warn(format!("sheet \"{name}\" could not be read: {e}"));
-                Sheet::new(name.clone())
+                (Sheet::new(name.clone()), vec![])
             }
         };
         match crate::pivot::read_pivots(&mut cx, &mut pivot_caches, &rel.target, &name) {
@@ -232,6 +232,13 @@ pub fn read_xlsx(bytes: &[u8]) -> Result<(Workbook, ReadReport), IoError> {
             Err(IoError::TooLarge(m)) => return Err(IoError::TooLarge(m)),
             Err(e) => cx.warn(format!("PivotTables on sheet \"{name}\" could not be read: {e}")),
         }
+        if wb.macro_buttons.len().saturating_add(buttons.len()) > 65_536 {
+            return Err(IoError::TooLarge("too many macro buttons".into()));
+        }
+        wb.macro_buttons.extend(buttons.into_iter().map(|mut b| {
+            b.sheet = wb.sheets.len();
+            b
+        }));
         sheet.preserved = kept.sheet(&mut cx, &rel.target, &name);
         sheet.visibility = match se.attr("state") {
             Some("hidden") => Visibility::Hidden,
@@ -332,11 +339,27 @@ pub fn read_xlsx(bytes: &[u8]) -> Result<(Workbook, ReadReport), IoError> {
         match cx.pkg.read(&r.target) {
             Ok(Some(data)) => {
                 wb.vba_project = Some(data);
+                match crate::vba::read(&mut cx, &mut wb, &r.target) {
+                    Ok(()) => {}
+                    Err(IoError::TooLarge(m)) => return Err(IoError::TooLarge(m)),
+                    Err(_) => {
+                        wb.vba_signature_loss = true;
+                        cx.warn(crate::vba::DROPPED_SIGNATURE);
+                    }
+                }
                 cx.warn("macros (VBA project) were kept but not executed");
             }
             Ok(None) => cx.warn("macros (VBA project) reference a missing part and were dropped"),
             Err(IoError::TooLarge(m)) => return Err(IoError::TooLarge(m)),
             Err(e) => cx.warn(format!("macros (VBA project) could not be read and were dropped: {e}")),
+        }
+    }
+    // Written only into GridCraft's own recovery drafts; a damaged one must not block the open.
+    if let Ok(Some(meta)) = cx.pkg.read_xml("gridcraft/draftWarnings.xml") {
+        wb.legacy_vba_signature |= meta.flag("legacySignature", false);
+        wb.vba_signature_loss |= meta.flag("signatureLoss", false);
+        for warning in meta.kids("warning").take(32) {
+            cx.warn(&warning.text);
         }
     }
     wb.preserved = kept.workbook(&mut cx, &wb_part, &wb_xml, &file_to_model);

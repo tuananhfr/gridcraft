@@ -186,6 +186,10 @@ fn check_sheet_names(wb: &Workbook) -> Result<(), IoError> {
 }
 
 pub fn write_xlsx(wb: &Workbook, kind: XlsxKind, packing: Packing) -> Result<Vec<u8>, IoError> {
+    write_with_warnings(wb, kind, packing, &[])
+}
+
+pub fn write_with_warnings(wb: &Workbook, kind: XlsxKind, packing: Packing, warnings: &[String]) -> Result<Vec<u8>, IoError> {
     if wb.sheets.is_empty() {
         return Err(IoError::Format("a workbook needs at least one sheet".into()));
     }
@@ -405,6 +409,16 @@ pub fn write_xlsx(wb: &Workbook, kind: XlsxKind, packing: Packing) -> Result<Vec
     if let Some(data) = wb.vba_project.as_ref().filter(|_| kind.is_macro_enabled()) {
         wb_rels.add("vbaProject", "vbaProject.bin");
         out.part("xl/vbaProject.bin", Some(CT_VBA), data.clone());
+        // A signature over other project bytes would ship a stale (invalid) signature.
+        if let Some(signatures) = wb.vba_signatures.as_ref().filter(|s| s.matches(Some(data))) {
+            out.part("xl/_rels/vbaProject.bin.rels", None, signatures.relationships.clone());
+            let mut written = std::collections::HashSet::new();
+            for part in signatures.parts.iter().filter(|p| crate::vba::is_signature_part(&p.name)) {
+                if written.insert(part.name.to_ascii_lowercase()) {
+                    out.part(&part.name, Some(&part.content_type), part.data.clone());
+                }
+            }
+        }
     }
     out.part("xl/_rels/workbook.xml.rels", None, wb_rels.xml().into_bytes());
 
@@ -440,6 +454,18 @@ pub fn write_xlsx(wb: &Workbook, kind: XlsxKind, packing: Packing) -> Result<Vec
     crate::passthrough::write_package_rels(&mut root, &mut out);
     out.part("_rels/.rels", None, root.xml().into_bytes());
 
+    if !warnings.is_empty() {
+        let mut meta = format!(
+            "<draftWarnings legacySignature=\"{}\" signatureLoss=\"{}\">",
+            wb.legacy_vba_signature,
+            wb.vba_signature_loss || wb.vba_signatures.as_ref().is_some_and(|s| !s.matches(wb.vba_project.as_deref()))
+        );
+        for warning in warnings {
+            let _ = write!(meta, "<warning>{}</warning>", esc(warning));
+        }
+        meta.push_str("</draftWarnings>");
+        out.part("gridcraft/draftWarnings.xml", Some("application/xml"), meta.into_bytes());
+    }
     // Content types first, then the parts in creation order.
     let mut ct = format!("{XML_DECL}<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">");
     for (ext, t) in &out.defaults {

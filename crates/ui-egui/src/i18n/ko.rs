@@ -2,6 +2,23 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "too many VBA signature parts" => "VBA 서명 부분이 너무 많습니다",
+        "too many macro buttons" => "매크로 단추가 너무 많습니다",
+        "The macro digital signature in the .xls file is not preserved when saving as .xlsm; the macros will be unsigned." => {
+            ".xls 파일을 .xlsm으로 저장하면 매크로의 디지털 서명이 유지되지 않으며 매크로는 서명되지 않은 상태가 됩니다."
+        }
+        "Some VBA signature relationships could not be preserved; the saved macros may be unsigned." => {
+            "일부 VBA 서명 관계를 유지하지 못했습니다. 저장된 매크로가 서명되지 않은 상태일 수 있습니다."
+        }
+        "The VBA project has changed. Its digital signature will be removed; the saved macros will be unsigned." => {
+            "VBA 프로젝트가 변경되었습니다. 디지털 서명이 제거되며 저장된 매크로는 서명되지 않은 상태가 됩니다."
+        }
+        "This format cannot preserve VBA macros. The saved file will not contain the macros." => {
+            "이 형식은 VBA 매크로를 보존할 수 없습니다. 저장된 파일에는 매크로가 포함되지 않습니다."
+        }
+        "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
+            "이 형식은 VBA 매크로와 디지털 서명을 보존할 수 없습니다. 저장된 파일에는 매크로와 서명이 포함되지 않습니다."
+        }
         "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
             "Excel 97-2003 통합 문서(.xls)에서 값, 수식, 숫자 형식, 병합된 셀, 열 너비, 행 높이 및 정의된 이름을 읽었습니다. 글꼴, 채우기, 테두리, 차트, 그림, 메모 및 기타 기능은 아직 가져오지 않습니다. .xlsx로 저장하세요. .xls 저장은 지원되지 않습니다."
         }

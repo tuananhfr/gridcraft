@@ -626,3 +626,37 @@ fn legacy_vba_storage_becomes_a_macro_enabled_package() {
     zip.by_name("xl/_rels/workbook.xml.rels").unwrap().read_to_string(&mut rels).unwrap();
     assert!(rels.contains("vbaProject.bin"));
 }
+
+#[test]
+fn vba_signature_xls_root_streams_warn_without_becoming_ooxml_signatures() {
+    use std::io::{Cursor, Write};
+    let global = |offset: u32| cat(&[&bof(5), &rec(0x0085, &cat(&[&offset.to_le_bytes(), &[0, 0, 1, 0], b"S"])), &eof()]);
+    let workbook = cat(&[&global(global(0).len() as u32), &bof(0x10), &eof()]);
+    for name in ["\u{5}DigitalSignature", "\u{5}DigitalSignatureEx", "\u{5}DigitalSignatureExt"] {
+        let mut cf = cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap();
+        cf.create_stream("/Workbook").unwrap().write_all(&workbook).unwrap();
+        cf.create_stream(format!("/{name}")).unwrap().write_all(b"synthetic signature").unwrap();
+        let (wb, report) = read_xls(&cf.into_inner().into_inner()).unwrap();
+        assert!(wb.legacy_vba_signature);
+        assert!(wb.vba_signatures.is_none());
+        assert!(report.warnings.iter().any(|w| w == crate::LEGACY_SIGNATURE));
+    }
+}
+
+#[test]
+fn macro_buttons_xls_obj_resolves_ftmacro_lbl_and_survives_truncation() {
+    let lbl = rec(0x18, &cat(&[&u16s(&[8]), &[0, 9], &u16s(&[0, 0, 0]), &[0; 4], &[0], b"RunReport"]));
+    let global = |offset: u32| cat(&[&bof(5), &lbl, &rec(0x85, &cat(&[&offset.to_le_bytes(), &[0, 0, 1, 0], b"S"])), &eof()]);
+    let cmo = cat(&[&u16s(&[0x15, 18, 7, 42]), &[0; 14]]);
+    let fmla = cat(&[&u16s(&[4, 12, 5]), &[0; 4], &[0x23], &1u32.to_le_bytes(), &[0]]);
+    let obj = cat(&[&cmo, &fmla, &[0; 4]]);
+    let stream = |obj: &[u8]| cat(&[&global(global(0).len() as u32), &bof(0x10), &rec(0x5d, obj), &eof()]);
+    let (wb, _) = read_xls(&compound("Workbook", &stream(&obj))).unwrap();
+    assert_eq!(wb.macro_buttons.len(), 1);
+    let button = &wb.macro_buttons[0];
+    assert_eq!((button.sheet, button.name.as_str(), button.macro_name.as_str()), (0, "Button 42", "RunReport"));
+    assert_eq!(button.kind, gridcraft_model::MacroButtonKind::FormControl);
+    for len in 0..obj.len() {
+        assert!(read_xls(&compound("Workbook", &stream(&obj[..len]))).is_ok(), "OBJ cut at {len}");
+    }
+}

@@ -152,8 +152,7 @@ impl Args {
 
 fn exec(s: &mut Session, id: &str, params: Value) -> Result<Value, String> {
     let r = s.execute_headless(id, params).map_err(|e| e.to_string());
-    if id == "file.open"
-        && let Ok(value) = &r
+    if let Ok(value) = &r
         && let Some(warnings) = value.get("warnings").and_then(Value::as_array)
     {
         for warning in warnings.iter().filter_map(Value::as_str) {
@@ -278,6 +277,9 @@ fn convert(args: &[String]) -> Result<(), String> {
     activate_sheet(&mut s, a.opt("sheet"))?;
     let d = s.doc().map_err(|e| e.to_string())?;
     let bytes = gridcraft_engine::io::save_file_bytes(&d.wb, out).map_err(|e| e.to_string())?;
+    for warning in gridcraft_engine::io::save_warnings(&d.wb, out) {
+        eprintln!("Warning: {warning}");
+    }
     gridcraft_engine::io::write_file(out, &bytes).map_err(|e| e.to_string())?;
     eprintln!("wrote {out} ({} bytes)", bytes.len());
     Ok(())

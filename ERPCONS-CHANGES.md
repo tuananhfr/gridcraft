@@ -21,6 +21,8 @@
 - Desktop file filters follow the current UI language; translate the edited window title suffix.
 - Desktop Save As offers macro-enabled templates (.xltm) first when suggested.
 
+- Both: GRID-03 keeps `.xlsm`/`.xltm` VBA signature parts (signature, Agile, V3) byte-identical behind a SHA-256 guard of the VBA project, reports lost signatures and macros (.xls signatures, stale or unkeepable parts, non-macro formats) through one `io::save_warnings` shared by Save, Save As, AutoSave/drafts, exports, web download, CLI and MCP, and lists Form Control/ActiveX buttons from VML, ctrlProps, ActiveX parts and .xls OBJ records without running macros or changing button write-back.
+
 This branch (`erpcons`) is the ERPCons Văn phòng fork of [GridCraft](https://github.com/storytold/gridcraft), based on GridCraft by the ArtCraft team, licensed MIT OR Apache-2.0 (see `LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`). Changes from upstream `main` (Apache-2.0 §4b):
 
 - Desktop: default to Vietnamese when no UI language is saved, respect saved languages, and atomically save language changes immediately with logged write errors.
