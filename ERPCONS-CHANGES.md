@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- (desktop) Repository variable `ERPCONS_SKIP_MACOS=true` releases Windows and Linux installers without waiting for a macOS runner; update.json then lists no Mac asset.
+
 - Both: add sandboxed Jet 3/4 Access table reading, R2000 DXF drawing output and the undoable `data.importAccess` command for future ETABS VBA bindings.
 
 - Both: add scoped sheet/selection calculation and Manual cache deferral, report calculation errors and translated diagnostics/import notices without executing VBA, reject erroneous CLI checks, and provide disabled 44-point Undo/Redo controls with transaction IDs/timestamps, grouped range edits and save-preserved history. A typed formula that cannot be parsed shows #NAME? again (only a cached file value is kept).
