@@ -16,6 +16,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
             "Một số tên đã định nghĩa tham chiếu tới sổ làm việc khác (liên kết ngoài) nên đã bị bỏ qua."
         }
         "Calculate Selection" => "Tính vùng chọn",
+        "Import Access Table" => "Nhập bảng Access",
         "Recalculation needed" => "Cần tính lại",
         "Calculation has errors" => "Còn lỗi",
         "Cause" => "Nguyên nhân",
