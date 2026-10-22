@@ -1514,7 +1514,7 @@ fn about(ui: &mut egui::Ui, d: &mut Dialog, app: &SheetApp) {
             ui.heading(app.product_name);
             if app.product_name != "GridCraft" {
                 ui.label("ERPCons");
-                ui.hyperlink_to("https://office.erpcons.vn", "https://office.erpcons.vn");
+                ui.hyperlink_to("https://office.erpcons.ai", "https://office.erpcons.ai");
             }
             ui.label(tr(ui, "Version {version}").replace("{version}", env!("CARGO_PKG_VERSION")));
             ui.add_space(4.0);

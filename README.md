@@ -1,6 +1,6 @@
 <h1 align="center">GridCraft</h1>
 
-> **ERPCons fork.** This is the ERPCons Văn phòng fork of GridCraft, based on GridCraft by the ArtCraft team (MIT OR Apache-2.0). It runs at https://office.erpcons.vn/bang-tinh/. ArtCraft names and logos are removed as their brand terms require; see [ERPCONS-CHANGES.md](ERPCONS-CHANGES.md).
+> **ERPCons fork.** This is the ERPCons Văn phòng fork of GridCraft, based on GridCraft by the ArtCraft team (MIT OR Apache-2.0). It runs at https://office.erpcons.ai/bang-tinh/. ArtCraft names and logos are removed as their brand terms require; see [ERPCONS-CHANGES.md](ERPCONS-CHANGES.md).
 
 <p align="center">
   <b>Spreadsheets and data; an open-source, clean-room reimplementation of Microsoft Excel, rebuilt in pure Rust.</b>

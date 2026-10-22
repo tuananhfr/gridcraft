@@ -24,7 +24,7 @@ fn product_branding_about_and_start_keep_web_default() {
             assert!(h.query_all_by_label_contains(product).count() > 0);
             if dialog == "about" && product != "GridCraft" {
                 assert!(h.query_by_label("ERPCons").is_some());
-                assert!(h.query_by_label("https://office.erpcons.vn").is_some());
+                assert!(h.query_by_label("https://office.erpcons.ai").is_some());
             }
             if product != "GridCraft"
                 && let Ok(dir) = std::env::var("GRIDCRAFT_BRANDING_SHOTS")

@@ -275,7 +275,7 @@ jobs:
           ```
 
           Đối chiếu mã SHA-256 của tệp tải về với `SHA256SUMS.txt`. `update.json` và `update.json.sig` dành cho chức năng tự cập nhật của ứng dụng.
-          Dùng bản web tại https://office.erpcons.vn.
+          Dùng bản web tại https://office.erpcons.ai.
           NOTES
           gh release create "$TAG" --verify-tag --latest --title "Bảng tính – ERPCons $VERSION" \
             --notes-file "$RUNNER_TEMP/release-notes.md" ./*

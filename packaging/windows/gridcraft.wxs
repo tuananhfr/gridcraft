@@ -31,7 +31,7 @@
 
     <Icon Id="GridcraftIcon.ico" SourceFile="$(var.IconPath)" />
     <Property Id="ARPPRODUCTICON" Value="GridcraftIcon.ico" />
-    <Property Id="ARPURLINFOABOUT" Value="https://office.erpcons.vn" />
+    <Property Id="ARPURLINFOABOUT" Value="https://office.erpcons.ai" />
     <Property Id="ARPURLUPDATEINFO" Value="https://github.com/tuananhfr/gridcraft/releases" />
     <Property Id="ARPHELPLINK" Value="https://github.com/tuananhfr/gridcraft/issues" />
 
