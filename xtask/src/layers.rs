@@ -32,6 +32,7 @@ pub const TABLE: &[(&str, Class)] = &[
     ("mdb", Class::Layer(0)),
     ("vba", Class::Layer(0)),
     ("dxf", Class::Layer(0)),
+    ("vbarun", Class::Layer(1)),
     ("formula", Class::Layer(1)),
     ("functions", Class::Layer(1)),
     ("model", Class::Layer(2)),
@@ -62,7 +63,7 @@ fn intra_layer_allowed(from: &str, to: &str) -> bool {
 
 /// Format crates may only depend on these workspace crates (on top of the layer rule), so a
 /// file format never pulls in calculation or engine code.
-pub const FORMAT_ALLOWED: &[(&str, &[&str])] = &[("xlsx", &["core", "formula", "model"])];
+pub const FORMAT_ALLOWED: &[(&str, &[&str])] = &[("xlsx", &["core", "formula", "model"]), ("vbarun", &["core", "vba"])];
 
 /// External crates that constitute a UI toolkit / windowing dependency.
 /// Entries ending in `*` are prefixes.

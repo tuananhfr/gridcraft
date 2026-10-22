@@ -1935,6 +1935,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gridcraft-vbarun"
+version = "0.6.5"
+dependencies = [
+ "gridcraft-core",
+ "gridcraft-vba",
+]
+
+[[package]]
 name = "gridcraft-web"
 version = "0.6.5"
 dependencies = [
