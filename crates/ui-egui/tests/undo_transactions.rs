@@ -119,7 +119,7 @@ fn disabled_history_widget_has_no_hover_or_pressed_response() {
         ],
         ..Default::default()
     };
-    let _ = ctx.run_ui(input, |ui| {
+    let mut output = ctx.run_ui(input, |ui| {
         let response =
             gridcraft_ui_egui::widgets::enabled_icon_button(ui, false, gridcraft_ui_egui::icons::Icon::Undo, "Undo (⌘Z)", vec2(44.0, 44.0));
         assert!(!response.enabled());
@@ -127,4 +127,6 @@ fn disabled_history_widget_has_no_hover_or_pressed_response() {
         assert!(!response.is_pointer_button_down_on());
         assert!(!response.clicked());
     });
+    // Debug builds panic when a frame's texture deltas are dropped unapplied.
+    output.textures_delta.clear();
 }
