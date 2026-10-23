@@ -2,6 +2,64 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Invalid record count" => "Neplatné: záznamy",
+        "Invalid field count" => "Neplatné: pole",
+
+        "Invalid color" => "Neplatné: barva",
+        "Invalid coordinate" => "Neplatné: souřadnice",
+        "Invalid database" => "Neplatné: databáze",
+        "Invalid emulated object" => "Neplatné: emulovaný objekt",
+        "Invalid field" => "Neplatné: pole",
+        "Invalid recordset" => "Neplatné: sada záznamů",
+        "Invalid tables" => "Neplatné: tabulky",
+        "Invalid AutoCAD polyline vertices" => "Neplatné: vrcholy křivky",
+        "Invalid DAO number" => "Neplatné: číslo",
+        "Invalid DAO file bytes" => "Neplatné: data souboru",
+        "Missing X" => "Chybí: X",
+        "Missing Y" => "Chybí: Y",
+        "Missing Z" => "Chybí: Z",
+        "Missing table index" => "Chybí: index tabulky",
+        "Missing {name}" => "Chybí: {name}",
+        "DAO field not found" => "Nenalezeno: pole",
+        "DAO table not found" => "Nenalezeno: tabulky",
+        "DAO workspace not found" => "Nenalezeno: pracovní prostor",
+        "Entity not found" => "Nenalezeno: entita",
+        "Layer not found" => "Nenalezeno: hladina",
+        "DAO database is closed" => "Uzavřeno: databáze",
+        "DAO recordset is closed" => "Uzavřeno: sada záznamů",
+        "Expected a DAO recordset" => "Požadováno: sada záznamů",
+        "Expected a layer" => "Požadováno: hladina",
+        "VBA sandbox limit: emulation handles" => "Limit izolovaného VBA: popisovače objektů",
+        "VBA sandbox limit: emulation memory" => "Limit izolovaného VBA: paměť",
+        "VBA sandbox limit: recordset cells" => "Limit izolovaného VBA: buňky sady záznamů",
+        "VBA sandbox limit: DAO file bytes" => "Limit izolovaného VBA: data souboru",
+        "VBA sandbox limit: DAO query projection" => "Limit izolovaného VBA: sloupce dotazu",
+        "DAO record limit" => "Limit izolovaného VBA: záznamy",
+        "No drawing" => "Žádný výkres",
+        "AutoCAD point requires three coordinates" => "Bod AutoCAD vyžaduje tři souřadnice",
+        "AutoCAD requires a one-dimensional coordinate array" => "AutoCAD vyžaduje jednorozměrné pole souřadnic",
+        "DAO field requires a name or index" => "Pole DAO vyžaduje název nebo index",
+        "OpenDatabase requires a path" => "OpenDatabase vyžaduje cestu",
+        "DAO path is too long" => "Cesta DAO je příliš dlouhá",
+        "DAO: no current record" => "DAO: žádný aktuální záznam",
+        "non-positive radius" => "poloměr musí být kladný",
+        "invalid multiline text or width" => "neplatný víceřádkový text nebo šířka",
+        "drawing text limit" => "limit textu výkresu",
+        "DAO/AutoCAD.{member} not supported in GridCraft (no disk/network/system access)" => {
+            "DAO/AutoCAD.{member} není v GridCraft podporováno (bez přístupu k disku, síti či systému)"
+        }
+        "Invalid DXF drawing: {detail}" => "Neplatný výkres DXF: {detail}",
+
+        "Choose the .mdb file required by the macro: {path}" => "Vyberte soubor .mdb požadovaný makrem: {path}",
+        "Macro created a drawing — Save DXF" => "Makro vytvořilo výkres — Uložit DXF",
+        "Emulated DAO/AutoCAD: read-only MDB selection and DXF output; unknown members stop the macro." => {
+            "Emulace DAO/AutoCAD: MDB jen pro čtení a výstup DXF; neznámé členy zastaví makro."
+        }
+        "DAO write operations are not supported" => "Zápis DAO není podporován",
+        "DAO file selection was cancelled; macro stopped" => "Výběr souboru DAO byl zrušen; makro zastaveno",
+        "AppActivate/ChDir/ChDrive/CurDir ignored by in-memory emulation" => "Emulace v paměti ignoruje AppActivate/ChDir/ChDrive/CurDir",
+        "DAO: unsupported or invalid SELECT query" => "DAO: nepodporovaný nebo neplatný dotaz SELECT",
+
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "Tento sešit obsahuje makra VBA. Podporovaná makra lze s vaším souhlasem spustit v dialogu Makra. Uložení jako .xlsm je zachová; .xlsx je odstraní."
         }

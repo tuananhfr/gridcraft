@@ -14,6 +14,9 @@ const NESTED: [&str; 2] = ["reason", "detail"];
 /// reasons inside them. Each has a catalog entry; `tests/open_refused.rs` opens real broken files
 /// to keep them in step with the engine.
 const TEMPLATES: &[&str] = &[
+    "Missing {name}",
+    "DAO/AutoCAD.{member} not supported in GridCraft (no disk/network/system access)",
+    "Invalid DXF drawing: {detail}",
     "We can't open '{name}': {reason}",
     "We can't import '{name}': {reason}",
     "Couldn't save '{name}': {reason}",

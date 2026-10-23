@@ -656,6 +656,11 @@ impl Parser {
             if chain > 64 {
                 return Err(Error::limit("expression complexity"));
             }
+            if self.eat("!") {
+                let field = self.word()?;
+                left = Expr::Invoke(Box::new(left), vec![Arg { name: None, expr: Expr::Literal(Value::String(field)) }]);
+                continue;
+            }
             if self.eat(".") {
                 left = Expr::Member(Box::new(left), self.word()?);
                 continue;

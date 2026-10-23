@@ -1,4 +1,5 @@
 //! Explicit, consent-gated macro execution. Opening documents never starts a run or fires events.
+mod emulation;
 mod host;
 use crate::{EngineError, HistoryEntry, Result, Session};
 use gridcraft_model::Workbook;
@@ -51,6 +52,7 @@ pub(crate) struct MacroInteraction {
 type Interaction = std::rc::Rc<std::cell::RefCell<MacroInteraction>>;
 
 pub struct MacroTask {
+    drawing: Option<Vec<u8>>,
     interaction: Option<Interaction>,
     future: Pin<Box<dyn Future<Output = RunOutput>>>,
     uid: u64,
@@ -62,6 +64,9 @@ pub struct MacroTask {
     finished: bool,
 }
 impl MacroTask {
+    pub fn take_drawing(&mut self) -> Option<Vec<u8>> {
+        self.drawing.take()
+    }
     pub fn cancel(&self) {
         self.cancellation.store(true, Ordering::Relaxed);
     }
@@ -86,6 +91,8 @@ struct RunClock {
     #[cfg(not(target_arch = "wasm32"))]
     start: std::time::Instant,
     epoch: f64,
+    picker_pause: std::rc::Rc<std::cell::Cell<Option<u64>>>,
+    excluded_ms: std::rc::Rc<std::cell::Cell<u64>>,
 }
 impl RunClock {
     #[allow(clippy::disallowed_methods)] // Instant is constructed only on native targets.
@@ -94,11 +101,15 @@ impl RunClock {
             #[cfg(not(target_arch = "wasm32"))]
             start: std::time::Instant::now(),
             epoch: gridcraft_core::date::unix_now_ms().unwrap_or(0.0),
+            picker_pause: Default::default(),
+            excluded_ms: Default::default(),
         }
     }
-}
-impl Clock for RunClock {
-    fn monotonic_ms(&self) -> u64 {
+    fn pause_for_picker(&self) -> PickerPause {
+        self.picker_pause.set(Some(self.elapsed_ms()));
+        PickerPause(self.clone())
+    }
+    fn elapsed_ms(&self) -> u64 {
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.start.elapsed().as_millis().min(u128::from(u64::MAX)) as u64
@@ -108,8 +119,21 @@ impl Clock for RunClock {
             (gridcraft_core::date::unix_now_ms().unwrap_or(self.epoch) - self.epoch).max(0.0) as u64
         }
     }
+}
+struct PickerPause(RunClock);
+impl Drop for PickerPause {
+    fn drop(&mut self) {
+        if let Some(at) = self.0.picker_pause.take() {
+            self.0.excluded_ms.set(self.0.excluded_ms.get().saturating_add(self.0.elapsed_ms().saturating_sub(at)));
+        }
+    }
+}
+impl Clock for RunClock {
+    fn monotonic_ms(&self) -> u64 {
+        self.picker_pause.get().unwrap_or_else(|| self.elapsed_ms()).saturating_sub(self.excluded_ms.get())
+    }
     fn date_serial(&self) -> f64 {
-        gridcraft_core::date::serial_from_unix_ms(self.epoch + self.monotonic_ms() as f64)
+        gridcraft_core::date::serial_from_unix_ms(self.epoch + self.elapsed_ms() as f64)
     }
 }
 fn now() -> u64 {
@@ -275,10 +299,14 @@ impl Session {
             let mut interpreter = Interpreter::new(&program, host, clock, limits);
             interpreter.set_quantum(options.instructions_per_frame);
             let result = interpreter.run_async(&module_name, &procedure_name, &[]).await;
+            let result = result.and_then(|v| {
+                interpreter.host.emulation.drawing_bytes()?;
+                Ok(v)
+            });
             let steps = interpreter.steps();
             RunOutput { host: interpreter.host, result, steps }
         });
-        Ok(MacroTask { interaction, future, uid, original, running, cancellation, log_index, started, finished: false })
+        Ok(MacroTask { drawing: None, interaction, future, uid, original, running, cancellation, log_index, started, finished: false })
     }
     fn push_macro_log(&mut self, entry: Json) -> Result<usize> {
         let state = &mut self.doc_mut()?.macro_state;
@@ -329,6 +357,9 @@ impl Session {
         } else {
             output.result
         };
+        if result.is_ok() {
+            task.drawing = output.host.emulation.drawing_bytes().map_err(|e| failure(e.to_string()))?;
+        }
         let status = if result.is_ok() {
             "completed"
         } else if task.cancellation.load(Ordering::Relaxed) {

@@ -33,6 +33,9 @@ pub struct Entity {
 enum Geometry {
     Text { text: String, point: [f64; 3], height: f64, rotation: f64 },
     Point([f64; 3]),
+    Circle { center: [f64; 3], radius: f64, angles: Option<(f64, f64)> },
+    MText { text: String, point: [f64; 3], width: f64 },
+    LegacyPolyline(Vec<[f64; 3]>),
     Polyline { points: Vec<[f64; 2]>, closed: bool, width: f64 },
     Line([f64; 3], [f64; 3]),
 }
@@ -51,7 +54,19 @@ impl Entity {
                 rotate(point);
                 *rotation += angle.to_degrees();
             }
-            Geometry::Point(point) => rotate(point),
+            Geometry::Point(point) | Geometry::MText { point, .. } => rotate(point),
+            Geometry::Circle { center, angles, .. } => {
+                rotate(center);
+                if let Some((start, end)) = angles {
+                    *start += angle;
+                    *end += angle;
+                }
+            }
+            Geometry::LegacyPolyline(points) => {
+                for p in points {
+                    rotate(p);
+                }
+            }
             Geometry::Line(a, b) => {
                 rotate(a);
                 rotate(b);
@@ -152,6 +167,45 @@ impl Drawing {
         self.vertices += points.len();
         self.push(Geometry::Polyline { points: points.to_vec(), closed, width })
     }
+    pub fn add_circle(&mut self, center: [f64; 3], radius: f64) -> Result<&mut Entity> {
+        self.circle(center, radius, None)
+    }
+    pub fn add_arc(&mut self, center: [f64; 3], radius: f64, start: f64, end: f64) -> Result<&mut Entity> {
+        valid_number(start)?;
+        valid_number(end)?;
+        self.circle(center, radius, Some((start, end)))
+    }
+    fn circle(&mut self, center: [f64; 3], radius: f64, angles: Option<(f64, f64)>) -> Result<&mut Entity> {
+        valid_point(&center)?;
+        valid_number(radius)?;
+        if radius <= 0.0 {
+            return Err(Error("non-positive radius"));
+        }
+        self.push(Geometry::Circle { center, radius, angles })
+    }
+    pub fn add_mtext(&mut self, text: &str, point: [f64; 3], width: f64) -> Result<&mut Entity> {
+        valid_point(&point)?;
+        valid_number(width)?;
+        if width <= 0.0 || text.len() > MAX_TEXT || text.chars().any(|c| c.is_control() && !matches!(c, '\n' | '\r')) {
+            return Err(Error("invalid multiline text or width"));
+        }
+        if self.text_bytes.saturating_add(text.len()) > MAX_OUTPUT {
+            return Err(Error("drawing text limit"));
+        }
+        self.text_bytes += text.len();
+        self.push(Geometry::MText { text: text.replace("\r\n", "\n").replace('\r', "\n"), point, width })
+    }
+    pub fn add_polyline(&mut self, points: &[[f64; 3]]) -> Result<&mut Entity> {
+        if points.len() < 2 || self.vertices.saturating_add(points.len()) > MAX_VERTICES {
+            return Err(Error("invalid vertex count"));
+        }
+        for p in points {
+            valid_point(p)?;
+        }
+        self.vertices += points.len();
+        // AddPolyline accepts XYZ triples but uses only OCS X/Y (ActiveX compatibility).
+        self.push(Geometry::LegacyPolyline(points.iter().map(|[x, y, _]| [*x, *y, 0.0]).collect()))
+    }
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         let mut out = Output(String::new(), false);
         out.pair(0, "SECTION");
@@ -163,7 +217,7 @@ impl Drawing {
         out.pair(9, "$INSUNITS");
         out.pair(70, self.units as u16);
         out.pair(9, "$HANDSEED");
-        out.pair(5, format!("{:X}", 0x1000 + self.entities.len()));
+        out.pair(5, "300000");
         out.pair(0, "ENDSEC");
         out.pair(0, "SECTION");
         out.pair(2, "CLASSES");
@@ -235,6 +289,7 @@ impl Drawing {
         out.pair(0, "ENDSEC");
         out.pair(0, "SECTION");
         out.pair(2, "ENTITIES");
+        let mut child_handle = 0x100000u64;
         for (i, entity) in self.entities.iter().enumerate() {
             valid_name(&entity.layer)?;
             if entity.color > 256 {
@@ -257,6 +312,51 @@ impl Drawing {
                     out.pair(72, 0);
                     out.pair(100, "AcDbText");
                     out.pair(73, 0);
+                }
+                Geometry::Circle { center, radius, angles } => {
+                    valid_point(center)?;
+                    out.entity(if angles.is_some() { "ARC" } else { "CIRCLE" }, &handle, "7", layer, entity.color);
+                    out.pair(100, "AcDbCircle");
+                    out.point(*center, 10);
+                    out.pair(40, radius);
+                    if let Some((start, end)) = angles {
+                        out.pair(100, "AcDbArc");
+                        out.pair(50, start.to_degrees().rem_euclid(360.0));
+                        out.pair(51, end.to_degrees().rem_euclid(360.0));
+                    }
+                }
+                Geometry::MText { text, point, width } => {
+                    out.entity("MTEXT", &handle, "7", layer, entity.color);
+                    out.pair(100, "AcDbMText");
+                    out.point(*point, 10);
+                    out.pair(40, 2.5);
+                    out.pair(41, width);
+                    let encoded = text.split('\n').map(escape).collect::<Vec<_>>().join("\\P");
+                    let mut rest = encoded.as_str();
+                    while rest.len() > 250 {
+                        let (part, tail) = rest.split_at(250);
+                        out.pair(3, part);
+                        rest = tail;
+                    }
+                    out.pair(1, rest);
+                    out.pair(7, "STANDARD");
+                }
+                Geometry::LegacyPolyline(points) => {
+                    out.entity("POLYLINE", &handle, "7", layer, entity.color);
+                    out.pair(100, "AcDb2dPolyline");
+                    out.pair(66, 1);
+                    out.point([0.0; 3], 10);
+                    out.pair(70, 0);
+                    for p in points {
+                        out.entity("VERTEX", &format!("{child_handle:X}"), &handle, layer, entity.color);
+                        child_handle += 1;
+                        out.pair(100, "AcDbVertex");
+                        out.pair(100, "AcDb2dVertex");
+                        out.point(*p, 10);
+                        out.pair(70, 0);
+                    }
+                    out.entity("SEQEND", &format!("{child_handle:X}"), &handle, layer, entity.color);
+                    child_handle += 1;
                 }
                 Geometry::Point(point) => {
                     valid_point(point)?;

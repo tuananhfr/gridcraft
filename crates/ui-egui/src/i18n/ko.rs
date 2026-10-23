@@ -2,6 +2,64 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Invalid record count" => "잘못됨: 레코드",
+        "Invalid field count" => "잘못됨: 필드",
+
+        "Invalid color" => "잘못됨: 색상",
+        "Invalid coordinate" => "잘못됨: 좌표",
+        "Invalid database" => "잘못됨: 데이터베이스",
+        "Invalid emulated object" => "잘못됨: 에뮬레이션 객체",
+        "Invalid field" => "잘못됨: 필드",
+        "Invalid recordset" => "잘못됨: 레코드 집합",
+        "Invalid tables" => "잘못됨: 테이블",
+        "Invalid AutoCAD polyline vertices" => "잘못됨: 폴리선 정점",
+        "Invalid DAO number" => "잘못됨: 숫자",
+        "Invalid DAO file bytes" => "잘못됨: 파일 데이터",
+        "Missing X" => "누락: X",
+        "Missing Y" => "누락: Y",
+        "Missing Z" => "누락: Z",
+        "Missing table index" => "누락: 테이블 인덱스",
+        "Missing {name}" => "누락: {name}",
+        "DAO field not found" => "찾을 수 없음: 필드",
+        "DAO table not found" => "찾을 수 없음: 테이블",
+        "DAO workspace not found" => "찾을 수 없음: 작업 공간",
+        "Entity not found" => "찾을 수 없음: 도면요소",
+        "Layer not found" => "찾을 수 없음: 도면층",
+        "DAO database is closed" => "닫힘: 데이터베이스",
+        "DAO recordset is closed" => "닫힘: 레코드 집합",
+        "Expected a DAO recordset" => "필요: 레코드 집합",
+        "Expected a layer" => "필요: 도면층",
+        "VBA sandbox limit: emulation handles" => "VBA 샌드박스 제한: 객체 핸들",
+        "VBA sandbox limit: emulation memory" => "VBA 샌드박스 제한: 메모리",
+        "VBA sandbox limit: recordset cells" => "VBA 샌드박스 제한: 레코드 집합 셀",
+        "VBA sandbox limit: DAO file bytes" => "VBA 샌드박스 제한: 파일 데이터",
+        "VBA sandbox limit: DAO query projection" => "VBA 샌드박스 제한: 쿼리 열",
+        "DAO record limit" => "VBA 샌드박스 제한: 레코드",
+        "No drawing" => "도면 없음",
+        "AutoCAD point requires three coordinates" => "AutoCAD 점에는 좌표 세 개가 필요합니다",
+        "AutoCAD requires a one-dimensional coordinate array" => "AutoCAD에는 1차원 좌표 배열이 필요합니다",
+        "DAO field requires a name or index" => "DAO 필드에는 이름이나 인덱스가 필요합니다",
+        "OpenDatabase requires a path" => "OpenDatabase에는 경로가 필요합니다",
+        "DAO path is too long" => "DAO 경로가 너무 깁니다",
+        "DAO: no current record" => "DAO: 현재 레코드가 없습니다",
+        "non-positive radius" => "반지름은 양수여야 합니다",
+        "invalid multiline text or width" => "여러 줄 텍스트 또는 너비가 잘못되었습니다",
+        "drawing text limit" => "도면 텍스트 제한",
+        "DAO/AutoCAD.{member} not supported in GridCraft (no disk/network/system access)" => {
+            "GridCraft에서 DAO/AutoCAD.{member}을 지원하지 않습니다(디스크/네트워크/시스템 접근 없음)"
+        }
+        "Invalid DXF drawing: {detail}" => "잘못된 DXF 도면: {detail}",
+
+        "Choose the .mdb file required by the macro: {path}" => "매크로에 필요한 .mdb 파일 선택: {path}",
+        "Macro created a drawing — Save DXF" => "매크로가 도면을 만들었습니다 — DXF 저장",
+        "Emulated DAO/AutoCAD: read-only MDB selection and DXF output; unknown members stop the macro." => {
+            "DAO/AutoCAD 에뮬레이션: 읽기 전용 MDB 선택 및 DXF 출력. 알 수 없는 멤버는 매크로를 중지합니다."
+        }
+        "DAO write operations are not supported" => "DAO 쓰기 작업은 지원되지 않습니다",
+        "DAO file selection was cancelled; macro stopped" => "DAO 파일 선택이 취소되어 매크로가 중지되었습니다",
+        "AppActivate/ChDir/ChDrive/CurDir ignored by in-memory emulation" => "메모리 에뮬레이션에서 AppActivate/ChDir/ChDrive/CurDir 무시",
+        "DAO: unsupported or invalid SELECT query" => "DAO: 지원되지 않거나 잘못된 SELECT 쿼리",
+
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "이 통합 문서에는 VBA 매크로가 포함되어 있습니다. 동의하면 매크로 대화 상자에서 지원되는 매크로를 실행할 수 있습니다. .xlsm으로 저장하면 유지되고 .xlsx로 저장하면 제거됩니다."
         }

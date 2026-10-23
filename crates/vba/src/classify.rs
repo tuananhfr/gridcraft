@@ -117,17 +117,46 @@ pub(crate) fn classify(project: &mut Project, bodies: &[Vec<Vec<Statement>>], de
                     reason(project, mi, pi, 2, "file_io", "Open ... For".into(), line, &mut budget)?;
                 }
                 if let Some(code) = com_code(word) {
-                    let prog_id = if matches!(code, "create_object" | "get_object") && words.get(i + 1).is_some_and(|s| s == "(") {
-                        tokens.get(i + 2).filter(|s| s.starts_with('"')).map(|s| s.trim_matches('"').to_owned())
+                    let factory = matches!(code, "create_object" | "get_object");
+                    let literal_index = if code == "get_object" { i + 3 } else { i + 2 };
+                    let prog_id = if factory && words.get(i + 1).is_some_and(|s| s == "(") {
+                        tokens.get(literal_index).filter(|s| s.starts_with('"')).map(|s| s.trim_matches('"').to_ascii_lowercase())
                     } else {
                         None
                     };
-                    let detail = prog_id.as_ref().map_or_else(|| original.clone(), |id| format!("{original}(\"{id}\")"));
-                    reason(project, mi, pi, 3, code, detail, line, &mut budget)?;
-                    // The ProgID names the automated library, e.g. CreateObject("AutoCAD.Application").
-                    if let Some(id) = prog_id {
-                        let lowered = id.to_lowercase();
-                        for part in lowered.split('.') {
+                    let covered_factory = prog_id.as_deref().is_some_and(|p| {
+                        p == "autocad.application"
+                            || (code == "create_object"
+                                && (p == "dao.dbengine"
+                                    || p.strip_prefix("dao.dbengine.").is_some_and(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()))))
+                    }) && (code != "get_object" || words.get(i + 2).is_some_and(|s| s == ","));
+                    let known_dao_type = word == "dao"
+                        && words.get(i + 1).is_some_and(|s| s == ".")
+                        && words.get(i + 2).is_some_and(|s| {
+                            matches!(
+                                s.as_str(),
+                                "database"
+                                    | "recordset"
+                                    | "dbengine"
+                                    | "workspace"
+                                    | "workspaces"
+                                    | "field"
+                                    | "fields"
+                                    | "tabledef"
+                                    | "tabledefs"
+                                    | "opendatabase"
+                            )
+                        });
+                    let covered = if factory {
+                        covered_factory && words.get(literal_index + 1).is_some_and(|s| s == ")")
+                    } else {
+                        word == "opendatabase" || known_dao_type
+                    };
+                    let detail = prog_id.as_ref().map_or_else(|| original.clone(), |p| format!("{original}(\"{p}\")"));
+                    reason(project, mi, pi, if covered { 1 } else { 3 }, if covered { "emulated_com" } else { code }, detail, line, &mut budget)?;
+                    // The ProgID names the automated library, e.g. CreateObject("Scripting.FileSystemObject").
+                    if let Some(id) = prog_id.filter(|_| !covered) {
+                        for part in id.split('.') {
                             if let Some(code) = com_code(part).filter(|c| !matches!(*c, "create_object" | "get_object")) {
                                 reason(project, mi, pi, 3, code, id.clone(), line, &mut budget)?;
                             } else if let Some(code) = windows_code(part) {

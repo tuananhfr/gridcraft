@@ -3,6 +3,64 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Invalid record count" => "Ungültig: Datensätze",
+        "Invalid field count" => "Ungültig: Feld",
+
+        "Invalid color" => "Ungültig: Farbe",
+        "Invalid coordinate" => "Ungültig: Koordinate",
+        "Invalid database" => "Ungültig: Datenbank",
+        "Invalid emulated object" => "Ungültig: emuliertes Objekt",
+        "Invalid field" => "Ungültig: Feld",
+        "Invalid recordset" => "Ungültig: Datensatzgruppe",
+        "Invalid tables" => "Ungültig: Tabellen",
+        "Invalid AutoCAD polyline vertices" => "Ungültig: Polylinienpunkte",
+        "Invalid DAO number" => "Ungültig: Zahl",
+        "Invalid DAO file bytes" => "Ungültig: Dateidaten",
+        "Missing X" => "Fehlt: X",
+        "Missing Y" => "Fehlt: Y",
+        "Missing Z" => "Fehlt: Z",
+        "Missing table index" => "Fehlt: Tabellenindex",
+        "Missing {name}" => "Fehlt: {name}",
+        "DAO field not found" => "Nicht gefunden: Feld",
+        "DAO table not found" => "Nicht gefunden: Tabellen",
+        "DAO workspace not found" => "Nicht gefunden: Arbeitsbereich",
+        "Entity not found" => "Nicht gefunden: Element",
+        "Layer not found" => "Nicht gefunden: Layer",
+        "DAO database is closed" => "Geschlossen: Datenbank",
+        "DAO recordset is closed" => "Geschlossen: Datensatzgruppe",
+        "Expected a DAO recordset" => "Erforderlich: Datensatzgruppe",
+        "Expected a layer" => "Erforderlich: Layer",
+        "VBA sandbox limit: emulation handles" => "VBA-Sandboxlimit: Objekthandles",
+        "VBA sandbox limit: emulation memory" => "VBA-Sandboxlimit: Speicher",
+        "VBA sandbox limit: recordset cells" => "VBA-Sandboxlimit: Datensatzzellen",
+        "VBA sandbox limit: DAO file bytes" => "VBA-Sandboxlimit: Dateidaten",
+        "VBA sandbox limit: DAO query projection" => "VBA-Sandboxlimit: Abfragespalten",
+        "DAO record limit" => "VBA-Sandboxlimit: Datensätze",
+        "No drawing" => "Keine Zeichnung",
+        "AutoCAD point requires three coordinates" => "Ein AutoCAD-Punkt benötigt drei Koordinaten",
+        "AutoCAD requires a one-dimensional coordinate array" => "AutoCAD benötigt ein eindimensionales Koordinatenarray",
+        "DAO field requires a name or index" => "Ein DAO-Feld benötigt Name oder Index",
+        "OpenDatabase requires a path" => "OpenDatabase benötigt einen Pfad",
+        "DAO path is too long" => "DAO-Pfad ist zu lang",
+        "DAO: no current record" => "DAO: kein aktueller Datensatz",
+        "non-positive radius" => "Radius muss positiv sein",
+        "invalid multiline text or width" => "ungültiger mehrzeiliger Text oder ungültige Breite",
+        "drawing text limit" => "Textlimit der Zeichnung",
+        "DAO/AutoCAD.{member} not supported in GridCraft (no disk/network/system access)" => {
+            "DAO/AutoCAD.{member} wird in GridCraft nicht unterstützt (kein Datenträger-, Netzwerk- oder Systemzugriff)"
+        }
+        "Invalid DXF drawing: {detail}" => "Ungültige DXF-Zeichnung: {detail}",
+
+        "Choose the .mdb file required by the macro: {path}" => "Wählen Sie die vom Makro benötigte .mdb-Datei: {path}",
+        "Macro created a drawing — Save DXF" => "Makro hat eine Zeichnung erstellt — DXF speichern",
+        "Emulated DAO/AutoCAD: read-only MDB selection and DXF output; unknown members stop the macro." => {
+            "DAO/AutoCAD-Emulation: MDB nur lesen und DXF ausgeben; unbekannte Elemente stoppen das Makro."
+        }
+        "DAO write operations are not supported" => "DAO-Schreibvorgänge werden nicht unterstützt",
+        "DAO file selection was cancelled; macro stopped" => "DAO-Dateiauswahl abgebrochen; Makro gestoppt",
+        "AppActivate/ChDir/ChDrive/CurDir ignored by in-memory emulation" => "Emulation im Speicher ignoriert AppActivate/ChDir/ChDrive/CurDir",
+        "DAO: unsupported or invalid SELECT query" => "DAO: nicht unterstützte oder ungültige SELECT-Abfrage",
+
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "Diese Arbeitsmappe enthält VBA-Makros. Unterstützte Makros können mit Ihrer Zustimmung im Makrodialog ausgeführt werden. .xlsm erhält sie; .xlsx entfernt sie."
         }

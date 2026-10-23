@@ -21,6 +21,7 @@ enum ExcelObject {
     Global(String),
 }
 pub(crate) struct ExcelHost {
+    pub emulation: super::emulation::Emulation,
     pub interaction: Option<super::Interaction>,
     pub session: Session,
     objects: Vec<ExcelObject>,
@@ -41,7 +42,7 @@ fn invalid(message: &str) -> Error {
 fn engine(error: crate::EngineError) -> Error {
     invalid(&error.to_string())
 }
-fn arg<'a>(args: &'a [Argument], index: usize, name: &str) -> Option<&'a Value> {
+pub(super) fn arg<'a>(args: &'a [Argument], index: usize, name: &str) -> Option<&'a Value> {
     args.iter()
         .find(|a| a.name.as_deref().is_some_and(|n| n.eq_ignore_ascii_case(name)))
         .or_else(|| args.get(index).filter(|a| a.name.is_none()))
@@ -69,6 +70,7 @@ fn cap(range: RangeRef) -> Result<()> {
 impl ExcelHost {
     pub fn new(session: Session) -> Self {
         Self {
+            emulation: Default::default(),
             interaction: None,
             session,
             objects: vec![ExcelObject::Application],
@@ -693,6 +695,54 @@ impl Host for ExcelHost {
         self.get_member_async(id, name, args).await
     }
     async fn get_member_async(&mut self, id: Object, name: &str, args: &[Argument]) -> Result<Value> {
+        let bare = matches!(self.resolve(id), Ok(ExcelObject::Global(ref n)) if n == "opendatabase");
+        if bare || self.emulation.opens_database(id, name) {
+            let path = arg(args, 0, "Name").ok_or_else(|| invalid("OpenDatabase requires a path"))?.text()?;
+            if path.len() > 65536 {
+                return Err(invalid("DAO path is too long"));
+            }
+            if let Some(bytes) = self.emulation.cached(&path) {
+                return self.emulation.open(path, bytes);
+            }
+            // A user's file-selection time must not exhaust the macro's execution quota.
+            let pause = self.clock.pause_for_picker();
+            let response = self.prompt("macro.openMdb", &[Argument::positional(Value::String(path.clone()))]).await?;
+            drop(pause);
+            if let Some(error) = response.get("error").and_then(Json::as_str) {
+                return Err(invalid(error));
+            }
+            let Some(encoded) = response.get("base64").and_then(Json::as_str) else {
+                return Err(Error { fatal: true, ..invalid("DAO file selection was cancelled; macro stopped") });
+            };
+            if encoded.len() > (32usize * 1024 * 1024).div_ceil(3) * 4 {
+                return Err(invalid("VBA sandbox limit: DAO file bytes"));
+            }
+            let bytes = crate::io::base64_decode(encoded).ok_or_else(|| invalid("Invalid DAO file bytes"))?;
+            return self.emulation.open(path, std::sync::Arc::new(bytes));
+        }
+        if id >= super::emulation::BASE {
+            return self.emulation.get(id, name, args);
+        }
+        if name.eq_ignore_ascii_case("copyfromrecordset")
+            && let ExcelObject::Range(sheet, range) = self.resolve(id)?
+        {
+            let Some(Value::Object(Some(rs))) = arg(args, 0, "Data") else { return Err(invalid("Expected a DAO recordset")) };
+            let max_rows = usize::try_from(number(args, 1, "MaxRows", 100_000)?).map_err(|_| invalid("Invalid record count"))?;
+            let max_cols = usize::try_from(number(args, 2, "MaxColumns", 256)?).map_err(|_| invalid("Invalid field count"))?;
+            let rows = self.emulation.copy_rows(*rs, max_rows, max_cols)?;
+            let count = rows.len();
+            for (r, row) in rows.into_iter().enumerate() {
+                if r.is_multiple_of(128) {
+                    gridcraft_vbarun::yield_once().await;
+                    self.check_budget()?;
+                }
+                for (c, value) in row.into_iter().enumerate() {
+                    let at = bounded(i64::from(range.start.row).saturating_add(r as i64), i64::from(range.start.col).saturating_add(c as i64))?;
+                    self.write_range(sheet, RangeRef::cell(at), "value", value)?;
+                }
+            }
+            return Ok(Value::Long(count as i32));
+        }
         if self.interaction.is_some() {
             let object = self.resolve(id)?;
             let member = match &object {
@@ -713,6 +763,9 @@ impl Host for ExcelHost {
         self.get_member(id, name, args)
     }
     async fn set_member_async(&mut self, id: Object, name: &str, args: &[Argument], value: Value) -> Result<()> {
+        if id >= super::emulation::BASE {
+            return self.emulation.set(id, name, value);
+        }
         let name = name.to_ascii_lowercase();
         let object = self.resolve(id)?;
         let object = match &object {
@@ -767,6 +820,12 @@ impl Host for ExcelHost {
     }
     fn scalar(&mut self, value: Value) -> Result<Value> {
         if let Value::Object(Some(id)) = value {
+            if id >= super::emulation::BASE {
+                return self.emulation.scalar(id);
+            }
+            if matches!(self.resolve(id), Ok(ExcelObject::Global(ref n)) if n.starts_with("curdir")) {
+                return self.get_member(id, "", &[]);
+            }
             match self.resolve(id)? {
                 ExcelObject::Range(sheet, range) => return self.read_range(sheet, range, "value"),
                 ExcelObject::Areas(sheet, ranges) => {
@@ -820,6 +879,16 @@ impl Host for ExcelHost {
     fn global(&mut self, name: &str) -> Option<Value> {
         let name = name.to_ascii_lowercase();
         let constant = match name.as_str() {
+            "dbopensnapshot" => Some(4),
+            "acbylayer" => Some(256),
+            "acbyblock" => Some(0),
+            "acred" => Some(1),
+            "acyellow" => Some(2),
+            "acgreen" => Some(3),
+            "accyan" => Some(4),
+            "acblue" => Some(5),
+            "acmagenta" => Some(6),
+            "acwhite" => Some(7),
             "xlup" => Some(-4162),
             "xldown" => Some(-4121),
             "xltoleft" => Some(-4159),
@@ -857,6 +926,8 @@ impl Host for ExcelHost {
             return Some(Value::Long(n));
         }
         match name.as_str() {
+            "dao" | "dbengine" => self.emulation.dao().ok(),
+            "opendatabase" | "appactivate" | "chdir" | "chdrive" | "curdir" | "curdir$" => self.object(ExcelObject::Global(name)).ok(),
             "application" => Some(Value::Object(Some(0))),
             "activeworkbook" | "thisworkbook" | "activesheet" | "activecell" | "selection" | "worksheetfunction" => self.application(&name, &[]).ok(),
             "sheets" | "worksheets" | "cells" | "rows" | "columns" => self.application(&name, &[]).ok(),
@@ -865,7 +936,20 @@ impl Host for ExcelHost {
             _ => None,
         }
     }
+    fn create_object(&mut self, existing: bool, args: &[Argument]) -> Result<Value> {
+        self.emulation.create(existing, args)
+    }
     fn get_member(&mut self, id: Object, name: &str, args: &[Argument]) -> Result<Value> {
+        if id >= super::emulation::BASE {
+            return self.emulation.get(id, name, args);
+        }
+        if let Ok(ExcelObject::Global(n)) = self.resolve(id)
+            && matches!(n.as_str(), "appactivate" | "chdir" | "chdrive" | "curdir" | "curdir$")
+        {
+            // The emulation has no OS window, drive or current-directory state.
+            self.log("AppActivate/ChDir/ChDrive/CurDir ignored by in-memory emulation");
+            return Ok(if n.starts_with("curdir") { Value::String(String::new()) } else { Value::Empty });
+        }
         let name = name.to_ascii_lowercase();
         match self.resolve(id)? {
             ExcelObject::Application => self.application(&name, args),
@@ -988,6 +1072,9 @@ impl Host for ExcelHost {
         }
     }
     fn set_member(&mut self, id: Object, name: &str, args: &[Argument], value: Value) -> Result<()> {
+        if id >= super::emulation::BASE {
+            return self.emulation.set(id, name, value);
+        }
         let name = name.to_ascii_lowercase();
         match self.resolve(id)? {
             ExcelObject::Areas(sheet, ranges) => {
@@ -1079,6 +1166,9 @@ impl Host for ExcelHost {
         Ok(())
     }
     fn enumerate(&mut self, id: Object) -> Result<Vec<Value>> {
+        if id >= super::emulation::BASE {
+            return self.emulation.enumerate(id);
+        }
         match self.resolve(id)? {
             ExcelObject::Range(sheet, range) | ExcelObject::Dimension(sheet, range, _) => {
                 cap(range)?;

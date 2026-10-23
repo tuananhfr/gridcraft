@@ -217,6 +217,30 @@ fn services(language: Rc<std::cell::Cell<gridcraft_ui_egui::i18n::Language>>) ->
     let clipboard: Rc<RefCell<Option<arboard::Clipboard>>> = Rc::default();
     let (html_clipboard, text_clipboard) = (clipboard.clone(), clipboard.clone());
     Services {
+        pick_macro_mdb: Some(Box::new(|title, reply| {
+            let result = rfd::FileDialog::new()
+                .set_title(title)
+                .add_filter("MDB", &["mdb"])
+                .pick_file()
+                .map(|path| {
+                    use std::io::Read;
+                    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+                    let mut bytes = Vec::new();
+                    file.take(32 * 1024 * 1024 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+                    if bytes.len() > 32 * 1024 * 1024 {
+                        return Err("VBA sandbox limit: DAO file bytes".into());
+                    }
+                    Ok(bytes)
+                })
+                .transpose();
+            *reply.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(result);
+        })),
+        save_macro_dxf: Some(Box::new(|title, bytes| {
+            if let Some(path) = rfd::FileDialog::new().set_title(title).set_file_name("macro.dxf").add_filter("DXF", &["dxf"]).save_file() {
+                std::fs::write(path, bytes).map_err(|e| e.to_string())?;
+            }
+            Ok(())
+        })),
         copy_html: Some(Box::new(move |html, text| {
             let mut clipboard = clipboard.borrow_mut();
             if clipboard.is_none() {

@@ -139,6 +139,7 @@ pub(crate) fn lex(source: &str) -> Result<Vec<Token>> {
                         continue;
                     }
                     if chars.peek().is_some_and(|c| matches!(c, '$' | '%' | '!' | '@' | '#' | '&'))
+                        && !(chars.peek() == Some(&'!') && chars.clone().nth(1).is_some_and(|c| c.is_alphabetic() || c == '_'))
                         && let Some(c) = chars.next()
                     {
                         s.push(c);

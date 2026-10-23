@@ -205,6 +205,9 @@ pub struct Notice {
 /// Host services the platform shell provides (file pickers, opening URLs).
 #[derive(Default)]
 pub struct Services {
+    /// A macro owns its reply queue so late file selections cannot open a workbook.
+    pub pick_macro_mdb: Option<Box<dyn Fn(&str, MacroFileReply)>>,
+    pub save_macro_dxf: Option<Box<dyn Fn(&str, &[u8]) -> Result<(), String>>>,
     /// Desktop: discover configured printers on a worker.
     pub printers: Option<printing::Discover>,
     /// Desktop: submit the PDF with the chosen settings on a worker.
@@ -248,6 +251,8 @@ pub struct Services {
 }
 
 /// Shared queue of files read asynchronously (browser file picker, drag and drop).
+pub type MacroFileReply = std::sync::Arc<std::sync::Mutex<Option<Result<Option<Vec<u8>>, String>>>>;
+
 pub type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;
 
 /// What became of a file handed to [`Services::download`].
