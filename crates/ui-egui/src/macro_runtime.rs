@@ -15,6 +15,12 @@ fn text<'a>(value: &'a Json, key: &str) -> &'a str {
     value.get(key).and_then(Json::as_str).unwrap_or_default()
 }
 
+pub(crate) fn udf_consent(app: &mut SheetApp) {
+    if let Some(doc) = app.session.active() {
+        app.macro_runtime.consent = Some((doc.uid, String::new(), false));
+    }
+}
+
 fn begin(app: &mut SheetApp, name: String) {
     if app.macro_runtime.task.is_some() {
         return;
@@ -188,23 +194,37 @@ pub(crate) fn modals(app: &mut SheetApp, ctx: &egui::Context) {
         }
         let mut allow = false;
         let mut cancel = false;
+        // An empty name is the formula-cell consent: nothing runs and UDFs cannot write.
+        let functions_only = name.is_empty();
         egui::Modal::new(egui::Id::new("macro_consent")).show(ctx, |ui| {
             ui.set_max_width((ctx.content_rect().width() - 48.0).clamp(220.0, 420.0));
-            ui.heading(tr(ui, "Allow this macro?"));
-            ui.label(&name);
-            ui.label(tr(ui, "This level-1 macro can change cells. Consent lasts for this document session and can be revoked."));
+            if functions_only {
+                ui.heading(tr(ui, "Allow VBA functions in formulas?"));
+                ui.label(tr(
+                    ui,
+                    "VBA functions in this file will calculate formula cells. They can only read cells. Consent lasts for this document session and can be revoked.",
+                ));
+            } else {
+                ui.heading(tr(ui, "Allow this macro?"));
+                ui.label(&name);
+                ui.label(tr(ui, "This level-1 macro can change cells. Consent lasts for this document session and can be revoked."));
+            }
             if event {
                 ui.label(tr(ui, "Event — automatic execution is not supported"));
             }
             ui.horizontal_wrapped(|ui| {
-                allow = ui.button(tr(ui, "Allow and run")).clicked();
+                allow = ui.button(tr(ui, if functions_only { "Allow VBA functions" } else { "Allow and run" })).clicked();
                 cancel = ui.button(tr(ui, "Cancel")).clicked();
             });
         });
         if allow {
             app.macro_runtime.consent = None;
             if app.run("macros.consent", json!({"allow":true})).is_ok() {
-                begin(app, name);
+                if !name.is_empty() {
+                    begin(app, name);
+                } else {
+                    app.show_calculation_notice(true);
+                }
             }
         } else if cancel {
             app.macro_runtime.consent = None;
@@ -306,6 +326,9 @@ mod tests {
                 "Allow this macro?",
                 "This level-1 macro can change cells. Consent lasts for this document session and can be revoked.",
                 "Allow and run",
+                "Allow VBA functions in formulas?",
+                "VBA functions in this file will calculate formula cells. They can only read cells. Consent lasts for this document session and can be revoked.",
+                "Allow VBA functions",
                 "Macro changes were rolled back; the workbook is unchanged.",
                 "Compatibility level {level} is not supported.",
                 "Macro execution stopped.",

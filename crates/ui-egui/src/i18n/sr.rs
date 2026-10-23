@@ -2,6 +2,12 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Enable macros to calculate" => "Омогући макрое за израчунавање",
+        "VBA function error ({module}, line {line}): {detail}" => "Грешка VBA функције ({module}, ред {line}): {detail}",
+        "VBA function exceeded its limits ({module}, line {line}): {detail}" => {
+            "VBA функција је прекорачила ограничења ({module}, ред {line}): {detail}"
+        }
+
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "Ова радна свеска садржи VBA макрое. Подржане макрое можете покренути уз сагласност у дијалогу Макрои. Формат .xlsm их чува, а .xlsx уклања."
         }
@@ -28,6 +34,11 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
             "Овај макро нивоа 1 може мењати ћелије. Опозива сагласност важи само за ову сесију документа."
         }
         "Allow and run" => "Дозволи и покрени",
+        "Allow VBA functions in formulas?" => "Дозволити VBA функције у формулама?",
+        "VBA functions in this file will calculate formula cells. They can only read cells. Consent lasts for this document session and can be revoked." => {
+            "VBA функције из ове датотеке рачунаће ћелије са формулама. Могу само да читају ћелије. Сагласност важи за ову сесију документа и може се опозвати."
+        }
+        "Allow VBA functions" => "Дозволи VBA функције",
         "Macro changes were rolled back; the workbook is unchanged." => "Измене макроа су поништене; радна свеска није промењена.",
         "Compatibility level {level} is not supported." => "Ниво компатибилности {level} није подржан.",
         "Macro execution stopped." => "Извршавање макроа је заустављено.",

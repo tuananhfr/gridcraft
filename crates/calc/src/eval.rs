@@ -49,9 +49,37 @@ fn err(e: CellError) -> Ev {
     Ev::V(Value::Error(e))
 }
 
+/// A reference retains its identity for hosts that expose read-only range objects.
+#[derive(Clone, Debug)]
+pub enum ExternalArg {
+    Value(Value),
+    Range(Area),
+}
+
+#[derive(Clone, Debug)]
+pub struct ExternalError {
+    pub message: String,
+    pub module: String,
+    pub line: usize,
+    pub limit: bool,
+}
+
+/// Engine-supplied capabilities; calc never depends on an interpreter.
+pub trait ExternalFunctions: std::fmt::Debug + Send + Sync {
+    fn call(&self, host: &mut dyn Host, sheet: usize, at: CellRef, name: &str, args: &[ExternalArg]) -> Option<Value>;
+    fn resolves(&self, wb: &Workbook, name: &str) -> bool;
+}
+
 /// What the evaluator needs from its surroundings.
 pub trait Host {
     fn workbook(&self) -> &Workbook;
+    fn external_function(&mut self, _sheet: usize, _at: CellRef, _name: &str, _args: &[ExternalArg]) -> Option<Value> {
+        None
+    }
+    fn external_error(&mut self, _error: ExternalError) {}
+    fn note_precedent(&mut self, _area: Area) -> bool {
+        true
+    }
     /// The current value of a cell (evaluating it first if it is dirty).
     fn cell_value(&mut self, sheet: usize, c: CellRef) -> Value;
     fn now_serial(&self) -> f64;
@@ -529,7 +557,26 @@ impl<'h> Evaluator<'h> {
         }
     }
 
+    fn external_call(&mut self, name: &str, args: &[Expr]) -> Ev {
+        let mut values = Vec::with_capacity(args.len());
+        for arg in args {
+            let ev = self.eval(arg);
+            if let Ev::R(areas) = &ev
+                && areas.len() == 1
+                && let Some(area) = areas.first()
+            {
+                values.push(ExternalArg::Range(*area));
+            } else {
+                values.push(ExternalArg::Value(self.deref(ev)));
+            }
+        }
+        self.host.external_function(self.sheet, self.at, name, &values).map(Ev::V).unwrap_or_else(|| err(CellError::Name))
+    }
+
     fn call(&mut self, name: &str, args: &[Expr]) -> Ev {
+        if name.get(..7).is_some_and(|p| p.eq_ignore_ascii_case("_xludf.")) {
+            return self.external_call(name, args);
+        }
         match name {
             "IF" => {
                 if args.is_empty() || args.len() > 3 {
@@ -804,7 +851,7 @@ impl<'h> Evaluator<'h> {
             if let Ev::L(l) = self.name(name) {
                 return self.apply_lambda(&l, args);
             }
-            return err(CellError::Name);
+            return self.external_call(name, args);
         };
         if args.len() < spec.min_args || args.len() > spec.max_args {
             return err(CellError::Value);
@@ -1734,6 +1781,10 @@ pub fn resized_sum_range(sum: RangeRef, height: u32, width: u32) -> RangeRef {
 /// Collects the static references of an expression with their sheets resolved; `dynamic` is
 /// set when the formula uses INDIRECT/OFFSET/names/tables whose targets can change.
 pub fn precedents(wb: &Workbook, sheet: usize, e: &Expr) -> (Vec<Area>, bool) {
+    precedents_with_external(wb, sheet, e, None)
+}
+
+pub fn precedents_with_external(wb: &Workbook, sheet: usize, e: &Expr, external: Option<&dyn ExternalFunctions>) -> (Vec<Area>, bool) {
     let mut out = Vec::new();
     let mut dynamic = false;
     let push = |out: &mut Vec<Area>, r: &Reference, range: RangeRef| match &r.sheet {
@@ -1769,7 +1820,9 @@ pub fn precedents(wb: &Workbook, sheet: usize, e: &Expr) -> (Vec<Area>, bool) {
             dynamic = true
         }
         Expr::Name(_) | Expr::Struct(_) => dynamic = true,
-        Expr::Call(n, _) if gridcraft_functions::lookup(n).is_none() && !is_special(n) => dynamic = true,
+        Expr::Call(n, _) if gridcraft_functions::lookup(n).is_none() && !is_special(n) && !external.is_some_and(|f| f.resolves(wb, n)) => {
+            dynamic = true
+        }
         // A range ending in a function's result (`A1:INDEX(B1:B9,n)`) covers the cells between
         // the references inside it, not only those references.
         Expr::Binary(BinOp::Range, a, b) if !matches!((&**a, &**b), (Expr::Ref(_), Expr::Ref(_))) => {

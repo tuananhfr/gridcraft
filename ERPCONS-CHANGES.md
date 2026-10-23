@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: calculate consent-gated VBA worksheet functions with read-only ranges, bounded interpreter calls, precedent tracking and translated runtime diagnostics.
+
 - Both: enable cooperative macro running on web with persisted time limits (5 s web, 30 s desktop defaults), local run times and duration, event-only consent notices and precise refusal locations.
 
 - (desktop) Run VBA macros and assigned Form Control buttons from Macro with session consent, responsive Stop, interactive prompts, rollback diagnostics, run logs and a configurable time limit.

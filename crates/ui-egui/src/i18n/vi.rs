@@ -5,6 +5,10 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Enable macros to calculate" => "Bật macro để tính",
+        "VBA function error ({module}, line {line}): {detail}" => "Lỗi hàm VBA ({module}, dòng {line}): {detail}",
+        "VBA function exceeded its limits ({module}, line {line}): {detail}" => "Hàm VBA vượt giới hạn ({module}, dòng {line}): {detail}",
+
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "Sổ tính này chứa macro VBA. Bạn có thể cho phép chạy các macro được hỗ trợ trong hộp Macro. Lưu dạng .xlsm để giữ macro; lưu dạng .xlsx sẽ xóa macro."
         }
@@ -31,6 +35,11 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
             "Macro mức 1 này có thể thay đổi ô. Quyền chỉ có hiệu lực trong phiên tài liệu này và có thể thu hồi."
         }
         "Allow and run" => "Cho phép và chạy",
+        "Allow VBA functions in formulas?" => "Cho phép hàm VBA trong công thức?",
+        "VBA functions in this file will calculate formula cells. They can only read cells. Consent lasts for this document session and can be revoked." => {
+            "Các hàm VBA trong tệp này sẽ tính giá trị các ô công thức. Hàm chỉ được đọc ô, không được sửa ô. Quyền chỉ có hiệu lực trong phiên tài liệu này và có thể thu hồi."
+        }
+        "Allow VBA functions" => "Cho phép hàm VBA",
         "Macro changes were rolled back; the workbook is unchanged." => "Đã hoàn tác thay đổi của macro; sổ tính không thay đổi.",
         "Compatibility level {level} is not supported." => "Chưa hỗ trợ mức tương thích {level}.",
         "Macro execution stopped." => "Đã dừng thực thi macro.",

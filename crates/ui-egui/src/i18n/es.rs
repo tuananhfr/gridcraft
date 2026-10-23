@@ -4,6 +4,12 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Enable macros to calculate" => "Activar macros para calcular",
+        "VBA function error ({module}, line {line}): {detail}" => "Error de función VBA ({module}, línea {line}): {detail}",
+        "VBA function exceeded its limits ({module}, line {line}): {detail}" => {
+            "La función VBA superó sus límites ({module}, línea {line}): {detail}"
+        }
+
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "Este libro contiene macros VBA. Ejecute las macros compatibles desde el diálogo Macros con su consentimiento. Guardar como .xlsm las conserva; .xlsx las elimina."
         }
@@ -30,6 +36,11 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
             "Esta macro de nivel 1 puede cambiar celdas. El consentimiento revocable solo dura esta sesión del documento."
         }
         "Allow and run" => "Permitir y ejecutar",
+        "Allow VBA functions in formulas?" => "¿Permitir funciones VBA en fórmulas?",
+        "VBA functions in this file will calculate formula cells. They can only read cells. Consent lasts for this document session and can be revoked." => {
+            "Las funciones VBA de este archivo calcularán las celdas con fórmulas. Solo pueden leer celdas. El consentimiento dura esta sesión del documento y se puede revocar."
+        }
+        "Allow VBA functions" => "Permitir funciones VBA",
         "Macro changes were rolled back; the workbook is unchanged." => "Se revirtieron los cambios de la macro; el libro no ha cambiado.",
         "Compatibility level {level} is not supported." => "El nivel de compatibilidad {level} no está admitido.",
         "Macro execution stopped." => "Ejecución de macro detenida.",

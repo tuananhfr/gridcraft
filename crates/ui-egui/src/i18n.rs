@@ -186,6 +186,9 @@ pub fn set_current(ctx: &egui::Context, language: Language) {
 /// English label → Japanese. Keys are the exact interface strings (command ids, file names and
 /// document text are never translated); anything absent falls back to English.
 const JAPANESE: &[(&str, &str)] = &[
+    ("Enable macros to calculate", "計算のためにマクロを有効にする"),
+    ("VBA function error ({module}, line {line}): {detail}", "VBA 関数エラー（{module}、{line} 行）：{detail}"),
+    ("VBA function exceeded its limits ({module}, line {line}): {detail}", "VBA 関数が制限を超えました（{module}、{line} 行）：{detail}"),
     (
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them.",
         "このブックにはVBAマクロが含まれています。同意すると、対応するマクロをマクロダイアログから実行できます。.xlsm形式で保存すると保持され、.xlsx形式では削除されます。",
@@ -206,6 +209,12 @@ const JAPANESE: &[(&str, &str)] = &[
         "このレベル1マクロはセルを変更できます。同意はこの文書セッションのみで有効で、取り消せます。",
     ),
     ("Allow and run", "許可して実行"),
+    ("Allow VBA functions in formulas?", "数式でVBA関数を許可しますか？"),
+    (
+        "VBA functions in this file will calculate formula cells. They can only read cells. Consent lasts for this document session and can be revoked.",
+        "このファイルのVBA関数で数式セルを計算します。関数はセルを読み取るだけです。同意はこの文書セッションのみで有効で、取り消せます。",
+    ),
+    ("Allow VBA functions", "VBA関数を許可"),
     ("Macro changes were rolled back; the workbook is unchanged.", "マクロの変更を元に戻しました。ブックは変更されていません。"),
     ("Compatibility level {level} is not supported.", "互換性レベル{level}は未対応です。"),
     ("Macro execution stopped.", "マクロの実行を停止しました。"),

@@ -2,6 +2,10 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Enable macros to calculate" => "계산하려면 매크로 사용",
+        "VBA function error ({module}, line {line}): {detail}" => "VBA 함수 오류 ({module}, {line}행): {detail}",
+        "VBA function exceeded its limits ({module}, line {line}): {detail}" => "VBA 함수 제한 초과 ({module}, {line}행): {detail}",
+
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "이 통합 문서에는 VBA 매크로가 포함되어 있습니다. 동의하면 매크로 대화 상자에서 지원되는 매크로를 실행할 수 있습니다. .xlsm으로 저장하면 유지되고 .xlsx로 저장하면 제거됩니다."
         }
@@ -28,6 +32,11 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
             "이 수준 1 매크로는 셀을 변경할 수 있습니다. 동의는 현재 문서 세션에만 적용되며 철회할 수 있습니다."
         }
         "Allow and run" => "허용 및 실행",
+        "Allow VBA functions in formulas?" => "수식에서 VBA 함수를 허용하시겠습니까?",
+        "VBA functions in this file will calculate formula cells. They can only read cells. Consent lasts for this document session and can be revoked." => {
+            "이 파일의 VBA 함수가 수식 셀을 계산합니다. 함수는 셀을 읽기만 할 수 있습니다. 동의는 이 문서 세션 동안만 유효하며 취소할 수 있습니다."
+        }
+        "Allow VBA functions" => "VBA 함수 허용",
         "Macro changes were rolled back; the workbook is unchanged." => "매크로 변경 사항이 취소되었습니다. 통합 문서는 변경되지 않았습니다.",
         "Compatibility level {level} is not supported." => "호환성 수준 {level}은 지원되지 않습니다.",
         "Macro execution stopped." => "매크로 실행이 중지되었습니다.",

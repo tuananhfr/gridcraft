@@ -47,6 +47,12 @@ fn parameters(ui: &egui::Ui, procedure: &Json) -> String {
 
 pub fn diagnostic_text(language: crate::i18n::Language, error: &Json) -> String {
     let reason = language.tr(text(error, "reason"));
+    if text(error, "cause") == "udfRuntime" {
+        return reason
+            .replace("{module}", text(error, "module"))
+            .replace("{line}", &error.get("line").and_then(Json::as_u64).unwrap_or(0).to_string())
+            .replace("{detail}", text(error, "detail"));
+    }
     if matches!(text(error, "cause"), "udfUnavailable" | "missingUdf") {
         reason
             .replace("{name}", text(error, "symbol"))

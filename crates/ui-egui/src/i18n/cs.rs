@@ -2,6 +2,10 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Enable macros to calculate" => "Povolit makra pro výpočet",
+        "VBA function error ({module}, line {line}): {detail}" => "Chyba funkce VBA ({module}, řádek {line}): {detail}",
+        "VBA function exceeded its limits ({module}, line {line}): {detail}" => "Funkce VBA překročila limity ({module}, řádek {line}): {detail}",
+
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "Tento sešit obsahuje makra VBA. Podporovaná makra lze s vaším souhlasem spustit v dialogu Makra. Uložení jako .xlsm je zachová; .xlsx je odstraní."
         }
@@ -28,6 +32,11 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
             "Toto makro úrovně 1 může měnit buňky. Odvolatelný souhlas platí pouze pro tuto relaci dokumentu."
         }
         "Allow and run" => "Povolit a spustit",
+        "Allow VBA functions in formulas?" => "Povolit funkce VBA ve vzorcích?",
+        "VBA functions in this file will calculate formula cells. They can only read cells. Consent lasts for this document session and can be revoked." => {
+            "Funkce VBA v tomto souboru budou počítat buňky se vzorci. Buňky mohou pouze číst. Souhlas platí pro tuto relaci dokumentu a lze jej odvolat."
+        }
+        "Allow VBA functions" => "Povolit funkce VBA",
         "Macro changes were rolled back; the workbook is unchanged." => "Změny makra byly vráceny; sešit se nezměnil.",
         "Compatibility level {level} is not supported." => "Úroveň kompatibility {level} není podporována.",
         "Macro execution stopped." => "Provádění makra zastaveno.",

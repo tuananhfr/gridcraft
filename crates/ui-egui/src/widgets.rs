@@ -371,7 +371,11 @@ pub fn notice_bar(app: &mut SheetApp, ui: &mut Ui) {
         });
     });
     if let Some((_, dialog)) = action {
-        app.open_dialog(&dialog, serde_json::json!({}));
+        if dialog == "udfConsent" {
+            crate::macro_runtime::udf_consent(app);
+        } else {
+            app.open_dialog(&dialog, serde_json::json!({}));
+        }
     }
     if dismiss {
         app.notice = None;

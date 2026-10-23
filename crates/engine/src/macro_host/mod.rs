@@ -1,5 +1,6 @@
 //! Explicit, consent-gated macro execution. Opening documents never starts a run or fires events.
 mod host;
+mod udf;
 use crate::{EngineError, HistoryEntry, Result, Session};
 use gridcraft_model::Workbook;
 use gridcraft_vbarun::{Clock, Error, Interpreter, Limits, Program};
@@ -409,14 +410,20 @@ impl Session {
     }
 }
 pub(crate) fn consent(session: &mut Session, params: &Json) -> Result<Json> {
-    let state = &mut session.doc_mut()?.macro_state;
+    let doc = session.doc_mut()?;
+    let state = &mut doc.macro_state;
     if let Some(allow) = params.get("allow").and_then(Json::as_bool) {
         state.consent = allow;
+        doc.calc.external = allow.then(|| Arc::new(udf::Functions::new(&doc.wb)) as Arc<dyn gridcraft_calc::eval::ExternalFunctions>);
         if !allow {
             state.cancellation.store(true, Ordering::Relaxed);
         }
     }
-    Ok(json!({"consent":state.consent,"persisted":false,"events":"notSupported"}))
+    let allowed = state.consent;
+    if params.get("allow").and_then(Json::as_bool).is_some() {
+        doc.calc.recalc_all(Arc::make_mut(&mut doc.wb));
+    }
+    Ok(json!({"consent":allowed,"persisted":false,"events":"notSupported"}))
 }
 pub(crate) fn stop(session: &mut Session, _: &Json) -> Result<Json> {
     let state = &session.doc()?.macro_state;

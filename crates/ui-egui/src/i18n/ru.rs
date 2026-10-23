@@ -2,6 +2,12 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Enable macros to calculate" => "Включить макросы для вычисления",
+        "VBA function error ({module}, line {line}): {detail}" => "Ошибка функции VBA ({module}, строка {line}): {detail}",
+        "VBA function exceeded its limits ({module}, line {line}): {detail}" => {
+            "Функция VBA превысила ограничения ({module}, строка {line}): {detail}"
+        }
+
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "Эта книга содержит макросы VBA. Поддерживаемые макросы можно запускать с вашего согласия в окне макросов. Формат .xlsm сохраняет их, а .xlsx удаляет."
         }
@@ -28,6 +34,11 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
             "Этот макрос уровня 1 может изменять ячейки. Согласие действует только в этом сеансе документа и может быть отозвано."
         }
         "Allow and run" => "Разрешить и запустить",
+        "Allow VBA functions in formulas?" => "Разрешить функции VBA в формулах?",
+        "VBA functions in this file will calculate formula cells. They can only read cells. Consent lasts for this document session and can be revoked." => {
+            "Функции VBA из этого файла будут вычислять ячейки с формулами. Они могут только читать ячейки. Согласие действует в этом сеансе документа и может быть отозвано."
+        }
+        "Allow VBA functions" => "Разрешить функции VBA",
         "Macro changes were rolled back; the workbook is unchanged." => "Изменения макроса отменены; книга не изменена.",
         "Compatibility level {level} is not supported." => "Уровень совместимости {level} не поддерживается.",
         "Macro execution stopped." => "Выполнение макроса остановлено.",

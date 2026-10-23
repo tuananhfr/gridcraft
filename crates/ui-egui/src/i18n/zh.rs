@@ -2,6 +2,10 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Enable macros to calculate" => "启用宏以计算",
+        "VBA function error ({module}, line {line}): {detail}" => "VBA 函数错误（{module}，第 {line} 行）：{detail}",
+        "VBA function exceeded its limits ({module}, line {line}): {detail}" => "VBA 函数超出限制（{module}，第 {line} 行）：{detail}",
+
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "此工作簿包含 VBA 宏。经您同意，可从“宏”对话框运行受支持的宏。另存为 .xlsm 会保留宏，另存为 .xlsx 会删除宏。"
         }
@@ -28,6 +32,11 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
             "此级别 1 宏可以更改单元格。许可仅在当前文档会话有效，并且可以撤销。"
         }
         "Allow and run" => "允许并运行",
+        "Allow VBA functions in formulas?" => "允许在公式中使用 VBA 函数？",
+        "VBA functions in this file will calculate formula cells. They can only read cells. Consent lasts for this document session and can be revoked." => {
+            "此文件中的 VBA 函数将计算公式单元格。函数只能读取单元格。同意仅在本文档会话中有效，可以撤销。"
+        }
+        "Allow VBA functions" => "允许 VBA 函数",
         "Macro changes were rolled back; the workbook is unchanged." => "宏更改已回滚；工作簿保持不变。",
         "Compatibility level {level} is not supported." => "不支持兼容性级别 {level}。",
         "Macro execution stopped." => "宏执行已停止。",

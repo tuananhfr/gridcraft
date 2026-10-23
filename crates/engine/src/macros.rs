@@ -28,6 +28,15 @@ pub fn project(wb: &Workbook) -> Option<Analysis> {
 }
 
 pub const UDF_UNAVAILABLE: &str = "VBA function {name} ({module}, line {line}) — macros are not run in GridCraft, so it cannot be calculated yet.";
+pub const UDF_RUNTIME: &str = "VBA function error ({module}, line {line}): {detail}";
+pub const UDF_LIMIT: &str = "VBA function exceeded its limits ({module}, line {line}): {detail}";
+
+pub fn udf_runtime_diagnostic(doc: &crate::DocState, sheet: usize, cell: gridcraft_core::CellRef) -> Option<Json> {
+    let error = doc.calc.external_errors.get(&(sheet, cell))?;
+    Some(json!({"cause":"udfRuntime", "reason": if error.limit { UDF_LIMIT } else { UDF_RUNTIME },
+        "module": error.module, "line": error.line, "detail": error.message, "suggestion":"View code"}))
+}
+
 pub const UDF_MISSING: &str = "Function {name} was not found in this file's macros.";
 pub const READ_ERROR: &str = "Could not read the VBA project";
 

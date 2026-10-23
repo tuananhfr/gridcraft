@@ -509,7 +509,9 @@ fn error_checking(s: &mut Session, _: &Json) -> Result<Json> {
             } else {
                 ("staleCache", "Stale cached value (Manual)", "Calculate the sheet or workbook.", String::new())
             };
-            let udf = (error == Some(CellError::Name)).then(|| crate::macros::udf_diagnostic_with(analysis.as_ref(), &d.wb, si, cell)).flatten();
+            let udf = crate::macros::udf_runtime_diagnostic(d, si, c).or_else(|| {
+                (error == Some(CellError::Name)).then(|| crate::macros::udf_diagnostic_with(analysis.as_ref(), &d.wb, si, cell)).flatten()
+            });
             out.push(json!({"sheet": sh.name, "cell": c.a1(), "udf": udf, "error": error.map(|e| e.as_str()).unwrap_or("notCalculated"),
                 "cause": cause, "reason": reason, "suggestion": suggestion, "symbol": symbol,
                 "formula": cell.formula.as_ref().map(|f| format!("={}", f.text))}));

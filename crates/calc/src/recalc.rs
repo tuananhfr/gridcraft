@@ -44,7 +44,7 @@ use gridcraft_core::{Array, CellError, CellRef, RangeRef, Value};
 use gridcraft_formula::Expr;
 use gridcraft_model::{CalcMode, Workbook};
 
-use crate::eval::{Area, Evaluator, Host, precedents};
+use crate::eval::{Area, Evaluator, Host};
 
 pub type Key = (usize, CellRef);
 
@@ -380,6 +380,8 @@ impl NotCalculated {
 #[derive(Clone, Debug)]
 pub struct Calc {
     pub graph: Graph,
+    pub external: Option<std::sync::Arc<dyn crate::eval::ExternalFunctions>>,
+    pub external_errors: HashMap<Key, crate::eval::ExternalError>,
     rng: u64,
     /// Fixed "now" for deterministic tests; `None` = system clock.
     pub fixed_now: Option<f64>,
@@ -395,6 +397,8 @@ impl Default for Calc {
     fn default() -> Self {
         Calc {
             graph: Graph::default(),
+            external: None,
+            external_errors: HashMap::default(),
             rng: 0x9E37_79B9_7F4A_7C15,
             fixed_now: None,
             circular: vec![],
@@ -406,6 +410,11 @@ impl Default for Calc {
 }
 
 struct PassHost<'a> {
+    external: Option<std::sync::Arc<dyn crate::eval::ExternalFunctions>>,
+    external_errors: HashMap<Key, crate::eval::ExternalError>,
+    volatile: HashSet<Key>,
+    external_callers: HashSet<Key>,
+    external_reads: HashMap<Key, Vec<Area>>,
     wb: &'a Workbook,
     exprs: &'a HashMap<Key, std::sync::Arc<Expr>>,
     results: HashMap<Key, Value>,
@@ -441,6 +450,11 @@ struct PassHost<'a> {
 impl<'a> PassHost<'a> {
     fn new(wb: &'a Workbook, exprs: &'a HashMap<Key, std::sync::Arc<Expr>>, rng: &'a mut u64, now: f64) -> Self {
         PassHost {
+            external: None,
+            external_errors: HashMap::default(),
+            volatile: HashSet::default(),
+            external_callers: HashSet::default(),
+            external_reads: HashMap::default(),
             wb,
             exprs,
             results: HashMap::with_capacity_and_hasher(exprs.len(), Default::default()),
@@ -663,6 +677,36 @@ fn fit_to_range(v: Value, range: RangeRef) -> Value {
 }
 
 impl Host for PassHost<'_> {
+    fn external_function(&mut self, sheet: usize, at: CellRef, name: &str, args: &[crate::eval::ExternalArg]) -> Option<Value> {
+        let external = self.external.clone()?;
+        if let Some(key) = self.stack.last() {
+            self.external_callers.insert(*key);
+        }
+        external.call(self, sheet, at, name, args)
+    }
+    fn note_precedent(&mut self, area: Area) -> bool {
+        if let Some(key) = self.stack.last() {
+            let reads = self.external_reads.entry(*key).or_default();
+            if !reads.contains(&area) {
+                if reads.len() >= 4096 {
+                    return false;
+                }
+                reads.push(area);
+            }
+        }
+        true
+    }
+    fn external_error(&mut self, error: crate::eval::ExternalError) {
+        if let Some(key) = self.stack.last() {
+            self.external_errors.insert(*key, error);
+        }
+    }
+    fn note_volatile(&mut self) {
+        if let Some(key) = self.stack.last() {
+            self.volatile.insert(*key);
+        }
+    }
+
     fn workbook(&self) -> &Workbook {
         self.wb
     }
@@ -855,13 +899,14 @@ impl Calc {
 
     /// Rebuilds the graph from scratch.
     pub fn rebuild(&mut self, wb: &Workbook) {
+        self.external_errors.clear();
         self.graph = Graph::default();
         for (si, sheet) in wb.sheets.iter().enumerate() {
             for (c, cell) in sheet.cells.iter() {
                 if let Some(f) = &cell.formula
                     && let Some(e) = f.expr()
                 {
-                    let (areas, dynamic) = precedents(wb, si, &e);
+                    let (areas, dynamic) = crate::eval::precedents_with_external(wb, si, &e, self.external.as_deref());
                     self.graph.insert((si, c), Node { areas, dynamic });
                 }
             }
@@ -916,10 +961,11 @@ impl Calc {
     pub fn cells_changed(&mut self, wb: &mut Workbook, changed: &[Key]) {
         let mut cleared: Vec<(usize, RangeRef)> = Vec::new();
         for &k in changed {
+            self.external_errors.remove(&k);
             let formula = wb.sheet(k.0).and_then(|s| s.cell(k.1)).and_then(|c| c.formula.clone());
             match formula.and_then(|f| f.expr()) {
                 Some(e) => {
-                    let (areas, dynamic) = precedents(wb, k.0, &e);
+                    let (areas, dynamic) = crate::eval::precedents_with_external(wb, k.0, &e, self.external.as_deref());
                     self.graph.insert(k, Node { areas, dynamic });
                 }
                 None => {
@@ -1093,6 +1139,7 @@ impl Calc {
                 if precedents {
                     host.scheduled = dirty.iter().copied().collect();
                 }
+                host.external = self.external.clone();
                 host.iterate = wb.calc.iterative;
                 host.not_calculated = self.not_calculated.clone();
                 for k in &dirty {
@@ -1103,6 +1150,21 @@ impl Calc {
                     if std::env::var_os("GRIDCRAFT_PROFILE").is_some() {
                         eprintln!("  iterative calculation: {} passes over {} formulas", passes, host.tainted.len());
                     }
+                }
+                for key in host.results.keys() {
+                    self.external_errors.remove(key);
+                }
+                self.external_errors.extend(host.external_errors);
+                // Only UDF callers gain reads or volatility at run time; every other node is already exact.
+                for key in &host.external_callers {
+                    if let Some(expr) = exprs.get(key) {
+                        let (mut areas, dynamic) = crate::eval::precedents_with_external(wb, key.0, expr, self.external.as_deref());
+                        areas.extend(host.external_reads.remove(key).unwrap_or_default());
+                        self.graph.insert(*key, Node { areas, dynamic: dynamic || host.volatile.contains(key) });
+                    }
+                }
+                if !host.external_callers.is_empty() {
+                    self.graph.settle();
                 }
                 (host.results, host.spills, host.cycles, host.not_calculated)
             };
