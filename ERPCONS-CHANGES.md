@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: document VBA compatibility and add an opt-in headless customer macro acceptance report without bundling customer files.
+
 - Both: calculate consent-gated VBA worksheet functions with read-only ranges, bounded interpreter calls, precedent tracking and translated runtime diagnostics.
 - Both: emulate read-only DAO queries through explicit MDB selection and AutoCAD drawing commands as DXF exports; OS focus and current-directory calls are logged no-ops.
 
