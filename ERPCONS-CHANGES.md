@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: speed up array-heavy VBA macros by reading indexed elements without whole-array copies and tracking shared variable memory incrementally, preserving calculation, undo and sandbox limits.
+
 - Both: unblock VBA calculation macros with isolated compilation, bracket/Evaluate syntax, worksheet code names and bounded Excel range/print-area host bindings.
 
 - Both: document VBA compatibility and add an opt-in headless customer macro acceptance report without bundling customer files.

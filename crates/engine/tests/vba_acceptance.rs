@@ -29,6 +29,7 @@ fn report(name: &str, result: &Value, prompts: usize) {
 
 #[test]
 #[ignore = "requires GRIDCRAFT_VBA_SAMPLE; optional GRIDCRAFT_VBA_MDB"]
+#[allow(clippy::disallowed_methods)] // Local acceptance timing.
 fn customer_vba_acceptance() {
     let Some(path) = std::env::var_os("GRIDCRAFT_VBA_SAMPLE") else {
         println!("skipped: no GRIDCRAFT_VBA_SAMPLE");
@@ -79,6 +80,7 @@ fn customer_vba_acceptance() {
         }
         let mut session = open(&bytes, name);
         session.execute("macros.consent", json!({"allow":true})).unwrap();
+        let started = std::time::Instant::now();
         let mut task = match session.start_macro_interactive(name, MacroOptions::default()) {
             Ok(task) => task,
             Err(_) => {
@@ -94,6 +96,7 @@ fn customer_vba_acceptance() {
         let mut prompts = 0;
         loop {
             if let Some(result) = session.step_macro(&mut task).unwrap() {
+                println!("timing macro={name} ms={}", started.elapsed().as_millis());
                 report(name, &result, prompts);
                 break;
             }

@@ -10,6 +10,8 @@ struct Slot {
     value: Value,
     ty: String,
     constant: bool,
+    // Shared ByRef aliases must account for each slot once, without rescanning its arrays.
+    memory: usize,
 }
 #[derive(Clone)]
 struct Place {
@@ -17,15 +19,21 @@ struct Place {
     indices: Vec<i32>,
 }
 impl Place {
-    fn read(&self) -> Result<Value> {
+    fn with_value<R>(&self, f: impl FnOnce(&Value) -> R) -> Result<R> {
         let slot = self.slot.borrow();
         if self.indices.is_empty() {
-            return Ok(slot.value.clone());
+            return Ok(f(&slot.value));
         }
         let Value::Array(a) = &slot.value else {
             return Err(mismatch());
         };
-        a.values.get(a.offset(&self.indices)?).cloned().ok_or_else(|| Error::runtime(9, "Subscript out of range"))
+        a.values.get(a.offset(&self.indices)?).map(f).ok_or_else(|| Error::runtime(9, "Subscript out of range"))
+    }
+    fn read(&self) -> Result<Value> {
+        self.with_value(Clone::clone)
+    }
+    fn object_value(&self) -> Result<Option<Value>> {
+        self.with_value(|value| if let Value::Object(id) = value { Some(Value::Object(*id)) } else { None })
     }
     fn write(&self, v: Value) -> Result<()> {
         let mut slot = self.slot.borrow_mut();
@@ -33,7 +41,9 @@ impl Place {
             return Err(Error::runtime(5, "Assignment to constant"));
         }
         if self.indices.is_empty() {
-            slot.value = v.coerce(&slot.ty)?;
+            let value = v.coerce(&slot.ty)?;
+            slot.memory = value.memory();
+            slot.value = value;
         } else {
             let Value::Array(a) = &mut slot.value else {
                 return Err(mismatch());
@@ -41,13 +51,17 @@ impl Place {
             let i = a.offset(&self.indices)?;
             let v = v.coerce(&a.element_type)?;
             let dest = a.values.get_mut(i).ok_or_else(|| Error::runtime(9, "Subscript out of range"))?;
+            let old_memory = dest.memory();
+            let new_memory = v.memory();
             *dest = v;
+            slot.memory = slot.memory.saturating_sub(old_memory).saturating_add(new_memory);
         }
         Ok(())
     }
 }
 fn place(value: Value, ty: String, constant: bool) -> Place {
-    Place { slot: Rc::new(RefCell::new(Slot { value, ty, constant })), indices: Vec::new() }
+    let memory = value.memory();
+    Place { slot: Rc::new(RefCell::new(Slot { value, ty, constant, memory })), indices: Vec::new() }
 }
 struct Frame {
     module: usize,
@@ -244,7 +258,7 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
         }
         for p in self.globals.iter().flat_map(|g| g.values()).chain(self.statics.values()).chain(self.frames.iter().flat_map(|f| f.vars.values())) {
             if seen.insert(Rc::as_ptr(&p.slot) as usize) {
-                n = n.saturating_add(p.slot.borrow().value.memory());
+                n = n.saturating_add(p.slot.borrow().memory);
             }
         }
         if n > self.limits.max_memory_bytes {
@@ -496,7 +510,10 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                         Box::pin(self.invoke(module, &setter, supplied)).await?;
                         return self.memory();
                     }
-                    let object = self.lookup(name).ok().map(|p| p.read()).transpose()?.or_else(|| self.host.global(name));
+                    let object = match self.lookup(name) {
+                        Ok(p) => p.object_value()?,
+                        Err(_) => self.host.global(name),
+                    };
                     if let Some(Value::Object(id)) = object {
                         let id = object_id(Value::Object(id))?;
                         let args = self.arguments(args).await?;
@@ -574,17 +591,17 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
     async fn call(&mut self, target: &Expr, args: &[Arg], method: bool) -> Result<Value> {
         if let Expr::Name(name) = target {
             if let Ok(p) = self.lookup(name) {
-                match p.read()? {
-                    Value::Array(a) => {
-                        let indices = self.indices(args).await?;
-                        return a.values.get(a.offset(&indices)?).cloned().ok_or_else(|| Error::runtime(9, "Subscript out of range"));
-                    }
-                    Value::Object(id) => {
-                        let id = object_id(Value::Object(id))?;
-                        let args = self.arguments(args).await?;
-                        return self.host.get_member_async(id, "", &args).await;
-                    }
-                    _ => {}
+                if p.with_value(|value| matches!(value, Value::Array(_)))? {
+                    let indices = self.indices(args).await?;
+                    return p.with_value(|value| {
+                        let Value::Array(a) = value else { return Err(mismatch()) };
+                        a.values.get(a.offset(&indices)?).cloned().ok_or_else(|| Error::runtime(9, "Subscript out of range"))
+                    })?;
+                }
+                if let Some(Value::Object(id)) = p.object_value()? {
+                    let id = object_id(Value::Object(id))?;
+                    let args = self.arguments(args).await?;
+                    return self.host.get_member_async(id, "", &args).await;
                 }
             }
             let module = self.frame()?.module;
@@ -1052,7 +1069,10 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                     let v = Box::pin(self.eval(&value)).await?;
                     let v = self.host.scalar(v)?;
                     let object = if let Expr::Name(name) = &dest {
-                        self.lookup(name).ok().map(|p| p.read()).transpose()?.or_else(|| self.host.global(name))
+                        match self.lookup(name) {
+                            Ok(p) => p.object_value()?,
+                            Err(_) => self.host.global(name),
+                        }
                     } else {
                         None
                     };
@@ -1459,4 +1479,51 @@ impl std::future::Future for YieldOnce {
 /// Returns control to an embedding frame loop without requiring an executor dependency.
 pub async fn yield_once() {
     YieldOnce(false).await;
+}
+
+#[cfg(test)]
+mod array_memory_tests {
+    use super::*;
+
+    #[test]
+    fn indexed_writes_keep_shared_slot_memory_exact() {
+        let p = place(Value::Array(Array::new(vec![(1, 2)], "variant".into(), false, 10).unwrap()), "variant".into(), false);
+        let mut element = p.clone();
+        element.indices.push(1);
+        for value in [Value::String("longer".repeat(100)), Value::String("x".into()), Value::Empty] {
+            element.write(value).unwrap();
+            assert_eq!(p.slot.borrow().memory, p.slot.borrow().value.memory());
+        }
+        let before = p.slot.borrow().memory;
+        let mut invalid = p.clone();
+        invalid.indices.push(3);
+        assert!(invalid.write(Value::String("bad".into())).is_err());
+        assert_eq!(p.slot.borrow().memory, before);
+        p.write(Value::String("replacement".into())).unwrap();
+        assert_eq!(p.slot.borrow().memory, p.slot.borrow().value.memory());
+    }
+
+    #[test]
+    fn indexed_array_reads_preserve_copies_and_byref_elements() {
+        let program = Program::parse(
+            "Test",
+            "Function Main()\nDim a(1 To 2, 1 To 2) As Long\nDim b As Variant\na(1,1) = 7\nb = a\nChange a(1,1)\na(2,2) = b(1,1) + a(1,1)\nMain = a(2,2)\nEnd Function\nSub Change(ByRef target As Long)\ntarget = target + 1\nEnd Sub",
+        )
+        .unwrap();
+        let result = Interpreter::new(&program, crate::NoHost, crate::FixedClock, Limits::default()).run("Test", "Main", &[]).unwrap();
+        assert_eq!(result.number().unwrap(), 15.0);
+    }
+
+    #[test]
+    fn indexed_array_growth_still_exceeds_interpreter_memory_limit() {
+        let program = Program::parse(
+            "Test",
+            "Sub Main()\nDim a(1 To 30) As Variant\nDim i As Long\nFor i = 1 To 30\na(i) = String(1000, \"x\")\nNext i\nEnd Sub",
+        )
+        .unwrap();
+        let limits = Limits { max_memory_bytes: 16_000, ..Limits::default() };
+        let error = Interpreter::new(&program, crate::NoHost, crate::FixedClock, limits).run("Test", "Main", &[]).unwrap_err();
+        assert!(error.fatal);
+        assert!(error.description.contains("memory"));
+    }
 }
