@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: tighten narrow status bar spacing so selection Sum stays visible at 320 px beside the notes and zoom controls.
+
 - Both: speed up array-heavy VBA macros by reading indexed elements without whole-array copies and tracking shared variable memory incrementally, preserving calculation, undo and sandbox limits.
 
 - Both: unblock VBA calculation macros with isolated compilation, bracket/Evaluate syntax, worksheet code names and bounded Excel range/print-area host bindings.

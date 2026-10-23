@@ -242,6 +242,10 @@ pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
             let fits =
                 |ui: &Ui, text: &str| !narrow || text_width(ui, text) + 12.0 + ui.spacing().item_spacing.x <= ui.available_width() - right_fixed;
             ui.horizontal_centered(|ui| {
+                if narrow {
+                    // Keep room for Sum beside the zoom controls at phone widths.
+                    ui.spacing_mut().item_spacing.x = 4.0;
+                }
                 let mode = match app.session.mode {
                     gridcraft_engine::Mode::Ready => "Ready",
                     gridcraft_engine::Mode::Enter => "Enter",
