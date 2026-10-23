@@ -817,8 +817,11 @@ fn macros_dialog_lists_vba_and_scripts() {
     h.run_steps(3);
     let d = h.state().dialog.as_ref().expect("macros dialog open");
     assert_eq!(d.name(), "macros");
-    let items = d.result.as_ref().and_then(|r| r.as_array()).cloned().unwrap_or_default();
-    assert!(items.iter().any(|i| i.get("kind").and_then(|k| k.as_str()) == Some("vba")), "{items:?}");
+    let result = d.result.clone().unwrap_or_default();
+    assert_eq!(result.get("present"), Some(&json!(true)), "{result:?}");
+    // A bare OLE header is not a readable project: the dialog explains it instead of listing procedures.
+    assert_eq!(result.pointer("/error/message").and_then(|m| m.as_str()), Some(gridcraft_engine::macros::READ_ERROR), "{result:?}");
+    assert!(result.get("scripts").and_then(|s| s.as_array()).is_some(), "{result:?}");
     h.state_mut().dialog = None;
 }
 
