@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: unblock VBA calculation macros with isolated compilation, bracket/Evaluate syntax, worksheet code names and bounded Excel range/print-area host bindings.
+
 - Both: document VBA compatibility and add an opt-in headless customer macro acceptance report without bundling customer files.
 
 - Both: calculate consent-gated VBA worksheet functions with read-only ranges, bounded interpreter calls, precedent tracking and translated runtime diagnostics.

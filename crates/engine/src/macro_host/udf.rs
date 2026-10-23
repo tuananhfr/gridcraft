@@ -180,6 +180,25 @@ fn to_cell(value: Value) -> gridcraft_vbarun::Result<CellValue> {
     })
 }
 impl ReadHost<'_> {
+    fn evaluate(&mut self, sheet: usize, args: &[Argument]) -> gridcraft_vbarun::Result<Value> {
+        let text = args.first().ok_or_else(invalid)?.value.text()?;
+        if let Some(area) = super::evaluation_reference(self.calc.workbook(), sheet, &text)? {
+            if area.range.count() > CELLS {
+                return Err(resource_limit());
+            }
+            return self.object(ExcelObject::Range(area));
+        }
+        let expr = gridcraft_formula::parse(text.strip_prefix('=').unwrap_or(&text)).map_err(|_| invalid())?;
+        let (areas, _) = gridcraft_calc::eval::precedents(self.calc.workbook(), sheet, &expr);
+        for area in areas {
+            if area.range.count() > CELLS || !self.calc.note_precedent(area) {
+                return Err(resource_limit());
+            }
+        }
+        let value = gridcraft_calc::eval::Evaluator::new(self.calc, sheet, CellRef::new(0, 0)).value(&expr);
+        from_cell(&value)
+    }
+
     fn object(&mut self, object: ExcelObject) -> gridcraft_vbarun::Result<Value> {
         if self.objects.len() >= CELLS as usize {
             return Err(resource_limit());
@@ -190,11 +209,11 @@ impl ReadHost<'_> {
     }
     fn range(&mut self, sheet: usize, args: &[Argument]) -> gridcraft_vbarun::Result<Value> {
         let text = args.first().ok_or_else(invalid)?.value.text()?;
-        let range = RangeRef::parse(&text).ok_or_else(invalid)?;
-        if range.count() > CELLS {
+        let area = super::evaluation_reference(self.calc.workbook(), sheet, &text)?.ok_or_else(invalid)?;
+        if area.range.count() > CELLS {
             return Err(resource_limit());
         }
-        self.object(ExcelObject::Range(Area { sheet, range }))
+        self.object(ExcelObject::Range(area))
     }
     fn values(&mut self, area: Area) -> gridcraft_vbarun::Result<Value> {
         self.values_bounded(area, &mut (1024 * 1024))
@@ -224,13 +243,18 @@ impl ReadHost<'_> {
 }
 impl Host for ReadHost<'_> {
     fn global(&mut self, name: &str) -> Option<Value> {
+        if let Some(sheet) =
+            self.calc.workbook().sheets.iter().position(|s| !s.vba_code_name.is_empty() && s.vba_code_name.eq_ignore_ascii_case(name))
+        {
+            return self.object(ExcelObject::Sheet(sheet)).ok();
+        }
         let object = match name.to_ascii_lowercase().as_str() {
             "application" => ExcelObject::Application,
             "worksheetfunction" => ExcelObject::Functions,
             "activesheet" => ExcelObject::Sheet(self.sheet),
             "thisworkbook" | "activeworkbook" => ExcelObject::Workbook,
             "worksheets" | "sheets" => ExcelObject::Sheets,
-            "range" | "cells" => ExcelObject::Global(name.to_ascii_lowercase()),
+            "evaluate" | "range" | "cells" => ExcelObject::Global(name.to_ascii_lowercase()),
             _ => return None,
         };
         self.object(object).ok()
@@ -248,7 +272,10 @@ impl Host for ReadHost<'_> {
         let object = self.objects.get(id as usize).cloned().ok_or_else(invalid)?;
         let name = name.to_ascii_lowercase();
         match (object, name.as_str()) {
+            (_, "application") if args.is_empty() => self.object(ExcelObject::Application),
             (ExcelObject::Global(global), "") => self.get_global(&global, self.sheet, args),
+            (ExcelObject::Application, "evaluate") => self.evaluate(self.sheet, args),
+            (ExcelObject::Sheet(sheet), "evaluate") => self.evaluate(sheet, args),
             (ExcelObject::Application, "volatile") => {
                 if args.first().map(|a| a.value.number()).transpose()?.is_none_or(|v| v != 0.0) {
                     self.calc.note_volatile();
@@ -335,6 +362,9 @@ impl Host for ReadHost<'_> {
 }
 impl ReadHost<'_> {
     fn get_global(&mut self, name: &str, sheet: usize, args: &[Argument]) -> gridcraft_vbarun::Result<Value> {
+        if name == "evaluate" {
+            return self.evaluate(sheet, args);
+        }
         if name == "range" {
             return self.range(sheet, args);
         }

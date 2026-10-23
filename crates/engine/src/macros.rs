@@ -129,16 +129,24 @@ pub fn inspect(wb: &Workbook) -> Json {
     let mut procedures = Vec::new();
     let mut modules = Vec::new();
     if let Some(project) = &project {
+        let compiled = crate::macro_host::execution_program(project).ok();
         for module in &project.modules {
+            let compile_error =
+                compiled.as_ref().and_then(|p| p.modules.iter().find(|m| m.name == module.name)).and_then(|m| m.compile_error.as_ref());
             modules.push(json!({"name": module.name, "kind": module.kind, "lineCount": module.source.lines().count(), "source": module.source}));
             for procedure in &module.procedures {
                 let mut value = serde_json::to_value(procedure).unwrap_or(Json::Null);
                 if let Some(value) = value.as_object_mut() {
                     value.insert("module".into(), json!(module.name));
                     value.insert(
+                        "compileError".into(),
+                        compile_error.map(|e| json!({"message":e.description,"module":e.module,"line":e.line})).unwrap_or(Json::Null),
+                    );
+                    value.insert(
                         "runnableShape".into(),
                         json!(
-                            !module.private_module
+                            compile_error.is_none()
+                                && !module.private_module
                                 && module.kind == gridcraft_vba::ModuleKind::Standard
                                 && procedure.scope == gridcraft_vba::Scope::Public
                                 && procedure.kind == gridcraft_vba::ProcKind::Sub

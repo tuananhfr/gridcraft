@@ -65,6 +65,7 @@ pub fn read_sheet(cx: &mut Ctx<'_>, part: &str, name: &str) -> Result<(Sheet, Ve
     for e in &root.children {
         match e.name.as_str() {
             "sheetPr" => {
+                sheet.vba_code_name = e.attr("codeName").unwrap_or_default().to_string();
                 if let Some(t) = e.child("tabColor") {
                     sheet.tab_color = Some(read_color(t, &cx.palette));
                 }

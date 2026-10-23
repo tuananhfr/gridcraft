@@ -11,6 +11,7 @@ pub struct Program {
 #[derive(Clone, Debug)]
 pub struct Module {
     pub name: String,
+    pub compile_error: Option<Error>,
     pub option_explicit: bool,
     pub option_base: i32,
     pub compare_text: bool,
@@ -53,6 +54,7 @@ pub(crate) enum Expr {
     Member(Box<Expr>, String),
     Invoke(Box<Expr>, Vec<Arg>),
     With,
+    Evaluate(Option<Box<Expr>>, String),
 }
 #[derive(Clone, Debug)]
 pub(crate) struct Arg {
@@ -100,10 +102,35 @@ impl Program {
         Ok(Self { modules: vec![Module::parse(name, source)?] })
     }
     pub fn from_project(project: &gridcraft_vba::Project) -> Result<Self> {
-        Ok(Self { modules: project.modules.iter().map(|m| Module::parse(&m.name, &m.source)).collect::<Result<_>>()? })
+        Ok(Self {
+            modules: project.modules.iter().map(|m| Module::parse(&m.name, &m.source).unwrap_or_else(|error| Module::failed(m, error))).collect(),
+        })
     }
 }
 impl Module {
+    pub fn failed(module: &gridcraft_vba::Module, error: Error) -> Self {
+        let procedures = module
+            .procedures
+            .iter()
+            .map(|p| {
+                let name = p.name.to_ascii_lowercase();
+                (
+                    name.clone(),
+                    Procedure { public: p.scope == gridcraft_vba::Scope::Public, name, params: Vec::new(), ty: "variant".into(), body: Vec::new() },
+                )
+            })
+            .collect();
+        Self {
+            name: module.name.clone(),
+            compile_error: Some(error),
+            option_explicit: false,
+            option_base: 0,
+            compare_text: false,
+            declarations: Vec::new(),
+            procedures,
+        }
+    }
+
     pub fn parse(name: &str, source: &str) -> Result<Self> {
         let tokens = lexer::lex(source).map_err(|mut e| {
             e.module = name.into();
@@ -191,6 +218,7 @@ impl Parser {
     fn module(&mut self, name: &str) -> Result<Module> {
         let mut m = Module {
             name: name.into(),
+            compile_error: None,
             option_explicit: false,
             option_base: 0,
             compare_text: false,
@@ -561,6 +589,14 @@ impl Parser {
         };
         Ok(Stmt { line, kind })
     }
+    fn member(&mut self, base: Expr) -> Result<Expr> {
+        if let Some(Token { kind: Kind::Evaluation(text), .. }) = self.peek().cloned() {
+            self.pos += 1;
+            Ok(Expr::Evaluate(Some(Box::new(base)), text))
+        } else {
+            Ok(Expr::Member(Box::new(base), self.word()?))
+        }
+    }
     fn expr_list(&mut self) -> Result<Vec<Expr>> {
         let mut v = vec![self.expr(0)?];
         while self.eat(",") {
@@ -624,7 +660,7 @@ impl Parser {
             self.need(")")?;
             e
         } else if self.eat(".") {
-            Expr::Member(Box::new(Expr::With), self.word()?)
+            self.member(Expr::With)?
         } else {
             let t = self.peek().cloned().ok_or_else(|| self.error("Expected expression"))?;
             self.pos += 1;
@@ -637,6 +673,7 @@ impl Parser {
                     Value::Double(n)
                 }),
                 Kind::TypedNumber(n, ty) => Expr::Literal(Value::Double(n).coerce(&ty)?),
+                Kind::Evaluation(s) => Expr::Evaluate(None, s),
                 Kind::Text(s) => Expr::Literal(Value::String(s)),
                 Kind::Date(s) => Expr::Literal(Value::String(s).coerce("date")?),
                 Kind::Word(s) => match s.as_str() {
@@ -662,7 +699,7 @@ impl Parser {
                 continue;
             }
             if self.eat(".") {
-                left = Expr::Member(Box::new(left), self.word()?);
+                left = self.member(left)?;
                 continue;
             }
             if self.eat("(") {

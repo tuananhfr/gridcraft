@@ -269,6 +269,9 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
         }
         let module_name = self.program.modules.get(module).map(|m| m.name.as_str()).unwrap_or_default();
         self.host.enter_procedure(module_name, name)?;
+        if let Some(error) = self.program.modules.get(module).and_then(|m| m.compile_error.as_ref()) {
+            return Err(error.clone());
+        }
         let proc = self
             .program
             .modules
@@ -450,6 +453,10 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
     async fn assign(&mut self, target: &Expr, value: Value) -> Result<()> {
         self.validate(&value)?;
         match target {
+            Expr::Evaluate(_, _) => {
+                let id = object_id(Box::pin(self.eval(target)).await?)?;
+                self.host.set_member_async(id, "", &[], value).await?;
+            }
             Expr::Member(base, name) => {
                 if matches!(base.as_ref(), Expr::Name(object) if object == "err") {
                     match name.as_str() {
@@ -647,6 +654,21 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                     let args = self.arguments(args).await?;
                     return self.host.get_member_async(object_id(value)?, "", &args).await;
                 }
+                if !self.program.modules.get(i).is_some_and(|m| m.procedures.contains_key(name)) {
+                    let object = self.lookup(module_name).ok().map(|p| p.read()).transpose()?.or_else(|| self.host.global(module_name));
+                    if let Some(value) = object {
+                        let args = self.arguments(args).await?;
+                        let id = object_id(value)?;
+                        return if method {
+                            self.host.call_method_async(id, name, &args).await
+                        } else {
+                            self.host.get_member_async(id, name, &args).await
+                        };
+                    }
+                    if let Some(error) = self.program.modules.get(i).and_then(|m| m.compile_error.as_ref()) {
+                        return Err(error.clone());
+                    }
+                }
                 let visible = i == self.frame()?.module || self.program.modules.get(i).and_then(|m| m.procedures.get(name)).is_some_and(|p| p.public);
                 if !visible {
                     return Err(Error::runtime(35, format!("Procedure {name} is private")));
@@ -684,6 +706,19 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
     async fn eval_inner(&mut self, e: &Expr) -> Result<Value> {
         let value = match e {
             Expr::Literal(v) => v.clone(),
+            Expr::Evaluate(base, text) => {
+                if text.len() > self.limits.max_string_length {
+                    return Err(Error::limit("string length"));
+                }
+                let expression = Value::String(text.clone());
+                self.validate(&expression)?;
+                let id = if let Some(base) = base {
+                    Box::pin(self.eval(base)).await?
+                } else {
+                    self.host.global("application").ok_or_else(|| Error::unsupported("Evaluate"))?
+                };
+                self.host.get_member_async(object_id(id)?, "evaluate", &[Argument::positional(expression)]).await?
+            }
             Expr::With => {
                 if self.with.len() <= self.frame()?.with_base {
                     return Err(Error::runtime(91, "With block not active"));
@@ -730,8 +765,8 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
                 let right = Box::pin(self.eval(b)).await?;
                 let left = self.host.scalar(left)?;
                 let right = self.host.scalar(right)?;
-                let promote = self.variant_expression(a) || self.variant_expression(b);
-                self.binary(op, left, right, promote)?
+                let variants = (self.variant_expression(a), self.variant_expression(b));
+                self.binary(op, left, right, variants)?
             }
         };
         self.validate(&value)?;
@@ -744,13 +779,16 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
             Expr::Unary(_, inner) => self.variant_expression(inner),
             Expr::Binary(_, left, right) => self.variant_expression(left) || self.variant_expression(right),
             Expr::Invoke(target, _) => match target.as_ref() {
-                Expr::Name(name) => self.program.modules.iter().find_map(|m| m.procedures.get(name)).is_some_and(|p| p.ty == "variant"),
+                Expr::Name(name) => {
+                    self.program.modules.iter().find_map(|m| m.procedures.get(name)).map_or_else(|| !intrinsic::exists(name), |p| p.ty == "variant")
+                }
                 _ => true,
             },
             _ => true,
         }
     }
-    fn binary(&mut self, op: &str, a: Value, b: Value, promote: bool) -> Result<Value> {
+    fn binary(&mut self, op: &str, a: Value, b: Value, variants: (bool, bool)) -> Result<Value> {
+        let promote = variants.0 || variants.1;
         if op == "is" {
             return match (&a, &b) {
                 (Value::Object(a), Value::Object(b)) => Ok(Value::Boolean(a == b)),
@@ -781,9 +819,16 @@ impl<'a, H: Host, C: Clock> Interpreter<'a, H, C> {
             if op == "like" {
                 return Ok(Value::Boolean(intrinsic::like(&a.text()?, &b.text()?, text, || self.tick())?));
             }
-            let order = if matches!((&a, &b), (Value::String(_), Value::String(_))) {
+            let strings = matches!((&a, &b), (Value::String(_), Value::String(_) | Value::Empty) | (Value::Empty, Value::String(_)))
+                || (matches!(a, Value::String(_)) && !variants.0 && variants.1)
+                || (matches!(b, Value::String(_)) && !variants.1 && variants.0);
+            let order = if strings {
                 let (a, b) = (a.text()?, b.text()?);
                 if text { a.to_lowercase().cmp(&b.to_lowercase()) } else { a.cmp(&b) }
+            } else if variants.0 && variants.1 && matches!(a, Value::String(_)) && b.number().is_ok() {
+                std::cmp::Ordering::Greater
+            } else if variants.0 && variants.1 && matches!(b, Value::String(_)) && a.number().is_ok() {
+                std::cmp::Ordering::Less
             } else {
                 a.number()?.partial_cmp(&b.number()?).ok_or_else(mismatch)?
             };

@@ -144,7 +144,7 @@ fn failure(message: impl Into<String>) -> EngineError {
     EngineError::Other(message.into())
 }
 
-fn execution_program(project: &gridcraft_vba::Project) -> gridcraft_vbarun::Result<Program> {
+pub(crate) fn execution_program(project: &gridcraft_vba::Project) -> gridcraft_vbarun::Result<Program> {
     let mut modules = Vec::new();
     for module in &project.modules {
         if let Ok(parsed) = gridcraft_vbarun::Module::parse(&module.name, &module.source) {
@@ -164,7 +164,7 @@ fn execution_program(project: &gridcraft_vba::Project) -> gridcraft_vbarun::Resu
                 })
                 .map(|(i, _)| i);
             let Some(end) = end else {
-                return Err(Error::runtime(1002, "Unsupported procedure has no terminator"));
+                continue;
             };
             // Dormant platform code must not prevent compiling a safe procedure in the same project.
             for line in lines.get_mut(start..=end).into_iter().flatten() {
@@ -188,7 +188,9 @@ fn execution_program(project: &gridcraft_vba::Project) -> gridcraft_vbarun::Resu
                 line.clear();
             }
         }
-        modules.push(gridcraft_vbarun::Module::parse(&module.name, &lines.join("\n"))?);
+        modules.push(
+            gridcraft_vbarun::Module::parse(&module.name, &lines.join("\n")).unwrap_or_else(|error| gridcraft_vbarun::Module::failed(module, error)),
+        );
     }
     Ok(Program { modules })
 }
@@ -488,4 +490,31 @@ pub(crate) fn run(session: &mut Session, params: &Json) -> Result<Json> {
             return Ok(result);
         }
     }
+}
+
+fn evaluation_reference(wb: &gridcraft_model::Workbook, sheet: usize, text: &str) -> gridcraft_vbarun::Result<Option<gridcraft_calc::Area>> {
+    use gridcraft_formula::{Expr, SheetSel};
+    let mut text = text.to_string();
+    for _ in 0..64 {
+        let Ok(expr) = gridcraft_formula::parse(text.strip_prefix('=').unwrap_or(&text)) else { return Ok(None) };
+        match expr {
+            Expr::Ref(reference) => {
+                let sheet = match &reference.sheet {
+                    SheetSel::Current => sheet,
+                    SheetSel::Named(name) => {
+                        wb.sheets.iter().position(|s| s.name.eq_ignore_ascii_case(name)).ok_or_else(|| Error::runtime(1004, "Worksheet not found"))?
+                    }
+                    SheetSel::Span(_, _) => return Err(Error::unsupported("Evaluate 3-D reference")),
+                };
+                return Ok(Some(gridcraft_calc::Area { sheet, range: reference.range() }));
+            }
+            Expr::Name(name) => {
+                let Some(name) = wb.name(&name, sheet) else { return Ok(None) };
+                text = name.formula.clone();
+            }
+            Expr::Paren(expr) => text = gridcraft_formula::print(&expr),
+            _ => return Ok(None),
+        }
+    }
+    Err(Error { fatal: true, ..Error::runtime(-32000, "VBA sandbox limit: Evaluate name nesting") })
 }

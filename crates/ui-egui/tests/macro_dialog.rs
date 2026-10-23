@@ -1,4 +1,4 @@
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use gridcraft_engine::Session;
 use gridcraft_ui_egui::{SheetApp, i18n::Language};
 use gridcraft_vba::testing::{FixtureModule, fixture};
@@ -133,5 +133,32 @@ fn macro_dialog_screenshots_when_requested() {
         h.get_by_label("Xem mã").click();
         h.run_steps(4);
         h.render().unwrap().save(std::path::Path::new(&dir).join(format!("macro-code-{width:.0}.png"))).unwrap();
+    }
+}
+
+#[test]
+fn macro_compile_error_is_visible_and_run_is_disabled() {
+    let mut s = Session::new();
+    s.new_workbook();
+    Arc::make_mut(&mut s.doc_mut().unwrap().wb).vba_project =
+        Some(fixture(&[FixtureModule::new("Broken", "Module", "Sub Main()\nDim =\nEnd Sub").unwrap()], 1252, "", &[]).unwrap());
+    let mut app = SheetApp::new(s, Default::default());
+    app.ui.language = Language::En;
+    app.open_dialog("macros", json!({}));
+    let builder = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0));
+    let builder = if std::env::var_os("GRIDCRAFT_MACRO_SCREENSHOTS").is_some() { builder.wgpu() } else { builder };
+    let mut h = builder.build_ui_state(
+        |ui, app: &mut SheetApp| {
+            app.logic(&ui.ctx().clone());
+            app.ui(ui);
+        },
+        app,
+    );
+    h.run_steps(6);
+    assert!(h.query_by_label("Broken · Line 2: Expected identifier").is_some());
+    assert!(h.get_by_label("Run").accesskit_node().is_disabled());
+    if let Some(dir) = std::env::var_os("GRIDCRAFT_MACRO_SCREENSHOTS") {
+        std::fs::create_dir_all(&dir).unwrap();
+        h.render().unwrap().save(std::path::Path::new(&dir).join("macro-compile-error.png")).unwrap();
     }
 }

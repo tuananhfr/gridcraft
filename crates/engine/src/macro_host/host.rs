@@ -12,6 +12,7 @@ enum ExcelObject {
     Workbook,
     Sheets,
     Sheet(usize),
+    PageSetup(usize),
     Range(usize, RangeRef),
     Areas(usize, Vec<RangeRef>),
     Dimension(usize, RangeRef, bool),
@@ -129,29 +130,16 @@ impl ExcelHost {
                 ExcelObject::Range(si, range) | ExcelObject::Dimension(si, range, _) => Ok((si, range)),
                 _ => Err(invalid("Expected a Range")),
             },
-            Value::String(text) => {
-                let (si, address) = if let Some((name, address)) = text.rsplit_once('!') {
-                    let name = name.trim_matches('\'').replace("''", "'");
-                    let si = self
-                        .session
-                        .doc()
-                        .map_err(engine)?
-                        .wb
-                        .sheets
-                        .iter()
-                        .position(|s| s.name.eq_ignore_ascii_case(&name))
-                        .ok_or_else(|| invalid("Worksheet not found"))?;
-                    (si, address)
-                } else {
-                    (sheet, text.as_str())
-                };
-                RangeRef::parse(address).map(|range| (si, range)).ok_or_else(|| invalid("Invalid range address"))
-            }
+            Value::String(text) => super::evaluation_reference(&self.session.doc().map_err(engine)?.wb, sheet, text)?
+                .map(|area| (area.sheet, area.range))
+                .ok_or_else(|| invalid("Invalid range address")),
             _ => Err(invalid("Expected a Range or address")),
         }
     }
     fn sheet_member(&mut self, sheet: usize, name: &str, args: &[Argument]) -> Result<Value> {
         match name {
+            "evaluate" => self.evaluate(sheet, args),
+            "pagesetup" => self.object(ExcelObject::PageSetup(sheet)),
             "name" => {
                 Ok(Value::String(self.session.doc().map_err(engine)?.wb.sheet(sheet).ok_or_else(|| invalid("Worksheet not found"))?.name.clone()))
             }
@@ -464,9 +452,18 @@ impl ExcelHost {
                 if let Some(at) = next.or(first) { self.range(sheet, RangeRef::cell(at)) } else { Ok(Value::Object(None)) }
             }
             "clearcontents" | "clear" => {
-                cap(range)?;
+                // Clearing is sparse: budget stored cells instead of enumerating blank worksheet space.
+                let stored = self.session.doc().map_err(engine)?.wb.sheet(sheet).ok_or_else(|| invalid("Worksheet not found"))?;
+                let cells: Vec<_> = stored.cells.iter_range(range).map(|(at, _)| at).take(CELL_CAP as usize + 1).collect();
+                if cells.len() > CELL_CAP as usize {
+                    return Err(invalid("VBA sandbox limit: range cells"));
+                }
+                self.edit_bytes = self.edit_bytes.saturating_add(cells.len().saturating_mul(128));
+                if self.edit_bytes > self.max_edit_bytes {
+                    return Err(invalid("VBA sandbox limit: host edit memory"));
+                }
                 self.run(if name == "clear" { "edit.clearAll" } else { "edit.clearContents" }, json!({"sheet":sheet,"range":range.a1()}))?;
-                self.changed.extend(range.iter().map(|at| (sheet, at)));
+                self.changed.extend(cells.into_iter().map(|at| (sheet, at)));
                 Ok(Value::Empty)
             }
             "copy" => {
@@ -517,13 +514,63 @@ impl ExcelHost {
                 cap(range)?;
                 self.run(if name == "merge" { "home.mergeCells" } else { "home.unmergeCells" }, json!({"sheet":sheet,"range":range.a1()}))
             }
+            "autofill" => {
+                let destination = arg(args, 0, "Destination").ok_or_else(|| invalid("AutoFill requires Destination"))?;
+                let (target_sheet, target) = self.range_arg(destination, sheet)?;
+                let vertical = target.width() == range.width() && (target.start.row == range.start.row || target.end.row == range.end.row);
+                let horizontal = target.height() == range.height() && (target.start.col == range.start.col || target.end.col == range.end.col);
+                if sheet != target_sheet || !target.contains_range(&range) || target == range || !(vertical || horizontal) {
+                    return Err(invalid("AutoFill destination must extend and include the source on the same worksheet"));
+                }
+                cap(range)?;
+                cap(target)?;
+                let mode = match number(args, 1, "Type", 0)? {
+                    0 => "series",
+                    1 => "copy",
+                    3 => "formats",
+                    4 => "values",
+                    _ => return Err(Error::unsupported("AutoFill Type")),
+                };
+                let stored = self.session.doc().map_err(engine)?.wb.sheet(sheet).ok_or_else(|| invalid("Worksheet not found"))?;
+                let cell_bytes = stored
+                    .cells
+                    .iter_range(range)
+                    .map(|(_, c)| {
+                        c.formula.as_ref().map_or_else(
+                            || match &c.value {
+                                gridcraft_core::Value::Text(text) => text.len(),
+                                _ => 32,
+                            },
+                            |formula| formula.text.len().saturating_add(1),
+                        )
+                    })
+                    .max()
+                    .unwrap_or(0)
+                    .saturating_add(128);
+                self.edit_bytes = self.edit_bytes.saturating_add(cell_bytes.saturating_mul(target.count() as usize));
+                if self.edit_bytes > self.max_edit_bytes {
+                    return Err(invalid("VBA sandbox limit: host edit memory"));
+                }
+                self.run("edit.autoFill", json!({"sheet":sheet,"source":range.a1(),"target":target.a1(),"mode":mode}))?;
+                self.changed.extend(target.iter().map(|at| (sheet, at)));
+                Ok(Value::Empty)
+            }
             "autofit" => Ok(Value::Empty),
             "select" | "activate" => self.run("selection.set", json!({"sheet":sheet,"range":range.a1()})),
             _ => Err(Error::unsupported(name)),
         }
     }
+    fn evaluate(&mut self, sheet: usize, args: &[Argument]) -> Result<Value> {
+        let text = arg(args, 0, "Name").ok_or_else(|| invalid("Evaluate requires an expression"))?.text()?;
+        let doc = self.session.doc().map_err(engine)?;
+        if let Some(area) = super::evaluation_reference(&doc.wb, sheet, &text)? {
+            return self.range(area.sheet, area.range);
+        }
+        from_cell(gridcraft_calc::evaluate(&doc.wb, sheet, doc.selection.active, &text))
+    }
     fn application(&mut self, name: &str, args: &[Argument]) -> Result<Value> {
         match name {
+            "evaluate" => self.evaluate(self.active_sheet()?, args),
             "application" => Ok(Value::Object(Some(0))),
             "activeworkbook" | "thisworkbook" => self.object(ExcelObject::Workbook),
             "activesheet" => self.object(ExcelObject::Sheet(self.active_sheet()?)),
@@ -878,6 +925,14 @@ impl Host for ExcelHost {
     }
     fn global(&mut self, name: &str) -> Option<Value> {
         let name = name.to_ascii_lowercase();
+        if let Some(sheet) = self
+            .session
+            .doc()
+            .ok()
+            .and_then(|d| d.wb.sheets.iter().position(|s| !s.vba_code_name.is_empty() && s.vba_code_name.eq_ignore_ascii_case(&name)))
+        {
+            return self.object(ExcelObject::Sheet(sheet)).ok();
+        }
         let constant = match name.as_str() {
             "dbopensnapshot" => Some(4),
             "acbylayer" => Some(256),
@@ -889,6 +944,18 @@ impl Host for ExcelHost {
             "acblue" => Some(5),
             "acmagenta" => Some(6),
             "acwhite" => Some(7),
+            "xlfilldefault" => Some(0),
+            "xlfillcopy" => Some(1),
+            "xlfillseries" => Some(2),
+            "xlfillformats" => Some(3),
+            "xlfillvalues" => Some(4),
+            "xlfilldays" => Some(5),
+            "xlfillweekdays" => Some(6),
+            "xlfillmonths" => Some(7),
+            "xlfillyears" => Some(8),
+            "xllineartrend" => Some(9),
+            "xlgrowthtrend" => Some(10),
+            "xlflashfill" => Some(11),
             "xlup" => Some(-4162),
             "xldown" => Some(-4121),
             "xltoleft" => Some(-4159),
@@ -931,7 +998,7 @@ impl Host for ExcelHost {
             "application" => Some(Value::Object(Some(0))),
             "activeworkbook" | "thisworkbook" | "activesheet" | "activecell" | "selection" | "worksheetfunction" => self.application(&name, &[]).ok(),
             "sheets" | "worksheets" | "cells" | "rows" | "columns" => self.application(&name, &[]).ok(),
-            "range" | "union" | "intersect" => self.object(ExcelObject::Global(name)).ok(),
+            "evaluate" | "range" | "union" | "intersect" => self.object(ExcelObject::Global(name)).ok(),
             "getopenfilename" => self.object(ExcelObject::Global(name)).ok(),
             _ => None,
         }
@@ -951,6 +1018,10 @@ impl Host for ExcelHost {
             return Ok(if n.starts_with("curdir") { Value::String(String::new()) } else { Value::Empty });
         }
         let name = name.to_ascii_lowercase();
+        if name == "application" && args.is_empty() {
+            self.resolve(id)?;
+            return Ok(Value::Object(Some(0)));
+        }
         match self.resolve(id)? {
             ExcelObject::Application => self.application(&name, args),
             ExcelObject::Global(global) => self.application(if name.is_empty() { &global } else { &name }, args),
@@ -967,6 +1038,13 @@ impl Host for ExcelHost {
                 _ => Err(Error::unsupported(&name)),
             },
             ExcelObject::Sheet(sheet) => self.sheet_member(sheet, &name, args),
+            ExcelObject::PageSetup(sheet) => {
+                if name != "printarea" {
+                    return Err(Error::unsupported(&name));
+                }
+                let area = self.session.doc().map_err(engine)?.wb.sheet(sheet).ok_or_else(|| invalid("Worksheet not found"))?.print.print_area;
+                if let Some(area) = area { self.range_member(sheet, area, "address", &[]) } else { Ok(Value::String(String::new())) }
+            }
             ExcelObject::Range(sheet, range) => self.range_member(sheet, range, &name, args),
             ExcelObject::Areas(sheet, ranges) => {
                 if name == "cells" && args.is_empty() {
@@ -1077,6 +1155,22 @@ impl Host for ExcelHost {
         }
         let name = name.to_ascii_lowercase();
         match self.resolve(id)? {
+            ExcelObject::PageSetup(sheet) => {
+                if name != "printarea" {
+                    return Err(Error::unsupported(&name));
+                }
+                let text = value.text()?;
+                let address = if text.is_empty() {
+                    String::new()
+                } else {
+                    let (target_sheet, range) = self.range_arg(&Value::String(text), sheet)?;
+                    if target_sheet != sheet {
+                        return Err(invalid("PrintArea must belong to its worksheet"));
+                    }
+                    range.a1()
+                };
+                self.run("pageLayout.pageSetup", json!({"sheet":sheet,"printArea":address}))?;
+            }
             ExcelObject::Areas(sheet, ranges) => {
                 for range in ranges {
                     let Value::Object(Some(target)) = self.range(sheet, range)? else { return Err(invalid("Expected range")) };

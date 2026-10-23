@@ -660,3 +660,15 @@ fn macro_buttons_xls_obj_resolves_ftmacro_lbl_and_survives_truncation() {
         assert!(read_xls(&compound("Workbook", &stream(&obj[..len]))).is_ok(), "OBJ cut at {len}");
     }
 }
+
+#[test]
+fn vba_sheet_code_name_import_and_ooxml_roundtrip() {
+    let globals = |pos: u32| cat(&[&bof(0x0005), &rec(0x0085, &cat(&[&pos.to_le_bytes(), &[0, 0, 4, 0], b"Data"])), &eof()]);
+    let bytes = cat(&[&globals(globals(0).len() as u32), &bof(0x0010), &rec(0x01BA, &xlstr("DataCode")), &eof()]);
+    let (wb, _) = read_xls(&compound("Workbook", &bytes)).unwrap();
+    assert_eq!(wb.sheets[0].vba_code_name, "DataCode");
+    assert_eq!(wb.sheets[0].name, "Data");
+    let output = crate::write_xlsx_as(&wb, crate::XlsxKind::MacroWorkbook).unwrap();
+    let (back, _) = read_xlsx(&output).unwrap();
+    assert_eq!(back.sheets[0].vba_code_name, "DataCode");
+}

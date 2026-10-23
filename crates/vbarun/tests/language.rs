@@ -186,3 +186,90 @@ fn unsupported_features_and_parse_limits() {
     assert_eq!(e.number, 445);
     assert!(e.description.contains("no disk/network/system access"));
 }
+
+#[test]
+fn bracket_evaluation_lexer_preserves_formula_and_rejects_unclosed_bracket() {
+    assert!(Program::parse("Generic", "Sub Main()\n[ 'Data tab'!A1:B2 ].Value = [SUM(A1:B2)]\nEnd Sub").is_ok());
+    let error = Program::parse("Generic", "Sub Main()\nx = [A1\nEnd Sub").unwrap_err();
+    assert_eq!(error.description, "Unterminated bracket evaluation");
+    assert_eq!(error.module, "Generic");
+    assert_eq!(error.line, 2);
+}
+
+#[test]
+fn project_parse_isolates_failed_module_and_calls_raise_its_error() {
+    use gridcraft_vba::{Compatibility, Module, ModuleKind, ProcKind, Procedure, Project, Scope};
+    let procedure = Procedure {
+        name: "Bad".into(),
+        kind: ProcKind::Sub,
+        scope: Scope::Public,
+        params: vec![],
+        returns: None,
+        line: 1,
+        event: None,
+        udf: false,
+        compatibility: Compatibility { level: 1, reasons: vec![] },
+    };
+    let project = Project {
+        name: "Synthetic".into(),
+        code_page: 1252,
+        locked: false,
+        warnings: vec![],
+        references: vec![],
+        modules: vec![
+            Module {
+                name: "Good".into(),
+                stream_name: "Good".into(),
+                kind: ModuleKind::Standard,
+                private_module: false,
+                source: "Function Test()\nTest = 6\nEnd Function\nSub Caller()\nBad\nEnd Sub\nSub MissingCaller()\nBroken.Missing\nEnd Sub".into(),
+                procedures: vec![],
+            },
+            Module {
+                name: "Broken".into(),
+                stream_name: "Broken".into(),
+                kind: ModuleKind::Standard,
+                private_module: false,
+                source: "Sub Bad()\nDim =\nEnd Sub".into(),
+                procedures: vec![procedure],
+            },
+        ],
+    };
+    let program = Program::from_project(&project).unwrap();
+    let mut vm = Interpreter::new(&program, NoHost, FixedClock, Limits::default());
+    assert_eq!(vm.run("Good", "Test", &[]).unwrap().number().unwrap(), 6.0);
+    for (module, name) in [("Good", "Caller"), ("Good", "MissingCaller"), ("Broken", "Bad")] {
+        let error = vm.run(module, name, &[]).unwrap_err();
+        assert_eq!(error.module, "Broken");
+        assert_eq!(error.line, 2);
+        assert_eq!(error.description, "Expected identifier");
+    }
+}
+
+#[test]
+fn document_module_builtin_members_are_delegated_to_host() {
+    struct DocumentHost;
+    impl Host for DocumentHost {
+        fn global(&mut self, name: &str) -> Option<Value> {
+            (name == "document").then_some(Value::Object(Some(7)))
+        }
+        fn get_member(&mut self, obj: u64, name: &str, _args: &[Argument]) -> gridcraft_vbarun::Result<Value> {
+            assert_eq!(obj, 7);
+            assert_eq!(name, "value");
+            Ok(Value::Long(12))
+        }
+    }
+    let mut program = Program::parse("Main", "Function Test()\nTest = Document.Value + Document.Bonus()\nEnd Function").unwrap();
+    program.modules.push(gridcraft_vbarun::Module::parse("Document", "Public Function Bonus()\nBonus = 3\nEnd Function").unwrap());
+    let mut vm = Interpreter::new(&program, DocumentHost, FixedClock, Limits::default());
+    assert_eq!(vm.run("Main", "Test", &[]).unwrap().number().unwrap(), 15.0);
+}
+
+#[test]
+fn bracket_evaluation_obeys_string_budget_before_host_call() {
+    let program = Program::parse("Generic", "Function Test()\nTest = [A123]\nEnd Function").unwrap();
+    let limits = Limits { max_string_length: 2, ..Limits::default() };
+    let error = Interpreter::new(&program, NoHost, FixedClock, limits).run("Generic", "Test", &[]).unwrap_err();
+    assert!(error.fatal);
+    assert_eq!(error.description, "VBA sandbox limit: string length");
+}

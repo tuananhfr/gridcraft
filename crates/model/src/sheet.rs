@@ -52,6 +52,8 @@ impl SheetViewMode {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Sheet {
     pub name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub vba_code_name: String,
     pub cells: CellStore,
     /// Static pictures are sparse rich content. Ordinary cells carry no picture pointer.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty", with = "picture_map")]
@@ -127,6 +129,7 @@ impl Sheet {
     pub fn new(name: impl Into<String>) -> Sheet {
         Sheet {
             name: name.into(),
+            vba_code_name: String::new(),
             cells: CellStore::new(),
             cell_pictures: BTreeMap::new(),
             spill: BTreeMap::new(),

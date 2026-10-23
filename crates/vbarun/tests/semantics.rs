@@ -353,3 +353,21 @@ fn public_private_cross_module_declarations_and_byref_calls() {
         assert_eq!(Interpreter::new(&program, NoHost, FixedClock, Limits::default()).run("Entry", "Test", &[]).unwrap_err().number, 35);
     }
 }
+
+#[test]
+fn comparison_empty_and_typed_string_with_numeric_variant() {
+    for (setup, expression, expected) in [
+        ("Dim x", "x = \"\"", true),
+        ("Dim x", "\"\" = x", true),
+        ("Dim x", "x < \"a\"", true),
+        ("Dim x\nx = 7", "x <> \"\"", true),
+        ("Dim x\nx = 7", "\"7\" = x", true),
+        ("Dim x\nx = 7", "x < \"12\"", false),
+        ("Dim x, y\nx = 7\ny = \"2\"", "x < y", true),
+        ("Dim x, y\nx = 7\ny = \"2\"", "y > x", true),
+        ("Dim x As Long, y\nx = 7\ny = \"7\"", "x = y", true),
+    ] {
+        let source = format!("Function Test()\n{setup}\nTest = {expression}\nEnd Function");
+        assert_eq!(run(&source), Value::Boolean(expected), "{expression}");
+    }
+}

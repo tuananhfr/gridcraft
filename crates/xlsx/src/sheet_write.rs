@@ -114,8 +114,12 @@ pub fn write_sheet(wb: &Workbook, si: usize, selected: bool, out: &mut Out) -> (
     let mut s = format!("{XML_DECL}<worksheet xmlns=\"{NS_MAIN}\" xmlns:r=\"{NS_REL}\">");
     // sheetPr
     let fit = sheet.print.fit_to.is_some();
-    if sheet.tab_color.is_some() || fit {
-        s.push_str("<sheetPr>");
+    if sheet.tab_color.is_some() || fit || !sheet.vba_code_name.is_empty() {
+        s.push_str("<sheetPr");
+        if !sheet.vba_code_name.is_empty() {
+            let _ = write!(s, " codeName=\"{}\"", esc(&sheet.vba_code_name));
+        }
+        s.push('>');
         if let Some(c) = &sheet.tab_color {
             let _ = write!(s, "<tabColor {}/>", color_attrs(c));
         }

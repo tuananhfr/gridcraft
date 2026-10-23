@@ -25,6 +25,8 @@ Mức 1 là kết quả phân tích tĩnh; macro vẫn có thể gặp cú pháp
 
 Phân loại lan truyền qua các lời gọi được phân tích. Hộp Macro hiển thị lý do và vị trí;
 việc có một thủ tục không hỗ trợ không tự động cấm mọi thủ tục an toàn trong cùng tệp.
+Lỗi biên dịch được cô lập theo module: các module khác vẫn chạy; lời gọi vào module lỗi báo lỗi
+biên dịch và vị trí của module đó. Hộp Macro hiển thị lỗi trên mọi thủ tục của module và không cho chạy chúng.
 
 ### Đồng ý, hoàn tác và giới hạn
 
@@ -58,16 +60,28 @@ Các hàm nội tại sau có triển khai (ngữ nghĩa/định dạng chỉ l�
 
 | Đối tượng | Thành viên có triển khai; giới hạn đáng chú ý |
 |---|---|
-| Application/global | ActiveWorkbook, ThisWorkbook, ActiveSheet, ActiveCell, Selection, Sheets/Worksheets, Range/Cells/Rows/Columns, WorksheetFunction, Calculate, Union, Intersect, ScreenUpdating, EnableEvents, DisplayAlerts, StatusBar, Calculation, GetOpenFilename, InputBox, Wait |
+| Application/global | ActiveWorkbook, ThisWorkbook, ActiveSheet, ActiveCell, Selection, Sheets/Worksheets, Range/Cells/Rows/Columns, WorksheetFunction, Calculate, Union, Intersect, ScreenUpdating, EnableEvents, DisplayAlerts, StatusBar, Calculation, GetOpenFilename, InputBox, Wait, Evaluate |
 | Workbook | Name (đọc), Path (rỗng), Sheets/Worksheets; Save bị từ chối |
 | Worksheets | Item/chỉ số hoặc tên, Count; code name của sheet được phân giải |
-| Worksheet | Name, Visible (kể cả VeryHidden), Range, Cells, Rows, Columns, UsedRange, Activate/Select, Calculate, Protect/Unprotect (không mật khẩu) |
-| Range | Item/Cells/Range, Value/Value2, Formula/FormulaLocal/FormulaR1C1, Text (đọc), Offset, Resize, Row/Column, Count/CountLarge, Rows/Columns, Address, End, Find, Clear/ClearContents, Copy, PasteSpecial, Merge/UnMerge, Select/Activate, NumberFormat, Font, Interior, CopyFromRecordset |
+| Worksheet | Name, Visible (kể cả VeryHidden), Range, Cells, Rows, Columns, UsedRange, Activate/Select, Calculate, PageSetup.PrintArea, Protect/Unprotect (không mật khẩu) |
+| Range | Item/Cells/Range, Value/Value2, Formula/FormulaLocal/FormulaR1C1, Text (đọc), Offset, Resize, Row/Column, Count/CountLarge, Rows/Columns, Address, End, Find, Clear/ClearContents, Copy, PasteSpecial, Merge/UnMerge, Select/Activate, NumberFormat, Font, Interior, CopyFromRecordset, AutoFill |
 | Định dạng | Font.Bold/Color, Interior.Color/ColorIndex; AutoFit hiện là no-op |
 | WorksheetFunction | Các hàm mà bộ tính toán GridCraft nhận biết; tên có `_` có thể ánh xạ sang dấu chấm; đối số đặt tên Arg1…Arg255 |
 
-Không có toàn bộ object model Excel: chẳng hạn AutoFill, PageSetup/PrintArea, ExportAsFixedFormat,
-Application.Interactive chưa được host triển khai. Cú pháp range ngoặc vuông cũng chưa được parser triển khai. Copy/PasteSpecial/Find chỉ có những tùy chọn được host xử lý;
+Không có toàn bộ object model Excel: chẳng hạn các thuộc tính PageSetup khác, ExportAsFixedFormat,
+Application.Interactive chưa được host triển khai.
+`[A1]`, `[A1:B5]`, `[Sheet1!A1]`, `[MyName]` gọi `Application.Evaluate`: tham chiếu trả về Range
+(hỗ trợ `.Value`, gán giá trị mặc định và Set), biểu thức khác trả về giá trị tính toán.
+UDF chỉ đọc, ghi nhận ô phụ thuộc và từ chối ghi qua Range trả về.
+Cũng hỗ trợ `sheet.[A1]` và `.[A1]` trong With. Code name của worksheet được đọc từ XLS/XLSM,
+giữ lại khi lưu OOXML và liên kết tới sheet; lời gọi thành viên Excel không bị nhầm với thủ tục VBA private.
+Clear/ClearContents xử lý ô đã lưu trong vùng thưa thay vì liệt kê toàn bộ ô trống; vẫn giới hạn số ô thực sự xử lý.
+So sánh Empty/chuỗi và Variant số/chuỗi hỗ trợ vòng lặp tìm ô trống.
+AutoFill dùng bộ điền hiện có với Type mặc định, Copy, Formats và Values; đích phải chứa nguồn,
+cùng worksheet và mở rộng theo một trục. Các Type khác bị từ chối; có giới hạn ô/bộ nhớ.
+Range cũng nhận defined name trỏ tới vùng; PageSetup.PrintArea đọc/ghi/xóa một vùng in thông qua lệnh engine,
+được hoàn tác cùng macro và không truy cập máy in hay ổ đĩa.
+Các đối tượng Excel trả về Application để tiếp tục chuỗi thành viên như worksheet.Application.ActiveSheet. Copy/PasteSpecial/Find chỉ có những tùy chọn được host xử lý;
 không suy ra hỗ trợ mọi đối số Excel từ việc tên phương thức xuất hiện trong bảng.
 
 ### COM giả lập
@@ -134,6 +148,21 @@ Desktop and web share the sandboxed VBA interpreter and Excel host. Public level
 without required arguments can run with session consent; eligible read-only UDFs can calculate in formulas.
 Level 2 (system dependencies), level 3 (unsupported automation) and level 4 (unsupported UI/control events) are refused.
 Level 1 is static classification, not a guarantee of runtime compatibility or numerical parity.
+Compile errors are isolated per module: other modules can run, while calls into a failed module raise
+its compile error with module/line. Macro analysis shows the error on its procedures and disables Run.
+Square brackets (`[A1]`, `[A1:B5]`, `[Sheet1!A1]`, `[MyName]`) call Application.Evaluate;
+references return Range objects supporting members, default-value assignment and Set. Other expressions
+return calculated values. Read-only UDF evaluation tracks precedents and rejects writes through returned ranges.
+Worksheet-qualified brackets (`sheet.[A1]`, `.[A1]` in With) use that sheet's context. Worksheet code names
+are imported from XLS/XLSM, preserved in OOXML and bound to sheet objects; built-in Excel members
+are delegated to the host while declared VBA procedure visibility is preserved.
+Clear/ClearContents budget stored cells in sparse ranges without expanding blank worksheet space.
+Empty/string and numeric/string Variant comparisons support loops that stop at blank cells.
+AutoFill delegates default, Copy, Formats and Values modes to the existing fill engine, with cell/memory
+budgets and a same-sheet destination containing and extending the source along one axis. Other types are refused.
+Range accepts defined names referring to ranges. PageSetup.PrintArea reads, sets and clears a single print
+area through engine commands, within the macro's undo transaction and without printer or disk access.
+Excel objects expose Application for member chains such as worksheet.Application.ActiveSheet.
 
 There is no automatic open/event execution or unrestricted disk, network or OS access. Successful macro edits
 form one undo transaction; errors/cancellation roll back. Default deadlines are 30 seconds desktop and 5 seconds web,

@@ -436,3 +436,205 @@ fn refused_feature_location_matches_its_reason_line() {
     assert_eq!(log["runs"][0]["error"]["reasons"][0]["line"], 3);
     assert_eq!(s.doc().unwrap().wb, before);
 }
+
+#[test]
+fn macro_bracket_evaluation_ranges_names_and_values() {
+    let mut s = session(
+        "Sub Main()\n[A1:B2] = 3\n[A1].Value = 5\n[B3] = [A1] * 2\n[C1] = [SUM(A1:B2)]\nSet r = [Sheet1!B3]\nr.Value = 12\n[NamedBlock].Value = 7\n[C2] = Application.Evaluate(\"2+4\")\nEnd Sub",
+    );
+    Arc::make_mut(&mut s.doc_mut().unwrap().wb).names.push(gridcraft_model::DefinedName {
+        name: "NamedBlock".into(),
+        scope: None,
+        formula: "Sheet1!$D$1:$D$2".into(),
+        comment: String::new(),
+        hidden: false,
+    });
+    consent(&mut s);
+    let result = run(&mut s);
+    assert_eq!(result["status"], "completed", "{result}");
+    for (cell, expected) in [("A1", 5.0), ("B2", 3.0), ("B3", 12.0), ("C1", 14.0), ("C2", 6.0), ("D2", 7.0)] {
+        assert_eq!(value(&s, cell), Value::Number(expected));
+    }
+}
+
+#[test]
+fn macro_compile_failure_isolated_and_reported_on_call() {
+    let mut s = session("Sub Main()\n[A1] = 8\nEnd Sub\nSub Caller()\nBroken.Bad\nEnd Sub");
+    Arc::make_mut(&mut s.doc_mut().unwrap().wb).vba_project = Some(
+        fixture(
+            &[
+                FixtureModule::new("Module1", "Module", "Sub Main()\n[A1] = 8\nEnd Sub\nSub Caller()\nBroken.Bad\nEnd Sub").unwrap(),
+                FixtureModule::new("Broken", "Module", "Sub Bad()\nDim =\nEnd Sub").unwrap(),
+            ],
+            1252,
+            "",
+            &[],
+        )
+        .unwrap(),
+    );
+    let analysis = s.execute("macros.analyze", json!({})).unwrap();
+    let broken = analysis["procedures"].as_array().unwrap().iter().find(|p| p["module"] == "Broken").unwrap();
+    assert_eq!(broken["runnableShape"], false);
+    assert_eq!(broken["compileError"]["module"], "Broken");
+    assert_eq!(broken["compileError"]["line"], 2);
+    consent(&mut s);
+    assert_eq!(run(&mut s)["status"], "completed");
+    assert_eq!(value(&s, "A1"), Value::Number(8.0));
+    let result = s.execute("macros.run", json!({"name":"Caller"})).unwrap();
+    assert_eq!(result["status"], "failed", "{result}");
+    assert_eq!(result["error"]["module"], "Broken");
+    assert_eq!(result["error"]["line"], 2);
+}
+
+#[test]
+fn macro_worksheet_qualified_bracket_evaluation_and_with() {
+    let mut s = session(
+        "Sub Main()\nWorksheets(1).[A1:B2].Value = 4\nWith Worksheets(1)\n.[C1] = .[A1] + 2\nEnd With\n[D1] = Worksheets(1).Evaluate(\"C1\").Value\nEnd Sub",
+    );
+    consent(&mut s);
+    let result = run(&mut s);
+    assert_eq!(result["status"], "completed", "{result}");
+    assert_eq!(value(&s, "B2"), Value::Number(4.0));
+    assert_eq!(value(&s, "D1"), Value::Number(6.0));
+}
+
+#[test]
+fn macro_document_code_name_resolves_sheet_members_and_vba_procedures() {
+    let mut s = session("Sub Main()\nDataCode.Range(\"A1\").Value = 4\nDataCode.[B1] = DataCode.Range(\"A1\").Value + DataCode.Bonus()\nEnd Sub");
+    let wb = Arc::make_mut(&mut s.doc_mut().unwrap().wb);
+    Arc::make_mut(&mut wb.sheets[0]).vba_code_name = "DataCode".into();
+    wb.vba_project = Some(
+        fixture(
+            &[
+                FixtureModule::new(
+                    "Module1",
+                    "Module",
+                    "Sub Main()\nDataCode.Range(\"A1\").Value = 4\nDataCode.[B1] = DataCode.Range(\"A1\").Value + DataCode.Bonus()\nEnd Sub",
+                )
+                .unwrap(),
+                FixtureModule::new("DataCode", "Document", "Public Function Bonus()\nBonus = 2\nEnd Function").unwrap(),
+            ],
+            1252,
+            "",
+            &[],
+        )
+        .unwrap(),
+    );
+    consent(&mut s);
+    let result = run(&mut s);
+    assert_eq!(result["status"], "completed", "{result}");
+    assert_eq!(value(&s, "B1"), Value::Number(6.0));
+}
+
+#[test]
+fn macro_sparse_clear_contents_does_not_expand_blank_ranges() {
+    let mut s = session("Sub Main()\nRange(\"A:A\").ClearContents\nEnd Sub");
+    s.execute("cell.set", json!({"cell":"A1","input":"5"})).unwrap();
+    s.execute("cell.set", json!({"cell":"A900000","input":"7"})).unwrap();
+    s.execute("cell.set", json!({"cell":"B1","input":"9"})).unwrap();
+    consent(&mut s);
+    let result = run(&mut s);
+    assert_eq!(result["status"], "completed", "{result}");
+    assert_eq!(result["cellsChanged"], 2);
+    assert_eq!(value(&s, "A1"), Value::Empty);
+    assert_eq!(value(&s, "A900000"), Value::Empty);
+    assert_eq!(value(&s, "B1"), Value::Number(9.0));
+    s.execute("edit.undo", json!({})).unwrap();
+    assert_eq!(value(&s, "A900000"), Value::Number(7.0));
+}
+
+#[test]
+fn macro_bracket_name_cycles_are_bounded() {
+    let mut s = session("Sub Main()\nx = [CycleName]\nEnd Sub");
+    Arc::make_mut(&mut s.doc_mut().unwrap().wb).names.push(gridcraft_model::DefinedName {
+        name: "CycleName".into(),
+        scope: None,
+        formula: "CycleName".into(),
+        comment: String::new(),
+        hidden: false,
+    });
+    consent(&mut s);
+    let result = run(&mut s);
+    assert_eq!(result["status"], "failed", "{result}");
+    assert_eq!(result["error"]["message"], "VBA sandbox limit: Evaluate name nesting");
+}
+
+#[test]
+fn macro_range_comparison_to_empty_string_stops_at_blank() {
+    let mut s = session("Sub Main()\n[A1] = 4\n[A2] = 6\ni = 1\nDo While Cells(i, 1) <> \"\"\ni = i + 1\nLoop\n[B1] = i - 1\nEnd Sub");
+    consent(&mut s);
+    let result = run(&mut s);
+    assert_eq!(result["status"], "completed", "{result}");
+    assert_eq!(value(&s, "B1"), Value::Number(2.0));
+}
+
+#[test]
+fn macro_autofill_uses_engine_series_formula_translation_and_undo() {
+    let mut s = session(
+        "Sub Main()\n[A1] = 2\n[A2] = 5\n[A1:A2].AutoFill Destination:=[A1:A5]\n[B1].Formula = \"=A1*2\"\n[B1].AutoFill Destination:=[B1:B5], Type:=xlFillDefault\n[C1] = 9\n[C1].AutoFill Destination:=[C1:C3], Type:=xlFillCopy\nEnd Sub",
+    );
+    consent(&mut s);
+    let result = run(&mut s);
+    assert_eq!(result["status"], "completed", "{result}");
+    assert_eq!(result["cellsChanged"], 13);
+    assert_eq!(value(&s, "A5"), Value::Number(14.0));
+    assert_eq!(value(&s, "B5"), Value::Number(28.0));
+    assert_eq!(value(&s, "C3"), Value::Number(9.0));
+    s.execute("edit.undo", json!({})).unwrap();
+    assert_eq!(value(&s, "A1"), Value::Empty);
+    assert_eq!(value(&s, "B5"), Value::Empty);
+}
+
+#[test]
+fn macro_autofill_rejects_invalid_destination_and_unsupported_type() {
+    for statement in ["[A1].AutoFill Destination:=[B1:B4]", "[A1].AutoFill Destination:=[A1:A4], Type:=xlFlashFill"] {
+        let mut s = session(&format!("Sub Main()\n[A1] = 2\n{statement}\nEnd Sub"));
+        consent(&mut s);
+        let result = run(&mut s);
+        assert_eq!(result["status"], "failed", "{result}");
+        assert_eq!(value(&s, "A1"), Value::Empty);
+    }
+}
+
+#[test]
+fn macro_range_resolves_defined_names_in_scalar_context() {
+    let mut s = session("Sub Main()\nRange(\"RecordCount\").Value = 3\nFor i = 1 To Range(\"RecordCount\")\nCells(i, 2) = i\nNext\nEnd Sub");
+    Arc::make_mut(&mut s.doc_mut().unwrap().wb).names.push(gridcraft_model::DefinedName {
+        name: "RecordCount".into(),
+        scope: None,
+        formula: "Sheet1!$A$1".into(),
+        comment: String::new(),
+        hidden: false,
+    });
+    consent(&mut s);
+    let result = run(&mut s);
+    assert_eq!(result["status"], "completed", "{result}");
+    assert_eq!(value(&s, "B3"), Value::Number(3.0));
+}
+
+#[test]
+fn macro_page_setup_print_area_roundtrip_clear_and_undo() {
+    let mut s = session(
+        "Sub Main()\nWith Worksheets(1).PageSetup\n.PrintArea = \"A1:D8\"\n[A1] = .PrintArea\n.PrintArea = \"\"\n[B1] = .PrintArea\n.PrintArea = \"B2:C5\"\nEnd With\nEnd Sub",
+    );
+    consent(&mut s);
+    let result = run(&mut s);
+    assert_eq!(result["status"], "completed", "{result}");
+    assert_eq!(value(&s, "A1"), Value::from("$A$1:$D$8"));
+    assert_eq!(value(&s, "B1"), Value::from(""));
+    assert_eq!(s.doc().unwrap().wb.sheets[0].print.print_area, gridcraft_core::RangeRef::parse("B2:C5"));
+    s.execute("edit.undo", json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().wb.sheets[0].print.print_area, None);
+}
+
+#[test]
+fn macro_excel_objects_expose_application_for_worksheet_functions() {
+    let mut s = session(
+        "Sub Main()\n[A1] = 4\n[A2] = 8\n[B1] = Worksheets(1).Application.WorksheetFunction.Max([A1:A2])\n[C1] = [A1].Application.WorksheetFunction.Sum([A1:A2])\nEnd Sub",
+    );
+    consent(&mut s);
+    let result = run(&mut s);
+    assert_eq!(result["status"], "completed", "{result}");
+    assert_eq!(value(&s, "B1"), Value::Number(8.0));
+    assert_eq!(value(&s, "C1"), Value::Number(12.0));
+}

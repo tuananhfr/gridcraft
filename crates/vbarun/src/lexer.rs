@@ -7,6 +7,7 @@ pub(crate) enum Kind {
     TypedNumber(f64, String),
     Text(String),
     Date(String),
+    Evaluation(String),
     Symbol(String),
     Eol,
     Eof,
@@ -55,6 +56,17 @@ pub(crate) fn lex(source: &str) -> Result<Vec<Token>> {
                     }
                     line += 1;
                     continue;
+                }
+                '[' => {
+                    let mut text = String::new();
+                    loop {
+                        match chars.next() {
+                            Some(']') => break,
+                            Some('\n') | None => return Err(Error::runtime(1002, "Unterminated bracket evaluation")),
+                            Some(c) => text.push(c),
+                        }
+                    }
+                    Kind::Evaluation(text)
                 }
                 '"' => {
                     let mut s = String::new();

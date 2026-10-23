@@ -140,6 +140,15 @@ pub fn show(ui: &mut egui::Ui, d: &mut Dialog) {
             if let Some(event) = procedure.get("event").and_then(Json::as_str) {
                 ui.label(format!("{}: {event}", tr(ui, "Event")));
             }
+            if let Some(error) = procedure.get("compileError").filter(|e| !e.is_null()) {
+                ui.label(format!(
+                    "{} · {} {}: {}",
+                    text(error, "module"),
+                    tr(ui, "Macro|Line"),
+                    error.get("line").and_then(Json::as_u64).unwrap_or(0),
+                    text(error, "message")
+                ));
+            }
             if let Some(compatibility) = procedure.get("compatibility") {
                 let level = compatibility.get("level").and_then(Json::as_u64).unwrap_or(1);
                 let label = LEVELS.get(level.saturating_sub(1) as usize).copied().unwrap_or(LEVELS[0]);

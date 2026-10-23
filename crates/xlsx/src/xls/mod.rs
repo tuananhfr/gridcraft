@@ -633,6 +633,7 @@ fn sheet_record(rec: &Record<'_>, st: &mut SheetState<'_>, budget: &mut Budget, 
         st.pending_string = None;
     }
     match rec.id {
+        0x01BA => st.sheet.vba_code_name = c.string()?,
         0x0203 => {
             let (r, col, x) = (c.u16()?, c.u16()?, c.u16()?);
             let v = Value::number(c.f64()?);

@@ -129,3 +129,46 @@ fn udf_range_value_is_a_two_dimensional_vba_array() {
     set(&mut s, "D1", "=Pick(A1:B2)");
     assert_eq!(value(&s, "D1"), Value::Number(17.0));
 }
+
+#[test]
+fn udf_bracket_evaluation_reads_and_tracks_precedents() {
+    let mut s = session("Function BracketTotal()\nBracketTotal = [A1] * 2 + [SUM(A1:A2)] + Application.Evaluate(\"1+2\")\nEnd Function");
+    set(&mut s, "A1", "4");
+    set(&mut s, "A2", "5");
+    set(&mut s, "B1", "=BracketTotal()");
+    allow(&mut s, true);
+    assert_eq!(value(&s, "B1"), Value::Number(20.0));
+    set(&mut s, "A2", "7");
+    assert_eq!(value(&s, "B1"), Value::Number(22.0));
+}
+
+#[test]
+fn udf_bracket_evaluation_cannot_write() {
+    let mut s = session("Function BadWrite()\n[A1].Value = 99\nBadWrite = 1\nEnd Function");
+    set(&mut s, "A1", "4");
+    set(&mut s, "B1", "=BadWrite()");
+    allow(&mut s, true);
+    assert_eq!(value(&s, "B1"), Value::Error(CellError::Value));
+    assert_eq!(value(&s, "A1"), Value::Number(4.0));
+}
+
+#[test]
+fn udf_compile_failure_in_other_module_does_not_block_evaluation() {
+    let mut s = session("Function Healthy()\nHealthy = Worksheets(1).[A1].Value + 1\nEnd Function");
+    Arc::make_mut(&mut s.doc_mut().unwrap().wb).vba_project = Some(
+        fixture(
+            &[
+                FixtureModule::new("Module1", "Module", "Function Healthy()\nHealthy = Worksheets(1).[A1].Value + 1\nEnd Function").unwrap(),
+                FixtureModule::new("Broken", "Module", "Function Bad()\nDim =\nEnd Function").unwrap(),
+            ],
+            1252,
+            "",
+            &[],
+        )
+        .unwrap(),
+    );
+    set(&mut s, "A1", "4");
+    set(&mut s, "B1", "=Healthy()");
+    allow(&mut s, true);
+    assert_eq!(value(&s, "B1"), Value::Number(5.0));
+}
