@@ -84,10 +84,10 @@ fn compatibility_reasons_and_cycle_safe_calls() {
         assert!(reasons.iter().any(|r| r.code == code));
     }
     assert!(reasons.iter().any(|r| r.code == "declare" && r.line == 7));
-    for code in ["create_object", "get_object", "dao", "adodb", "new_object", "etabs", "autocad"] {
+    for code in ["emulated_com", "get_object", "adodb", "new_object", "etabs"] {
         assert!(procs[2].compatibility.reasons.iter().any(|r| r.code == code));
     }
-    assert!(procs[2].compatibility.reasons.iter().any(|r| r.code == "create_object" && r.detail == "CreateObject(\"Autocad.Application\")"));
+    assert!(procs[2].compatibility.reasons.iter().any(|r| r.code == "emulated_com" && r.detail == "CreateObject(\"autocad.application\")"));
     assert!(procs.iter().all(|p| p.compatibility.reasons.iter().all(|r| r.code != "calls" || !r.detail.contains(&format!("calls {} ", p.name)))));
     for proc in procs.iter().skip(4) {
         assert!(proc.compatibility.reasons.iter().any(|r| r.code == "calls" && r.detail.contains("level 3")));
@@ -258,4 +258,33 @@ fn total_decompression_and_metadata_budgets_are_enforced() {
 fn udf_lookup_is_case_insensitive_for_unicode_names() {
     let p = analyze(&fixture(&[M::new("Functions", "Module", "Function TÍNH()\nEnd Function").unwrap()], 65001, "", &[])).unwrap();
     assert!(find_udf(&p, "tính").is_some());
+}
+
+#[test]
+fn macro_emulation_classifies_covered_factories_and_refuses_other_com() {
+    let source = r#"
+Sub Covered()
+Dim db As DAO.Database
+Set db = CreateObject("DAO.DBEngine.36").OpenDatabase("synthetic.mdb")
+Set acad = GetObject(, "AutoCAD.Application")
+End Sub
+Sub Wrapper()
+Covered
+End Sub
+Sub Unknown()
+Set obj = CreateObject("Synthetic.Application")
+End Sub
+Sub Dynamic()
+Set obj = CreateObject(progId)
+End Sub
+Sub RealEtabs()
+Set obj = CreateObject("ETABSv1.Helper")
+End Sub
+Sub UncoveredGet()
+Set obj = GetObject("drawing.dwg", "AutoCAD.Application")
+End Sub
+"#;
+    let p = analyze(&fixture(&[M::new("Module1", "Module", source).unwrap()], 1252, "", &[])).unwrap();
+    assert_eq!(p.modules[0].procedures.iter().map(|p| p.compatibility.level).collect::<Vec<_>>(), [1, 1, 3, 3, 3, 3]);
+    assert!(p.modules[0].procedures[0].compatibility.reasons.iter().all(|r| r.code == "emulated_com"));
 }

@@ -1,6 +1,7 @@
 # ERPCons changes
 
 - Both: calculate consent-gated VBA worksheet functions with read-only ranges, bounded interpreter calls, precedent tracking and translated runtime diagnostics.
+- Both: emulate read-only DAO queries through explicit MDB selection and AutoCAD drawing commands as DXF exports; OS focus and current-directory calls are logged no-ops.
 
 - Both: enable cooperative macro running on web with persisted time limits (5 s web, 30 s desktop defaults), local run times and duration, event-only consent notices and precise refusal locations.
 

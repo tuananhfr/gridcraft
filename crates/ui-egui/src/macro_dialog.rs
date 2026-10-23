@@ -144,6 +144,9 @@ pub fn show(ui: &mut egui::Ui, d: &mut Dialog) {
                 let level = compatibility.get("level").and_then(Json::as_u64).unwrap_or(1);
                 let label = LEVELS.get(level.saturating_sub(1) as usize).copied().unwrap_or(LEVELS[0]);
                 ui.strong(format!("{level} · {}", tr(ui, label)));
+                if list(compatibility, "reasons").iter().any(|r| text(r, "code") == "emulated_com") {
+                    ui.label(tr(ui, "Emulated DAO/AutoCAD: read-only MDB selection and DXF output; unknown members stop the macro."));
+                }
                 for reason in list(compatibility, "reasons") {
                     ui.label(format!(
                         "{} {}: {}",

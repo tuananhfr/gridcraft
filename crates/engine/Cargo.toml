@@ -14,6 +14,7 @@ gridcraft-vbarun = { workspace = true }
 gridcraft-vba = { workspace = true }
 sha2 = { workspace = true }
 gridcraft-mdb = { workspace = true }
+gridcraft-dxf = { path = "../dxf" }
 gridcraft-core = { workspace = true }
 gridcraft-numfmt = { workspace = true }
 gridcraft-formula = { workspace = true }

@@ -214,7 +214,29 @@ fn services(inbox: Inbox, ctx: egui::Context) -> Services {
     let open_inbox = inbox.clone();
     let picture_ctx = ctx.clone();
     let save_ctx = ctx.clone();
+    let macro_ctx = ctx.clone();
     Services {
+        pick_macro_mdb: Some(Box::new(move |title, reply| {
+            let title = title.to_string();
+            let ctx = macro_ctx.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let bytes = match rfd::AsyncFileDialog::new().set_title(&title).add_filter("MDB", &["mdb"]).pick_file().await {
+                    Some(file) => {
+                        if file.inner().size() > (32 * 1024 * 1024) as f64 {
+                            Err("VBA sandbox limit: DAO file bytes".into())
+                        } else {
+                            wasm_bindgen_futures::JsFuture::from(file.inner().array_buffer())
+                                .await
+                                .map(|buffer| Some(js_sys::Uint8Array::new(&buffer).to_vec()))
+                                .map_err(|_| "Invalid DAO file bytes".to_string())
+                        }
+                    }
+                    None => Ok(None),
+                };
+                *reply.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(bytes);
+                ctx.request_repaint();
+            });
+        })),
         open_async: Some(Box::new(move || {
             let inbox = open_inbox.clone();
             let ctx = ctx.clone();
@@ -317,6 +339,7 @@ fn mime_for(name: &str) -> &'static str {
         Some("csv") => "text/csv",
         Some("tsv" | "txt") => "text/plain",
         Some("pdf") => "application/pdf",
+        Some("dxf") => "image/vnd.dxf",
         Some("html" | "htm") => "text/html",
         Some("json") => "application/json",
         Some("png") => "image/png",
@@ -354,6 +377,7 @@ fn download(name: &str, bytes: &[u8], report: DeliveryReport, ctx: egui::Context
             "tsv" => "Tab Delimited Text (*.tsv)",
             "txt" => "Plain Text (*.txt)",
             "pdf" => "PDF Document (*.pdf)",
+            "dxf" => "DXF",
             "html" | "htm" => "HTML Document (*.html)",
             "json" => "JSON Document (*.json)",
             "png" => "PNG Image (*.png)",

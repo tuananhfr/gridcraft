@@ -7,6 +7,63 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "VBA function exceeded its limits ({module}, line {line}): {detail}" => {
             "Функция VBA превысила ограничения ({module}, строка {line}): {detail}"
         }
+        "Invalid record count" => "Недопустимо: записи",
+        "Invalid field count" => "Недопустимо: поле",
+
+        "Invalid color" => "Недопустимо: цвет",
+        "Invalid coordinate" => "Недопустимо: координата",
+        "Invalid database" => "Недопустимо: база данных",
+        "Invalid emulated object" => "Недопустимо: эмулируемый объект",
+        "Invalid field" => "Недопустимо: поле",
+        "Invalid recordset" => "Недопустимо: набор записей",
+        "Invalid tables" => "Недопустимо: таблицы",
+        "Invalid AutoCAD polyline vertices" => "Недопустимо: вершины полилинии",
+        "Invalid DAO number" => "Недопустимо: число",
+        "Invalid DAO file bytes" => "Недопустимо: данные файла",
+        "Missing X" => "Отсутствует: X",
+        "Missing Y" => "Отсутствует: Y",
+        "Missing Z" => "Отсутствует: Z",
+        "Missing table index" => "Отсутствует: индекс таблицы",
+        "Missing {name}" => "Отсутствует: {name}",
+        "DAO field not found" => "Не найдено: поле",
+        "DAO table not found" => "Не найдено: таблицы",
+        "DAO workspace not found" => "Не найдено: рабочая область",
+        "Entity not found" => "Не найдено: объект чертежа",
+        "Layer not found" => "Не найдено: слой",
+        "DAO database is closed" => "Закрыто: база данных",
+        "DAO recordset is closed" => "Закрыто: набор записей",
+        "Expected a DAO recordset" => "Требуется: набор записей",
+        "Expected a layer" => "Требуется: слой",
+        "VBA sandbox limit: emulation handles" => "Лимит среды VBA: дескрипторы объектов",
+        "VBA sandbox limit: emulation memory" => "Лимит среды VBA: память",
+        "VBA sandbox limit: recordset cells" => "Лимит среды VBA: ячейки набора записей",
+        "VBA sandbox limit: DAO file bytes" => "Лимит среды VBA: данные файла",
+        "VBA sandbox limit: DAO query projection" => "Лимит среды VBA: столбцы запроса",
+        "DAO record limit" => "Лимит среды VBA: записи",
+        "No drawing" => "Нет чертежа",
+        "AutoCAD point requires three coordinates" => "Точка AutoCAD требует три координаты",
+        "AutoCAD requires a one-dimensional coordinate array" => "AutoCAD требует одномерный массив координат",
+        "DAO field requires a name or index" => "Поле DAO требует имя или индекс",
+        "OpenDatabase requires a path" => "OpenDatabase требует путь",
+        "DAO path is too long" => "Путь DAO слишком длинный",
+        "DAO: no current record" => "DAO: нет текущей записи",
+        "non-positive radius" => "радиус должен быть положительным",
+        "invalid multiline text or width" => "неверный многострочный текст или ширина",
+        "drawing text limit" => "лимит текста чертежа",
+        "DAO/AutoCAD.{member} not supported in GridCraft (no disk/network/system access)" => {
+            "DAO/AutoCAD.{member} не поддерживается в GridCraft (без доступа к диску, сети или системе)"
+        }
+        "Invalid DXF drawing: {detail}" => "Недопустимый чертёж DXF: {detail}",
+
+        "Choose the .mdb file required by the macro: {path}" => "Выберите файл .mdb, необходимый макросу: {path}",
+        "Macro created a drawing — Save DXF" => "Макрос создал чертёж — Сохранить DXF",
+        "Emulated DAO/AutoCAD: read-only MDB selection and DXF output; unknown members stop the macro." => {
+            "Эмуляция DAO/AutoCAD: чтение MDB и вывод DXF; неизвестные члены останавливают макрос."
+        }
+        "DAO write operations are not supported" => "Операции записи DAO не поддерживаются",
+        "DAO file selection was cancelled; macro stopped" => "Выбор файла DAO отменён; макрос остановлен",
+        "AppActivate/ChDir/ChDrive/CurDir ignored by in-memory emulation" => "Эмуляция в памяти игнорирует AppActivate/ChDir/ChDrive/CurDir",
+        "DAO: unsupported or invalid SELECT query" => "DAO: неподдерживаемый или неверный запрос SELECT",
 
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "Эта книга содержит макросы VBA. Поддерживаемые макросы можно запускать с вашего согласия в окне макросов. Формат .xlsm сохраняет их, а .xlsx удаляет."

@@ -8,6 +8,63 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Enable macros to calculate" => "Bật macro để tính",
         "VBA function error ({module}, line {line}): {detail}" => "Lỗi hàm VBA ({module}, dòng {line}): {detail}",
         "VBA function exceeded its limits ({module}, line {line}): {detail}" => "Hàm VBA vượt giới hạn ({module}, dòng {line}): {detail}",
+        "Invalid record count" => "Số bản ghi không hợp lệ",
+        "Invalid field count" => "Số trường không hợp lệ",
+
+        "Invalid color" => "Không hợp lệ: màu",
+        "Invalid coordinate" => "Không hợp lệ: tọa độ",
+        "Invalid database" => "Không hợp lệ: cơ sở dữ liệu",
+        "Invalid emulated object" => "Không hợp lệ: đối tượng giả lập",
+        "Invalid field" => "Không hợp lệ: trường",
+        "Invalid recordset" => "Không hợp lệ: tập bản ghi",
+        "Invalid tables" => "Danh sách bảng không hợp lệ",
+        "Invalid AutoCAD polyline vertices" => "Không hợp lệ: đỉnh đường đa tuyến",
+        "Invalid DAO number" => "Không hợp lệ: số",
+        "Invalid DAO file bytes" => "Không hợp lệ: dữ liệu tệp",
+        "Missing X" => "Thiếu: X",
+        "Missing Y" => "Thiếu: Y",
+        "Missing Z" => "Thiếu: Z",
+        "Missing table index" => "Thiếu: chỉ mục bảng",
+        "Missing {name}" => "Thiếu: {name}",
+        "DAO field not found" => "Không tìm thấy: trường",
+        "DAO table not found" => "Không tìm thấy bảng DAO",
+        "DAO workspace not found" => "Không tìm thấy: không gian làm việc",
+        "Entity not found" => "Không tìm thấy: thực thể",
+        "Layer not found" => "Không tìm thấy: lớp",
+        "DAO database is closed" => "Đã đóng: cơ sở dữ liệu",
+        "DAO recordset is closed" => "Đã đóng: tập bản ghi",
+        "Expected a DAO recordset" => "Cần có: tập bản ghi",
+        "Expected a layer" => "Cần có: lớp",
+        "VBA sandbox limit: emulation handles" => "Giới hạn môi trường VBA: tham chiếu đối tượng",
+        "VBA sandbox limit: emulation memory" => "Giới hạn môi trường VBA: bộ nhớ",
+        "VBA sandbox limit: recordset cells" => "Giới hạn môi trường VBA: ô bản ghi",
+        "VBA sandbox limit: DAO file bytes" => "Giới hạn môi trường VBA: dữ liệu tệp",
+        "VBA sandbox limit: DAO query projection" => "Giới hạn môi trường VBA: cột truy vấn",
+        "DAO record limit" => "Giới hạn môi trường VBA: số bản ghi DAO",
+        "No drawing" => "Chưa có bản vẽ",
+        "AutoCAD point requires three coordinates" => "Điểm AutoCAD cần ba tọa độ",
+        "AutoCAD requires a one-dimensional coordinate array" => "AutoCAD cần mảng tọa độ một chiều",
+        "DAO field requires a name or index" => "Trường DAO cần tên hoặc chỉ mục",
+        "OpenDatabase requires a path" => "OpenDatabase cần đường dẫn",
+        "DAO path is too long" => "Đường dẫn DAO quá dài",
+        "DAO: no current record" => "DAO: không có bản ghi hiện tại",
+        "non-positive radius" => "bán kính phải lớn hơn không",
+        "invalid multiline text or width" => "văn bản nhiều dòng hoặc chiều rộng không hợp lệ",
+        "drawing text limit" => "vượt giới hạn văn bản của bản vẽ",
+        "DAO/AutoCAD.{member} not supported in GridCraft (no disk/network/system access)" => {
+            "Bảng tính chưa hỗ trợ DAO/AutoCAD.{member} (không truy cập ổ đĩa, mạng hay hệ thống)"
+        }
+        "Invalid DXF drawing: {detail}" => "Bản vẽ DXF không hợp lệ: {detail}",
+
+        "Choose the .mdb file required by the macro: {path}" => "Chọn tệp .mdb mà macro cần mở: {path}",
+        "Macro created a drawing — Save DXF" => "Macro đã tạo bản vẽ — Lưu DXF",
+        "Emulated DAO/AutoCAD: read-only MDB selection and DXF output; unknown members stop the macro." => {
+            "Giả lập DAO/AutoCAD: chọn MDB chỉ đọc và xuất DXF; thành viên chưa hỗ trợ sẽ dừng macro."
+        }
+        "DAO write operations are not supported" => "DAO không hỗ trợ ghi",
+        "DAO file selection was cancelled; macro stopped" => "Đã hủy chọn tệp DAO; macro đã dừng",
+        "AppActivate/ChDir/ChDrive/CurDir ignored by in-memory emulation" => "Giả lập trong bộ nhớ bỏ qua AppActivate/ChDir/ChDrive/CurDir",
+        "DAO: unsupported or invalid SELECT query" => "DAO: truy vấn SELECT không hợp lệ hoặc chưa được hỗ trợ",
 
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "Sổ tính này chứa macro VBA. Bạn có thể cho phép chạy các macro được hỗ trợ trong hộp Macro. Lưu dạng .xlsm để giữ macro; lưu dạng .xlsx sẽ xóa macro."

@@ -7,6 +7,63 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "VBA function exceeded its limits ({module}, line {line}): {detail}" => {
             "VBA функција је прекорачила ограничења ({module}, ред {line}): {detail}"
         }
+        "Invalid record count" => "Неисправно: записи",
+        "Invalid field count" => "Неисправно: поље",
+
+        "Invalid color" => "Неисправно: боја",
+        "Invalid coordinate" => "Неисправно: координата",
+        "Invalid database" => "Неисправно: база података",
+        "Invalid emulated object" => "Неисправно: емулирани објекат",
+        "Invalid field" => "Неисправно: поље",
+        "Invalid recordset" => "Неисправно: скуп записа",
+        "Invalid tables" => "Неисправно: табеле",
+        "Invalid AutoCAD polyline vertices" => "Неисправно: темена полилиније",
+        "Invalid DAO number" => "Неисправно: број",
+        "Invalid DAO file bytes" => "Неисправно: подаци датотеке",
+        "Missing X" => "Недостаје: X",
+        "Missing Y" => "Недостаје: Y",
+        "Missing Z" => "Недостаје: Z",
+        "Missing table index" => "Недостаје: индекс табеле",
+        "Missing {name}" => "Недостаје: {name}",
+        "DAO field not found" => "Није пронађено: поље",
+        "DAO table not found" => "Није пронађено: табеле",
+        "DAO workspace not found" => "Није пронађено: радни простор",
+        "Entity not found" => "Није пронађено: ентитет",
+        "Layer not found" => "Није пронађено: слој",
+        "DAO database is closed" => "Затворено: база података",
+        "DAO recordset is closed" => "Затворено: скуп записа",
+        "Expected a DAO recordset" => "Потребно: скуп записа",
+        "Expected a layer" => "Потребно: слој",
+        "VBA sandbox limit: emulation handles" => "Ограничење VBA окружења: идентификатори објеката",
+        "VBA sandbox limit: emulation memory" => "Ограничење VBA окружења: меморија",
+        "VBA sandbox limit: recordset cells" => "Ограничење VBA окружења: ћелије скупа записа",
+        "VBA sandbox limit: DAO file bytes" => "Ограничење VBA окружења: подаци датотеке",
+        "VBA sandbox limit: DAO query projection" => "Ограничење VBA окружења: колоне упита",
+        "DAO record limit" => "Ограничење VBA окружења: записи",
+        "No drawing" => "Нема цртежа",
+        "AutoCAD point requires three coordinates" => "AutoCAD тачка захтева три координате",
+        "AutoCAD requires a one-dimensional coordinate array" => "AutoCAD захтева једнодимензионални низ координата",
+        "DAO field requires a name or index" => "DAO поље захтева име или индекс",
+        "OpenDatabase requires a path" => "OpenDatabase захтева путању",
+        "DAO path is too long" => "DAO путања је предугачка",
+        "DAO: no current record" => "DAO: нема текућег записа",
+        "non-positive radius" => "полупречник мора бити позитиван",
+        "invalid multiline text or width" => "неисправан вишелинијски текст или ширина",
+        "drawing text limit" => "ограничење текста цртежа",
+        "DAO/AutoCAD.{member} not supported in GridCraft (no disk/network/system access)" => {
+            "DAO/AutoCAD.{member} није подржано у GridCraft (без приступа диску, мрежи или систему)"
+        }
+        "Invalid DXF drawing: {detail}" => "Неисправан DXF цртеж: {detail}",
+
+        "Choose the .mdb file required by the macro: {path}" => "Изаберите .mdb датотеку потребну макроу: {path}",
+        "Macro created a drawing — Save DXF" => "Макро је направио цртеж — Сачувај DXF",
+        "Emulated DAO/AutoCAD: read-only MDB selection and DXF output; unknown members stop the macro." => {
+            "DAO/AutoCAD емулација: MDB само за читање и DXF излаз; непознати чланови заустављају макро."
+        }
+        "DAO write operations are not supported" => "DAO упис није подржан",
+        "DAO file selection was cancelled; macro stopped" => "Избор DAO датотеке је отказан; макро је заустављен",
+        "AppActivate/ChDir/ChDrive/CurDir ignored by in-memory emulation" => "Емулација у меморији игнорише AppActivate/ChDir/ChDrive/CurDir",
+        "DAO: unsupported or invalid SELECT query" => "DAO: неподржан или неисправан SELECT упит",
 
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "Ова радна свеска садржи VBA макрое. Подржане макрое можете покренути уз сагласност у дијалогу Макрои. Формат .xlsm их чува, а .xlsx уклања."

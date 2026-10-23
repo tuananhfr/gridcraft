@@ -7,6 +7,63 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "VBA function exceeded its limits ({module}, line {line}): {detail}" => {
             "La fonction VBA a dépassé ses limites ({module}, ligne {line}) : {detail}"
         }
+        "Invalid record count" => "Non valide : enregistrements",
+        "Invalid field count" => "Non valide : champ",
+
+        "Invalid color" => "Non valide : couleur",
+        "Invalid coordinate" => "Non valide : coordonnée",
+        "Invalid database" => "Non valide : base de données",
+        "Invalid emulated object" => "Non valide : objet émulé",
+        "Invalid field" => "Non valide : champ",
+        "Invalid recordset" => "Non valide : jeu d’enregistrements",
+        "Invalid tables" => "Non valide : tables",
+        "Invalid AutoCAD polyline vertices" => "Non valide : sommets de polyligne",
+        "Invalid DAO number" => "Non valide : nombre",
+        "Invalid DAO file bytes" => "Non valide : données du fichier",
+        "Missing X" => "Manquant : X",
+        "Missing Y" => "Manquant : Y",
+        "Missing Z" => "Manquant : Z",
+        "Missing table index" => "Manquant : index de table",
+        "Missing {name}" => "Manquant : {name}",
+        "DAO field not found" => "Introuvable : champ",
+        "DAO table not found" => "Introuvable : tables",
+        "DAO workspace not found" => "Introuvable : espace de travail",
+        "Entity not found" => "Introuvable : entité",
+        "Layer not found" => "Introuvable : calque",
+        "DAO database is closed" => "Fermé : base de données",
+        "DAO recordset is closed" => "Fermé : jeu d’enregistrements",
+        "Expected a DAO recordset" => "Requis : jeu d’enregistrements",
+        "Expected a layer" => "Requis : calque",
+        "VBA sandbox limit: emulation handles" => "Limite du bac à sable VBA : identifiants d’objets",
+        "VBA sandbox limit: emulation memory" => "Limite du bac à sable VBA : mémoire",
+        "VBA sandbox limit: recordset cells" => "Limite du bac à sable VBA : cellules d’enregistrements",
+        "VBA sandbox limit: DAO file bytes" => "Limite du bac à sable VBA : données du fichier",
+        "VBA sandbox limit: DAO query projection" => "Limite du bac à sable VBA : colonnes de requête",
+        "DAO record limit" => "Limite du bac à sable VBA : enregistrements",
+        "No drawing" => "Aucun dessin",
+        "AutoCAD point requires three coordinates" => "Un point AutoCAD nécessite trois coordonnées",
+        "AutoCAD requires a one-dimensional coordinate array" => "AutoCAD nécessite un tableau de coordonnées à une dimension",
+        "DAO field requires a name or index" => "Un champ DAO nécessite un nom ou un index",
+        "OpenDatabase requires a path" => "OpenDatabase nécessite un chemin",
+        "DAO path is too long" => "Le chemin DAO est trop long",
+        "DAO: no current record" => "DAO : aucun enregistrement courant",
+        "non-positive radius" => "le rayon doit être positif",
+        "invalid multiline text or width" => "texte multiligne ou largeur non valide",
+        "drawing text limit" => "limite de texte du dessin",
+        "DAO/AutoCAD.{member} not supported in GridCraft (no disk/network/system access)" => {
+            "DAO/AutoCAD.{member} non pris en charge dans GridCraft (sans accès au disque, au réseau ou au système)"
+        }
+        "Invalid DXF drawing: {detail}" => "Dessin DXF non valide : {detail}",
+
+        "Choose the .mdb file required by the macro: {path}" => "Choisissez le fichier .mdb requis par la macro : {path}",
+        "Macro created a drawing — Save DXF" => "La macro a créé un dessin — Enregistrer DXF",
+        "Emulated DAO/AutoCAD: read-only MDB selection and DXF output; unknown members stop the macro." => {
+            "Émulation DAO/AutoCAD : MDB en lecture seule et sortie DXF ; les membres inconnus arrêtent la macro."
+        }
+        "DAO write operations are not supported" => "Les écritures DAO ne sont pas prises en charge",
+        "DAO file selection was cancelled; macro stopped" => "Sélection du fichier DAO annulée ; macro arrêtée",
+        "AppActivate/ChDir/ChDrive/CurDir ignored by in-memory emulation" => "L’émulation en mémoire ignore AppActivate/ChDir/ChDrive/CurDir",
+        "DAO: unsupported or invalid SELECT query" => "DAO : requête SELECT non valide ou non prise en charge",
 
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "Ce classeur contient des macros VBA. Exécutez les macros prises en charge depuis la boîte Macros avec votre consentement. Le format .xlsm les conserve ; .xlsx les supprime."

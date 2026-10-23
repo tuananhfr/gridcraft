@@ -5,6 +5,63 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Enable macros to calculate" => "启用宏以计算",
         "VBA function error ({module}, line {line}): {detail}" => "VBA 函数错误（{module}，第 {line} 行）：{detail}",
         "VBA function exceeded its limits ({module}, line {line}): {detail}" => "VBA 函数超出限制（{module}，第 {line} 行）：{detail}",
+        "Invalid record count" => "无效：记录",
+        "Invalid field count" => "无效：字段",
+
+        "Invalid color" => "无效：颜色",
+        "Invalid coordinate" => "无效：坐标",
+        "Invalid database" => "无效：数据库",
+        "Invalid emulated object" => "无效：仿真对象",
+        "Invalid field" => "无效：字段",
+        "Invalid recordset" => "无效：记录集",
+        "Invalid tables" => "无效：表",
+        "Invalid AutoCAD polyline vertices" => "无效：多段线顶点",
+        "Invalid DAO number" => "无效：数字",
+        "Invalid DAO file bytes" => "无效：文件数据",
+        "Missing X" => "缺少：X",
+        "Missing Y" => "缺少：Y",
+        "Missing Z" => "缺少：Z",
+        "Missing table index" => "缺少：表索引",
+        "Missing {name}" => "缺少：{name}",
+        "DAO field not found" => "未找到：字段",
+        "DAO table not found" => "未找到：表",
+        "DAO workspace not found" => "未找到：工作区",
+        "Entity not found" => "未找到：实体",
+        "Layer not found" => "未找到：图层",
+        "DAO database is closed" => "已关闭：数据库",
+        "DAO recordset is closed" => "已关闭：记录集",
+        "Expected a DAO recordset" => "需要：记录集",
+        "Expected a layer" => "需要：图层",
+        "VBA sandbox limit: emulation handles" => "VBA 沙盒限制：对象句柄",
+        "VBA sandbox limit: emulation memory" => "VBA 沙盒限制：内存",
+        "VBA sandbox limit: recordset cells" => "VBA 沙盒限制：记录集单元格",
+        "VBA sandbox limit: DAO file bytes" => "VBA 沙盒限制：文件数据",
+        "VBA sandbox limit: DAO query projection" => "VBA 沙盒限制：查询列",
+        "DAO record limit" => "VBA 沙盒限制：记录",
+        "No drawing" => "没有图形",
+        "AutoCAD point requires three coordinates" => "AutoCAD 点需要三个坐标",
+        "AutoCAD requires a one-dimensional coordinate array" => "AutoCAD 需要一维坐标数组",
+        "DAO field requires a name or index" => "DAO 字段需要名称或索引",
+        "OpenDatabase requires a path" => "OpenDatabase 需要路径",
+        "DAO path is too long" => "DAO 路径太长",
+        "DAO: no current record" => "DAO：没有当前记录",
+        "non-positive radius" => "半径必须为正数",
+        "invalid multiline text or width" => "多行文本或宽度无效",
+        "drawing text limit" => "图形文本限制",
+        "DAO/AutoCAD.{member} not supported in GridCraft (no disk/network/system access)" => {
+            "GridCraft 不支持 DAO/AutoCAD.{member}（无磁盘、网络或系统访问）"
+        }
+        "Invalid DXF drawing: {detail}" => "无效的 DXF 图形：{detail}",
+
+        "Choose the .mdb file required by the macro: {path}" => "选择宏需要打开的 .mdb 文件：{path}",
+        "Macro created a drawing — Save DXF" => "宏已创建图形 — 保存 DXF",
+        "Emulated DAO/AutoCAD: read-only MDB selection and DXF output; unknown members stop the macro." => {
+            "DAO/AutoCAD 仿真：只读 MDB 选择和 DXF 输出；未知成员将停止宏。"
+        }
+        "DAO write operations are not supported" => "不支持 DAO 写入操作",
+        "DAO file selection was cancelled; macro stopped" => "已取消选择 DAO 文件；宏已停止",
+        "AppActivate/ChDir/ChDrive/CurDir ignored by in-memory emulation" => "内存仿真忽略 AppActivate/ChDir/ChDrive/CurDir",
+        "DAO: unsupported or invalid SELECT query" => "DAO：不支持或无效的 SELECT 查询",
 
         "This workbook contains VBA macros. Run supported macros from the Macro dialog with your consent. Saving as .xlsm keeps them; saving as .xlsx removes them." => {
             "此工作簿包含 VBA 宏。经您同意，可从“宏”对话框运行受支持的宏。另存为 .xlsm 会保留宏，另存为 .xlsx 会删除宏。"

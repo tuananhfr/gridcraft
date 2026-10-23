@@ -5,6 +5,8 @@ use serde_json::{Value as Json, json};
 #[derive(Default)]
 pub(crate) struct State {
     task: Option<MacroTask>,
+    file_reply: Option<crate::MacroFileReply>,
+    drawing: Option<Vec<u8>>,
     consent: Option<(u64, String, bool)>,
     prompt: Option<(String, Json)>,
     input: String,
@@ -31,6 +33,7 @@ fn begin(app: &mut SheetApp, name: String) {
     let options = MacroOptions { wall_ms: u64::from(app.ui.macro_time_limit_seconds.clamp(1, 300)) * 1000, ..Default::default() };
     match app.session.start_macro_interactive(&name, options) {
         Ok(task) => {
+            app.macro_runtime.file_reply = None;
             app.macro_runtime.feedback = None;
             app.macro_runtime.task = Some(task);
         }
@@ -55,8 +58,21 @@ fn begin(app: &mut SheetApp, name: String) {
 
 pub(crate) fn step(app: &mut SheetApp, ctx: &egui::Context) {
     let Some(mut task) = app.macro_runtime.task.take() else { return };
+    let reply = app.macro_runtime.file_reply.as_ref().and_then(|r| r.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take());
+    if let Some(reply) = reply {
+        let response = match reply {
+            Ok(Some(bytes)) => json!({"base64":gridcraft_engine::io::base64_encode(&bytes)}),
+            Ok(None) => Json::Null,
+            Err(error) => json!({"error":error}),
+        };
+        task.answer_prompt(response);
+        app.macro_runtime.file_reply = None;
+        app.macro_runtime.prompt = None;
+    }
     match app.session.step_macro(&mut task) {
         Ok(Some(summary)) => {
+            app.macro_runtime.file_reply = None;
+            app.macro_runtime.drawing = task.take_drawing();
             app.macro_runtime.prompt = None;
             if summary.get("rolledBack").and_then(Json::as_bool) == Some(true) {
                 app.macro_runtime.feedback = Some(summary);
@@ -72,6 +88,7 @@ pub(crate) fn step(app: &mut SheetApp, ctx: &egui::Context) {
             ctx.request_repaint_after(std::time::Duration::from_millis(16));
         }
         Err(error) => {
+            app.macro_runtime.file_reply = None;
             app.macro_runtime.prompt = None;
             app.macro_runtime.feedback = Some(json!({"rolledBack":true,"error":{"message":error.to_string()}}));
         }
@@ -131,7 +148,7 @@ fn entry(ui: &mut egui::Ui, value: &Json) {
             ui.label(tr(ui, "Macro execution stopped."));
         }
         ui.label(format!("{} · {} {}", text(error, "module"), tr(ui, "Macro|Line"), error.get("line").unwrap_or(&Json::Null)));
-        ui.label(tr(ui, text(error, "message")));
+        ui.label(crate::i18n::current(ui.ctx()).tr_message(text(error, "message")));
         if let Some(reasons) = error.get("reasons").and_then(Json::as_array) {
             for reason in reasons {
                 ui.label(format!("{} {}: {}", tr(ui, "Macro|Line"), reason.get("line").unwrap_or(&Json::Null), text(reason, "detail")));
@@ -231,12 +248,41 @@ pub(crate) fn modals(app: &mut SheetApp, ctx: &egui::Context) {
         }
         return;
     }
+    if app.macro_runtime.drawing.is_some() {
+        let mut save = false;
+        let mut cancel = false;
+        egui::Modal::new(egui::Id::new("macro_dxf")).show(ctx, |ui| {
+            ui.heading(tr(ui, "Macro created a drawing — Save DXF"));
+            save = ui.button(tr(ui, "Save")).clicked();
+            cancel = ui.button(tr(ui, "Cancel")).clicked();
+        });
+        if save {
+            if let Some(bytes) = &app.macro_runtime.drawing {
+                let title = lang.tr("Macro created a drawing — Save DXF");
+                if let Some(save) = &app.services.save_macro_dxf {
+                    if let Err(error) = save(title, bytes) {
+                        app.macro_runtime.feedback = Some(json!({"error":{"message":error}}));
+                    }
+                } else if let Some(download) = &app.services.download {
+                    download("macro.dxf", bytes, crate::DeliveryReport::default());
+                }
+            }
+            app.macro_runtime.drawing = None;
+        } else if cancel {
+            app.macro_runtime.drawing = None;
+        }
+        return;
+    }
     if let Some((kind, params)) = app.macro_runtime.prompt.clone() {
         let mut answer = None;
         egui::Modal::new(egui::Id::new("macro_prompt")).show(ctx, |ui| {
             ui.set_max_width((ctx.content_rect().width() - 48.0).clamp(220.0, 420.0));
             ui.heading(if text(&params, "title").is_empty() { lang.tr("Macros") } else { text(&params, "title") });
-            ui.label(text(&params, "prompt"));
+            if kind == "macro.openMdb" {
+                ui.label(tr(ui, "Choose the .mdb file required by the macro: {path}").replace("{path}", text(&params, "prompt")));
+            } else {
+                ui.label(text(&params, "prompt"));
+            }
             if kind == "macro.inputBox" {
                 ui.add(egui::TextEdit::singleline(&mut app.macro_runtime.input).desired_width(ui.available_width()).char_limit(65536));
                 ui.horizontal_wrapped(|ui| {
@@ -247,6 +293,21 @@ pub(crate) fn modals(app: &mut SheetApp, ctx: &egui::Context) {
                         answer = Some(json!(""));
                     }
                 });
+            } else if kind == "macro.openMdb" {
+                if ui.add_enabled(app.macro_runtime.file_reply.is_none(), egui::Button::new(tr(ui, "Choose file…"))).clicked() {
+                    if let Some(pick) = &app.services.pick_macro_mdb {
+                        let reply = crate::MacroFileReply::default();
+                        let title = lang.tr("Choose the .mdb file required by the macro: {path}").replace("{path}", text(&params, "prompt"));
+                        pick(&title, reply.clone());
+                        app.macro_runtime.file_reply = Some(reply);
+                    } else {
+                        answer = Some(Json::Null);
+                    }
+                }
+                if ui.button(tr(ui, "Cancel")).clicked() {
+                    app.macro_runtime.file_reply = None;
+                    answer = Some(Json::Null);
+                }
             } else if kind == "macro.filePicker" {
                 ui.label(tr(ui, "GetOpenFilename returns False until file bindings are supported"));
                 if ui.button(tr(ui, "Choose file…")).clicked() {
@@ -309,10 +370,70 @@ pub(crate) fn modals(app: &mut SheetApp, ctx: &egui::Context) {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn macro_emulation_diagnostic_templates_keep_member_names() {
+        let lang = crate::i18n::Language::Vi;
+        assert_eq!(lang.tr_message("Missing Radius"), "Thiếu: Radius");
+        assert_eq!(lang.tr_message("Invalid DXF drawing: non-positive radius"), "Bản vẽ DXF không hợp lệ: bán kính phải lớn hơn không");
+        let message = lang.tr_message("DAO/AutoCAD.SyntheticMember not supported in GridCraft (no disk/network/system access)");
+        assert!(message.contains("chưa hỗ trợ"));
+        assert!(message.contains("DAO/AutoCAD.SyntheticMember"));
+    }
+    #[test]
     fn macro_runtime_messages_have_all_catalogues() {
         for lang in crate::i18n::Language::ALL.into_iter().filter(|l| *l != crate::i18n::Language::En) {
             for key in [
                 crate::VBA_NOTICE,
+                "Invalid record count",
+                "Invalid field count",
+                "Invalid color",
+                "Invalid coordinate",
+                "Invalid database",
+                "Invalid emulated object",
+                "Invalid field",
+                "Invalid recordset",
+                "Invalid tables",
+                "Invalid AutoCAD polyline vertices",
+                "Invalid DAO number",
+                "Invalid DAO file bytes",
+                "Missing X",
+                "Missing Y",
+                "Missing Z",
+                "Missing table index",
+                "Missing {name}",
+                "DAO field not found",
+                "DAO table not found",
+                "DAO workspace not found",
+                "Entity not found",
+                "Layer not found",
+                "DAO database is closed",
+                "DAO recordset is closed",
+                "Expected a DAO recordset",
+                "Expected a layer",
+                "VBA sandbox limit: emulation handles",
+                "VBA sandbox limit: emulation memory",
+                "VBA sandbox limit: recordset cells",
+                "VBA sandbox limit: DAO file bytes",
+                "VBA sandbox limit: DAO query projection",
+                "DAO record limit",
+                "No drawing",
+                "AutoCAD point requires three coordinates",
+                "AutoCAD requires a one-dimensional coordinate array",
+                "DAO field requires a name or index",
+                "OpenDatabase requires a path",
+                "DAO path is too long",
+                "DAO: no current record",
+                "non-positive radius",
+                "invalid multiline text or width",
+                "drawing text limit",
+                "DAO/AutoCAD.{member} not supported in GridCraft (no disk/network/system access)",
+                "Invalid DXF drawing: {detail}",
+                "Choose the .mdb file required by the macro: {path}",
+                "Macro created a drawing — Save DXF",
+                "Emulated DAO/AutoCAD: read-only MDB selection and DXF output; unknown members stop the macro.",
+                "DAO write operations are not supported",
+                "DAO file selection was cancelled; macro stopped",
+                "AppActivate/ChDir/ChDrive/CurDir ignored by in-memory emulation",
+                "DAO: unsupported or invalid SELECT query",
                 "Macro time limit (seconds)",
                 "Event — automatic execution is not supported",
                 "Macro running",
