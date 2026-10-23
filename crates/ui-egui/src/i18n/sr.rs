@@ -145,8 +145,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
             "Ovaj format ne čuva VBA makroe ni njihove digitalne potpise. Sačuvana datoteka neće sadržati makroe ni njihove potpise."
         }
-        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
-            "Uvezeno iz Excel 97–2003 radne sveske (.xls): pročitane su vrednosti, formule, formati brojeva, spojene ćelije, širine kolona, visine redova i definisana imena. Fontovi, ispune, ivice, grafikoni, slike, komentari i druge funkcije se još ne uvoze. Sačuvajte kao .xlsx; čuvanje .xls nije podržano."
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, fonts, number formats, merged cells, column widths, row heights and defined names were read. Fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
+            "Uvezeno iz Excel 97–2003 radne sveske (.xls): pročitane su vrednosti, formule, fontovi, formati brojeva, spojene ćelije, širine kolona, visine redova i definisana imena. Ispune, ivice, grafikoni, slike, komentari i druge funkcije se još ne uvoze. Sačuvajte kao .xlsx; čuvanje .xls nije podržano."
         }
         "Data validation in .xls files is not imported yet." => "Validacija podataka iz .xls datoteka se još ne uvozi.",
         "Pictures, charts and shapes in .xls files are not imported yet." => "Slike, grafikoni i oblici iz .xls datoteka se još ne uvoze.",

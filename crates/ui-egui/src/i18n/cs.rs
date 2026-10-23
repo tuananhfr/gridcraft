@@ -143,8 +143,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
             "Tento formát nezachovává makra VBA ani jejich digitální podpisy. Uložený soubor nebude obsahovat makra ani jejich podpisy."
         }
-        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
-            "Importováno ze sešitu Excel 97–2003 (.xls): načteny hodnoty, vzorce, číselné formáty, sloučené buňky, šířky sloupců, výšky řádků a definované názvy. Písma, výplně, ohraničení, grafy, obrázky, komentáře a další funkce se zatím neimportují. Uložte jako .xlsx; ukládání .xls není podporováno."
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, fonts, number formats, merged cells, column widths, row heights and defined names were read. Fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
+            "Importováno ze sešitu Excel 97–2003 (.xls): načteny hodnoty, vzorce, písma, číselné formáty, sloučené buňky, šířky sloupců, výšky řádků a definované názvy. Výplně, ohraničení, grafy, obrázky, komentáře a další funkce se zatím neimportují. Uložte jako .xlsx; ukládání .xls není podporováno."
         }
         "Data validation in .xls files is not imported yet." => "Ověřování dat v souborech .xls se zatím neimportuje.",
         "Pictures, charts and shapes in .xls files are not imported yet." => "Obrázky, grafy a obrazce v souborech .xls se zatím neimportují.",

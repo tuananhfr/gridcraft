@@ -148,8 +148,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
             "Dieses Format erhält weder VBA-Makros noch deren digitale Signaturen. Die gespeicherte Datei enthält weder die Makros noch deren Signaturen."
         }
-        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
-            "Aus einer Excel 97-2003-Arbeitsmappe (.xls) importiert: Werte, Formeln, Zahlenformate, verbundene Zellen, Spaltenbreiten, Zeilenhöhen und definierte Namen wurden gelesen. Schriftarten, Füllungen, Rahmen, Diagramme, Bilder, Kommentare und andere Funktionen werden noch nicht importiert. Speichern Sie als .xlsx; das Speichern als .xls wird nicht unterstützt."
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, fonts, number formats, merged cells, column widths, row heights and defined names were read. Fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
+            "Aus einer Excel 97-2003-Arbeitsmappe (.xls) importiert: Werte, Formeln, Schriftarten, Zahlenformate, verbundene Zellen, Spaltenbreiten, Zeilenhöhen und definierte Namen wurden gelesen. Füllungen, Rahmen, Diagramme, Bilder, Kommentare und andere Funktionen werden noch nicht importiert. Speichern Sie als .xlsx; das Speichern als .xls wird nicht unterstützt."
         }
         "Data validation in .xls files is not imported yet." => "Datenüberprüfung aus .xls-Dateien wird noch nicht importiert.",
         "Pictures, charts and shapes in .xls files are not imported yet." => {

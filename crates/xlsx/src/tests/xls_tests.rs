@@ -672,3 +672,112 @@ fn vba_sheet_code_name_import_and_ooxml_roundtrip() {
     let (back, _) = read_xlsx(&output).unwrap();
     assert_eq!(back.sheets[0].vba_code_name, "DataCode");
 }
+
+fn font_record(name: &str, height: u16, flags: u16, weight: u16, underline: u8) -> Vec<u8> {
+    let units: Vec<u16> = name.encode_utf16().collect();
+    let fields = u16s(&[height, flags, 0x7FFF, weight, 0]);
+    rec(0x0031, &cat(&[&fields, &[underline, 0, 0, 0, units.len() as u8, 1], &u16s(&units)]))
+}
+
+fn font_workbook(fonts: &[Vec<u8>], xfs: &[(u16, u16)]) -> Vec<u8> {
+    let globals = |pos: u32| {
+        let mut g = bof(5);
+        for font in fonts {
+            g.extend_from_slice(font);
+        }
+        for (font, format) in xfs {
+            g.extend(rec(0x00E0, &cat(&[&u16s(&[*font, *format, 0]), &[0; 14]])));
+        }
+        g.extend(rec(0x0085, &cat(&[&pos.to_le_bytes(), &[0, 0, 1, 0], b"S"])));
+        g.extend(eof());
+        g
+    };
+    let mut stream = globals(globals(0).len() as u32);
+    stream.extend(bof(0x10));
+    for (row, _) in xfs.iter().enumerate() {
+        stream.extend(rec(0x0203, &cat(&[&cell(row as u16, 0, row as u16), &1.0f64.to_le_bytes()])));
+    }
+    stream.extend(eof());
+    compound("Workbook", &stream)
+}
+
+#[test]
+fn fonts_and_xfs_respect_the_font_four_gap_and_normal_style() {
+    use gridcraft_model::{StyleId, Underline};
+    let normal = font_record("Noto Serif", 270, 0, 400, 0);
+    let bytes = font_workbook(
+        &[
+            normal.clone(),
+            font_record("Heavy", 350, 0x000A, 700, 0x22),
+            normal,
+            font_record("Font Three", 220, 0, 699, 1),
+            font_record(".VnTime", 240, 0, 400, 0),
+        ],
+        &[(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (65535, 0), (6, 0), (5, 14)],
+    );
+    let (wb, report) = read_xls(&bytes).unwrap();
+    let sh = &wb.sheets[0];
+    let font = |row| &wb.styles.get(sh.style_id(CellRef::new(row, 0))).font;
+    assert_eq!(wb.styles.get(StyleId::DEFAULT).font.name, "Noto Serif");
+    assert_eq!(font(0).size, 13.5);
+    assert_eq!(wb.styles.iter().count(), 5);
+    for row in [0, 2, 4, 6, 7] {
+        assert_eq!(sh.style_id(CellRef::new(row, 0)), StyleId::DEFAULT);
+        assert_eq!(font(row).name, "Noto Serif");
+    }
+    assert_eq!(font(1).name, "Heavy");
+    assert_eq!(font(1).size, 17.5);
+    assert!(font(1).bold && font(1).italic && font(1).strike);
+    assert_eq!(font(1).underline, Underline::DoubleAccounting);
+    assert!(!font(3).bold);
+    assert_eq!(font(3).underline, Underline::Single);
+    assert_eq!(font(5).name, ".VnTime");
+    assert_eq!(font(8).name, ".VnTime");
+    assert_eq!(wb.styles.get(sh.style_id(CellRef::new(8, 0))).num_fmt.as_str(), "m/d/yyyy");
+    assert!(report.warnings[0].contains("formulas, fonts, number formats"));
+    assert!(!report.warnings[0].contains("Fonts, fills"));
+    let (back, _) = read_xlsx(&write_xlsx(&wb).unwrap()).unwrap();
+    assert_eq!(back.styles.get(back.sheets[0].style_id(CellRef::new(1, 0))).font, *font(1));
+}
+
+#[test]
+fn font_underline_variants_and_size_limits_match_the_model() {
+    use gridcraft_model::Underline;
+    let fonts = vec![
+        font_record("Normal", 220, 0, 400, 0),
+        font_record("Single", 0, 0, 400, 1),
+        font_record("Double", u16::MAX, 0, 400, 2),
+        font_record("Accounting", 220, 0, 400, 0x21),
+        font_record("Double Accounting", 220, 0, 400, 0x22),
+        font_record("Unknown", 220, 0, 400, 0xFF),
+    ];
+    let (wb, _) = read_xls(&font_workbook(&fonts, &[(0, 0), (1, 0), (2, 0), (3, 0), (5, 0), (6, 0)])).unwrap();
+    let underlines =
+        [Underline::None, Underline::Single, Underline::Double, Underline::SingleAccounting, Underline::DoubleAccounting, Underline::None];
+    for (row, expected) in underlines.into_iter().enumerate() {
+        assert_eq!(wb.styles.get(wb.sheets[0].style_id(CellRef::new(row as u32, 0))).font.underline, expected);
+    }
+    assert_eq!(wb.styles.get(wb.sheets[0].style_id(CellRef::new(1, 0))).font.size, 1.0);
+    assert_eq!(wb.styles.get(wb.sheets[0].style_id(CellRef::new(2, 0))).font.size, 409.0);
+}
+
+#[test]
+fn truncated_font_records_return_errors_without_panicking() {
+    let valid = font_record(".VnTime", 240, 2, 700, 1);
+    let payload = &valid[4..];
+    for cut in 0..payload.len() {
+        let bytes = font_workbook(&[rec(0x0031, &payload[..cut])], &[(0, 0)]);
+        let result = std::panic::catch_unwind(|| read_xls(&bytes));
+        assert!(result.is_ok(), "FONT truncation at {cut} panicked");
+        assert!(result.unwrap().is_err(), "FONT truncation at {cut} was accepted");
+    }
+    let mut malformed = payload.to_vec();
+    malformed[14] = 255;
+    assert!(read_xls(&font_workbook(&[rec(0x0031, &malformed)], &[(0, 0)])).is_err());
+}
+
+#[test]
+fn font_count_is_bounded() {
+    let fonts = vec![font_record("F", 220, 0, 400, 0); 65_537];
+    assert!(matches!(read_xls(&font_workbook(&fonts, &[(0, 0)])), Err(IoError::TooLarge(_))));
+}

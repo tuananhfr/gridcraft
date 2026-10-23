@@ -5,6 +5,15 @@
 
 pub(super) fn translate(text: &str) -> Option<&'static str> {
     Some(match text {
+        "Convert TCVN3/VNI to Unicode" => "Chuyển mã TCVN3/VNI sang Unicode",
+        "Convert TCVN3 to Unicode" => "Chuyển mã TCVN3 sang Unicode",
+        "Convert VNI to Unicode" => "Chuyển mã VNI sang Unicode",
+        "Convert to Unicode" => "Chuyển sang Unicode",
+        "This workbook uses legacy Vietnamese fonts. Convert its text to Unicode for correct display." => {
+            "Sổ làm việc này dùng phông tiếng Việt bảng mã cũ. Hãy chuyển văn bản sang Unicode để hiển thị đúng."
+        }
+        "Select cells to convert." => "Chọn các ô cần chuyển mã.",
+        "The conversion is too large. Select a smaller range." => "Phạm vi chuyển mã quá lớn. Hãy chọn một vùng nhỏ hơn.",
         "Enable macros to calculate" => "Bật macro để tính",
         "VBA function error ({module}, line {line}): {detail}" => "Lỗi hàm VBA ({module}, dòng {line}): {detail}",
         "VBA function exceeded its limits ({module}, line {line}): {detail}" => "Hàm VBA vượt giới hạn ({module}, dòng {line}): {detail}",
@@ -146,8 +155,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
             "Định dạng này không giữ được macro VBA và chữ ký số của macro. Tệp đã lưu sẽ không chứa macro và chữ ký."
         }
-        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
-            "Đã nhập sổ làm việc Excel 97–2003 (.xls): giá trị, công thức, định dạng số, ô gộp, độ rộng cột, chiều cao hàng và tên đã định nghĩa. Phông chữ, màu nền, đường viền, biểu đồ, ảnh, chú thích và các tính năng khác chưa được nhập. Hãy lưu dạng .xlsx; không hỗ trợ lưu .xls."
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, fonts, number formats, merged cells, column widths, row heights and defined names were read. Fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
+            "Đã nhập sổ làm việc Excel 97–2003 (.xls): giá trị, công thức, phông chữ, định dạng số, ô gộp, độ rộng cột, chiều cao hàng và tên đã định nghĩa. Màu nền, đường viền, biểu đồ, ảnh, chú thích và các tính năng khác chưa được nhập. Hãy lưu dạng .xlsx; không hỗ trợ lưu .xls."
         }
         "Data validation in .xls files is not imported yet." => "Chưa nhập được quy tắc xác thực dữ liệu trong tệp .xls.",
         "Pictures, charts and shapes in .xls files are not imported yet." => "Chưa nhập được ảnh, biểu đồ và hình dạng trong tệp .xls.",

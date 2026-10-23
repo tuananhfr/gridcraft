@@ -141,8 +141,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
             "此格式无法保留 VBA 宏及其数字签名。保存的文件将不包含宏及其签名。"
         }
-        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
-            "已从 Excel 97-2003 工作簿（.xls）导入值、公式、数字格式、合并单元格、列宽、行高和定义的名称。字体、填充、边框、图表、图片、批注和其他功能尚未导入。请另存为 .xlsx；不支持保存 .xls。"
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, fonts, number formats, merged cells, column widths, row heights and defined names were read. Fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
+            "已从 Excel 97-2003 工作簿（.xls）导入值、公式、字体、数字格式、合并单元格、列宽、行高和定义的名称。填充、边框、图表、图片、批注和其他功能尚未导入。请另存为 .xlsx；不支持保存 .xls。"
         }
         "Data validation in .xls files is not imported yet." => "尚未导入 .xls 文件中的数据验证。",
         "Pictures, charts and shapes in .xls files are not imported yet." => "尚未导入 .xls 文件中的图片、图表和形状。",

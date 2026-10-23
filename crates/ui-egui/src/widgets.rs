@@ -371,7 +371,11 @@ pub fn notice_bar(app: &mut SheetApp, ui: &mut Ui) {
         });
     });
     if let Some((_, dialog)) = action {
-        if dialog == "udfConsent" {
+        if dialog == "convertVietnameseLegacy" {
+            if let Err(error) = app.run("review.convertVietnameseLegacy", serde_json::json!({})) {
+                app.alert(error);
+            }
+        } else if dialog == "udfConsent" {
             crate::macro_runtime::udf_consent(app);
         } else {
             app.open_dialog(&dialog, serde_json::json!({}));

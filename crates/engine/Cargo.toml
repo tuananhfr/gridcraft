@@ -10,6 +10,7 @@ publish = false
 workspace = true
 
 [dependencies]
+unicode-normalization = "0.1"
 gridcraft-vbarun = { workspace = true }
 gridcraft-vba = { workspace = true }
 sha2 = { workspace = true }

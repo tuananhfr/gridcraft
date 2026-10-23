@@ -21,6 +21,7 @@ pub mod slicer;
 pub mod solver;
 pub mod spelling;
 pub mod view;
+pub mod vn_legacy;
 pub mod whatif;
 
 use gridcraft_calc::Key;
@@ -141,6 +142,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(access::specs());
         v.extend(formulas::specs());
         v.extend(review::specs());
+        v.extend(vn_legacy::specs());
         v.extend(view::specs());
         v.extend(inspect::specs());
         v.extend(extra::specs());

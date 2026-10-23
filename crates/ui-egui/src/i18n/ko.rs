@@ -143,8 +143,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "This format cannot preserve VBA macros or their digital signatures. The saved file will not contain the macros or their signatures." => {
             "이 형식은 VBA 매크로와 디지털 서명을 보존할 수 없습니다. 저장된 파일에는 매크로와 서명이 포함되지 않습니다."
         }
-        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
-            "Excel 97-2003 통합 문서(.xls)에서 값, 수식, 숫자 형식, 병합된 셀, 열 너비, 행 높이 및 정의된 이름을 읽었습니다. 글꼴, 채우기, 테두리, 차트, 그림, 메모 및 기타 기능은 아직 가져오지 않습니다. .xlsx로 저장하세요. .xls 저장은 지원되지 않습니다."
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, fonts, number formats, merged cells, column widths, row heights and defined names were read. Fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported." => {
+            "Excel 97-2003 통합 문서(.xls)에서 값, 수식, 글꼴, 숫자 형식, 병합된 셀, 열 너비, 행 높이 및 정의된 이름을 읽었습니다. 채우기, 테두리, 차트, 그림, 메모 및 기타 기능은 아직 가져오지 않습니다. .xlsx로 저장하세요. .xls 저장은 지원되지 않습니다."
         }
         "Data validation in .xls files is not imported yet." => ".xls 파일의 데이터 유효성 검사는 아직 가져오지 않습니다.",
         "Pictures, charts and shapes in .xls files are not imported yet." => ".xls 파일의 그림, 차트 및 도형은 아직 가져오지 않습니다.",

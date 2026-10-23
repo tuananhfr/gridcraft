@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: GRID-11 imports BIFF8 .xls cell fonts and converts TCVN3/ABC and VNI cell text to Unicode, with font replacement, selection scope and one-step undo.
+
 - Both: speed up array-heavy VBA macros by reading indexed elements without whole-array copies and tracking shared variable memory incrementally, preserving calculation, undo and sandbox limits.
 
 - Both: unblock VBA calculation macros with isolated compilation, bracket/Evaluate syntax, worksheet code names and bounded Excel range/print-area host bindings.

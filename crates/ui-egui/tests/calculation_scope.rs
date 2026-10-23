@@ -60,7 +60,7 @@ fn error_checking_is_a_translated_table_with_named_causes() {
 fn import_details_show_translated_six_item_list() {
     let mut h = harness();
     h.state_mut().show_open_warnings(&json!({"warnings": [
-        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.",
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, fonts, number formats, merged cells, column widths, row heights and defined names were read. Fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.",
         "Data validation in .xls files is not imported yet.",
         "Pictures, charts and shapes in .xls files are not imported yet.",
         "Cell comments in .xls files are not imported yet.",
