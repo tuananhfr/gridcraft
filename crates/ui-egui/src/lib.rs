@@ -54,6 +54,7 @@ pub mod title_fit;
 pub mod touch;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod updates;
+mod vn_legacy;
 pub mod widgets;
 
 use std::collections::HashMap;
@@ -329,6 +330,7 @@ pub struct SheetApp {
     pub notice: Option<Notice>,
     pub(crate) import_warnings: Vec<String>,
     font_notice_pending: std::collections::HashSet<u64>,
+    vn_notice_pending: std::collections::HashSet<u64>,
     circular_notice_pending: std::collections::HashSet<u64>,
     calculation_notice_seen: std::collections::HashSet<u64>,
     draft_warning_seen: std::collections::HashSet<(u64, String)>,
@@ -431,6 +433,7 @@ impl SheetApp {
     pub fn new(session: Session, services: Services) -> SheetApp {
         craft_fonts::register_print_fonts();
         let circular_notice_pending = session.documents().iter().map(|doc| doc.uid).collect();
+        let vn_notice_pending = session.documents().iter().map(|doc| doc.uid).collect();
         SheetApp {
             #[cfg(not(target_arch = "wasm32"))]
             update_hook: None,
@@ -450,6 +453,7 @@ impl SheetApp {
             notice: None,
             import_warnings: Vec::new(),
             font_notice_pending: Default::default(),
+            vn_notice_pending,
             circular_notice_pending,
             calculation_notice_seen: Default::default(),
             draft_warning_seen: Default::default(),
@@ -558,6 +562,14 @@ impl SheetApp {
         let before = self.session.active().map(|doc| (doc.uid, doc.wb.clone()));
         let r = self.run_command(id, params);
         if r.is_ok() {
+            if matches!(id, "review.convertVietnameseLegacy" | "review.convertTcvn3" | "review.convertVni") {
+                if let Some(doc) = self.session.active() {
+                    self.vn_notice_pending.remove(&doc.uid);
+                }
+                if self.notice.as_ref().is_some_and(|n| n.action.as_ref().is_some_and(|(_, action)| action == "convertVietnameseLegacy")) {
+                    self.notice = None;
+                }
+            }
             self.circular_notice_after_edit(before);
             if matches!(id, "formulas.calculateNow" | "formulas.calculateSheet" | "formulas.calculateSelection") {
                 self.show_calculation_notice(true);
@@ -572,6 +584,7 @@ impl SheetApp {
             && let Some(doc) = self.session.active()
         {
             self.font_notice_pending.insert(doc.uid);
+            self.vn_notice_pending.insert(doc.uid);
             self.circular_notice_pending.insert(doc.uid);
             self.notice = None;
         }
@@ -1347,6 +1360,7 @@ impl SheetApp {
         }
         self.show_circular_open_notice();
         self.show_calculation_notice(false);
+        self.show_vn_legacy_notice();
         self.show_font_notice();
         if let Some(answer) = self.desktop_theme.take_change() {
             self.desktop_dark = Some(answer);
@@ -1697,7 +1711,7 @@ mod calculation_catalogue_tests {
                 "Calculate the sheet or workbook.",
                 "Import Details",
                 "{count} items in this file were handled differently. First: {detail}",
-                "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.",
+                "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, fonts, number formats, merged cells, column widths, row heights and defined names were read. Fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.",
                 "Data validation in .xls files is not imported yet.",
                 "Pictures, charts and shapes in .xls files are not imported yet.",
                 "Cell comments in .xls files are not imported yet.",
@@ -1714,7 +1728,7 @@ mod calculation_catalogue_tests {
         let mut app = SheetApp::new(Session::new(), Default::default());
         app.ui.language = i18n::Language::Vi;
         let warnings = json!([
-            "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.",
+            "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, fonts, number formats, merged cells, column widths, row heights and defined names were read. Fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.",
             "Data validation in .xls files is not imported yet.",
             "Pictures, charts and shapes in .xls files are not imported yet.",
             "Cell comments in .xls files are not imported yet.",

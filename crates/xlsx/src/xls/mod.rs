@@ -3,9 +3,9 @@
 //! <https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-xls/cd03cb5f-ca02-4934-a391-bb674cb8aa06>.
 //!
 //! Read: worksheets, shared strings, cell values, formulas (text and cached results, including
-//! shared and array formulas), number formats, the 1904 date system, merged cells, column
+//! shared and array formulas), fonts, number formats, the 1904 date system, merged cells, column
 //! widths, row heights, defined names, print areas, print titles and the calculation settings
-//! (mode, iteration, precision as displayed). Everything else (fonts, fills, borders, charts,
+//! (mode, iteration, precision as displayed). Everything else (fills, borders, charts,
 //! pictures, comments, conditional formats, validation) is skipped with a warning.
 //! Encrypted workbooks and pre-BIFF8 versions are refused.
 
@@ -17,7 +17,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use gridcraft_core::{CellRef, DateSystem, MAX_COLS, MAX_ROWS, RangeRef, Value};
-use gridcraft_model::{CalcMode, CalcSettings, Cell, DefinedName, Formula, LineInfo, NumFmt, Sheet, Style, StyleId, Visibility, Workbook};
+use gridcraft_model::{
+    CalcMode, CalcSettings, Cell, DefinedName, Font, Formula, LineInfo, NumFmt, Sheet, Style, StyleId, StyleTable, Underline, Visibility, Workbook,
+};
 
 use crate::cfb::Compound;
 use crate::tables::{builtin_format, col_width_to_px, pt_to_px};
@@ -120,7 +122,8 @@ struct Globals {
     sheets: Vec<BoundSheet>,
     date1904: bool,
     formats: HashMap<u16, String>,
-    xf_formats: Vec<u16>,
+    xfs: Vec<(u16, u16)>,
+    fonts: Vec<Font>,
     sst: Vec<Arc<str>>,
     links: Links,
     names: Vec<Lbl>,
@@ -158,17 +161,19 @@ pub(crate) fn read_xls_with(bytes: &[u8], mut budget: Budget) -> Result<(Workboo
         wb.vba_project = vba_project(bytes)?;
     }
     wb.date_system = if g.date1904 { DateSystem::D1904 } else { DateSystem::D1900 };
-    // One model style per XF: only the number format is imported.
+    // Font zero defines Normal, so unformatted cells and imported XFs share the same default.
+    let normal_font = g.fonts.first().cloned().unwrap_or_default();
+    wb.styles = StyleTable::with_default(Style { font: normal_font.clone(), ..Style::default() });
     let styles: Vec<StyleId> = g
-        .xf_formats
+        .xfs
         .iter()
-        .map(|ifmt| {
+        .map(|(ifnt, ifmt)| {
             let code = g.formats.get(ifmt).map(String::as_str).or_else(|| builtin_format(u32::from(*ifmt))).unwrap_or("General");
-            if code.eq_ignore_ascii_case("General") {
-                StyleId::DEFAULT
-            } else {
-                wb.styles.intern(Style { num_fmt: NumFmt::new(code), ..Style::default() })
-            }
+            // BIFF reserves font index four without storing a corresponding FONT record.
+            let index = if *ifnt < 4 { Some(*ifnt) } else { ifnt.checked_sub(1).filter(|_| *ifnt > 4) };
+            let font = index.and_then(|i| g.fonts.get(usize::from(i))).unwrap_or(&normal_font).clone();
+            let num_fmt = if code.eq_ignore_ascii_case("General") { NumFmt::default() } else { NumFmt::new(code) };
+            wb.styles.intern(Style { font, num_fmt, ..Style::default() })
         })
         .collect();
 
@@ -207,7 +212,7 @@ pub(crate) fn read_xls_with(bytes: &[u8], mut budget: Budget) -> Result<(Workboo
     // The overview comes first.
     report.warnings.insert(
         0,
-        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.".into(),
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, fonts, number formats, merged cells, column widths, row heights and defined names were read. Fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.".into(),
     );
     if wb.vba_project.is_some() {
         if let Some(overview) = report.warnings.first_mut() {
@@ -330,10 +335,39 @@ fn globals(stream: &[u8], budget: &mut Budget, report: &mut ReadReport) -> Resul
                 budget.text(code.len())?;
                 g.formats.insert(ifmt, code);
             }
+            0x0031 => {
+                if g.fonts.len() >= MAX_XFS {
+                    return Err(IoError::TooLarge("XLS: too many fonts".into()));
+                }
+                let height = c.u16()?;
+                let flags = c.u16()?;
+                let _color = c.u16()?;
+                let weight = c.u16()?;
+                let _script = c.u16()?;
+                let underline = match c.u8()? {
+                    1 => Underline::Single,
+                    2 => Underline::Double,
+                    0x21 => Underline::SingleAccounting,
+                    0x22 => Underline::DoubleAccounting,
+                    _ => Underline::None,
+                };
+                c.skip(3)?;
+                let name = c.short_string()?;
+                budget.text(name.len())?;
+                g.fonts.push(Font {
+                    name,
+                    size: (f32::from(height) / 20.0).clamp(1.0, 409.0),
+                    bold: weight >= 700,
+                    italic: flags & 0x0002 != 0,
+                    strike: flags & 0x0008 != 0,
+                    underline,
+                    ..Font::default()
+                });
+            }
             0x00E0 => {
-                if g.xf_formats.len() < MAX_XFS {
-                    c.u16()?;
-                    g.xf_formats.push(c.u16()?);
+                if g.xfs.len() < MAX_XFS {
+                    let ifnt = c.u16()?;
+                    g.xfs.push((ifnt, c.u16()?));
                 }
             }
             0x00FC => g.sst = shared_strings(&mut c, budget)?,

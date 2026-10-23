@@ -335,8 +335,8 @@ const JAPANESE: &[(&str, &str)] = &[
         "この形式は VBA マクロとデジタル署名を保持できません。保存したファイルにマクロと署名は含まれません。",
     ),
     (
-        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, number formats, merged cells, column widths, row heights and defined names were read. Fonts, fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.",
-        "Excel 97-2003 ブック（.xls）から値、数式、数値書式、結合セル、列幅、行の高さ、定義された名前を読み込みました。フォント、塗りつぶし、罫線、グラフ、画像、コメントなどの機能はまだインポートされません。.xlsx として保存してください。.xls の保存はサポートされていません。",
+        "Imported from an Excel 97-2003 (.xls) workbook: values, formulas, fonts, number formats, merged cells, column widths, row heights and defined names were read. Fills, borders, charts, pictures, comments and other features are not imported yet. Save as .xlsx; saving .xls is not supported.",
+        "Excel 97-2003 ブック（.xls）から値、数式、フォント、数値書式、結合セル、列幅、行の高さ、定義された名前を読み込みました。塗りつぶし、罫線、グラフ、画像、コメントなどの機能はまだインポートされません。.xlsx として保存してください。.xls の保存はサポートされていません。",
     ),
     ("Data validation in .xls files is not imported yet.", ".xls ファイルのデータの入力規則はまだインポートされません。"),
     ("Pictures, charts and shapes in .xls files are not imported yet.", ".xls ファイルの画像、グラフ、図形はまだインポートされません。"),

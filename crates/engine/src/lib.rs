@@ -29,6 +29,7 @@ pub mod pivot_calc;
 pub mod sample;
 pub mod selection;
 pub mod tables;
+pub mod vn_legacy;
 
 use std::sync::Arc;
 

@@ -2138,6 +2138,18 @@ fn data(app: &mut SheetApp, ui: &mut Ui) {
 }
 
 fn review(app: &mut SheetApp, ui: &mut Ui) {
+    ui.vertical(|ui| {
+        for (label, id) in [
+            ("Convert TCVN3/VNI to Unicode", "review.convertVietnameseLegacy"),
+            ("Convert TCVN3 to Unicode", "review.convertTcvn3"),
+            ("Convert VNI to Unicode", "review.convertVni"),
+        ] {
+            if small_button(ui, Icon::Spell, label, label, false).clicked() {
+                act(app, id, json!({}));
+            }
+        }
+    });
+    sep(ui);
     let __k = big_button(ui, Icon::Spell, "Spelling", "Spelling (F7)", false);
     control_keytip(app, ui, &__k, "dialog:spelling");
     if __k.clicked() {
