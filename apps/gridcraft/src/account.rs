@@ -77,7 +77,14 @@ pub fn install(language: Language) -> Option<DesktopAccount> {
     let mut config = Config::new(issuer, Product::BangTinh, env!("CARGO_PKG_VERSION"));
     config.api_base = API_BASE.filter(|base| !base.is_empty()).map(str::to_owned);
     config.ui_locale = Some(if language == Language::Vi { "vi" } else { "en" }.into());
+    config.callback_success_html = callback_page(language, "Signed in to PI ID. You can close this tab and go back to the app.");
+    config.callback_failure_html = callback_page(language, "Sign-in did not finish. Close this tab and try again in the app.");
     DesktopAccount::spawn(config, None, Box::new(crate::launch_with_system))
+}
+
+fn callback_page(language: Language, key: &str) -> String {
+    let text = language.tr(key).replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    format!("<!doctype html><meta charset=\"utf-8\"><title>PI ID</title><p style=\"font:16px sans-serif;margin:3em\">{text}</p>")
 }
 
 impl DesktopAccount {
