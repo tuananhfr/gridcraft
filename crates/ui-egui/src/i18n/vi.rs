@@ -218,6 +218,57 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "The app will close and reopen after updating" => "Ứng dụng sẽ đóng và mở lại sau khi cập nhật",
         "Check for updates" => "Kiểm tra cập nhật",
         "Help" => "Trợ giúp",
+        "Account" => "Tài khoản",
+        "Sign in" => "Đăng nhập",
+        "Signing in…" => "Đang đăng nhập…",
+        "Sign in with PI ID" => "Đăng nhập bằng PI ID",
+        "Signing in is optional. Every feature works without an account." => {
+            "Đăng nhập là không bắt buộc. Mọi tính năng đều dùng được khi không có tài khoản."
+        }
+        "Continue in your browser…" => "Tiếp tục trong trình duyệt…",
+        "Organization" => "Tổ chức",
+        "Personal" => "Cá nhân",
+        "License" => "Giấy phép",
+        "Connection" => "Kết nối",
+        "Free" => "Miễn phí",
+        "Free · offline until {date}" => "Miễn phí · dùng ngoại tuyến đến {date}",
+        "Valid until {date}" => "Còn hiệu lực đến {date}",
+        "Paid features active" => "Đang dùng tính năng trả phí",
+        "Expired on {date}" => "Đã hết hạn ngày {date}",
+        "This device was removed from your account" => "Thiết bị này đã bị gỡ khỏi tài khoản",
+        "Device limit reached" => "Đã đạt giới hạn số thiết bị",
+        "This session only (no credential store on this computer)" => "Chỉ trong phiên này (máy tính không có kho lưu thông tin đăng nhập)",
+        "Connected to PI ID" => "Đã kết nối PI ID",
+        "Offline: showing what is saved on this device" => "Ngoại tuyến: đang hiện thông tin đã lưu trên thiết bị này",
+        "Your session has expired. Sign in again to keep using your account." => {
+            "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại để tiếp tục dùng tài khoản."
+        }
+        "Sign in again" => "Đăng nhập lại",
+        "Sign out" => "Đăng xuất",
+        "Your offline license expires on {date}. Connect to the internet to renew it." => {
+            "Giấy phép ngoại tuyến sẽ hết hạn vào ngày {date}. Hãy kết nối Internet để gia hạn."
+        }
+        "Could not reach PI ID. Check your connection and try again." => "Không kết nối được PI ID. Kiểm tra mạng rồi thử lại.",
+        "PI ID did not answer in time. Try again." => "PI ID không phản hồi kịp. Hãy thử lại.",
+        "PI ID refused the request." => "PI ID đã từ chối yêu cầu.",
+        "PI ID is busy. Try again in {minutes} min." => "PI ID đang bận. Hãy thử lại sau {minutes} phút.",
+        "PI ID is busy. Try again in a few minutes." => "PI ID đang bận. Hãy thử lại sau ít phút.",
+        "Your account has reached its device limit. Remove a device in PI ID, then retry." => {
+            "Tài khoản đã đạt giới hạn số thiết bị. Hãy gỡ bớt một thiết bị trong PI ID rồi thử lại."
+        }
+        "This device was removed from your account. Sign in again to use it." => {
+            "Thiết bị này đã bị gỡ khỏi tài khoản. Hãy đăng nhập lại để dùng tiếp."
+        }
+        "Your PI ID account is suspended. Every free feature still works." => {
+            "Tài khoản PI ID đang bị tạm khóa. Bạn vẫn dùng được mọi tính năng miễn phí."
+        }
+        "This organization is not available to your account." => "Tổ chức này không khả dụng với tài khoản của bạn.",
+        "Your session has expired. Sign in again." => "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.",
+        "This version can no longer sign in. Update the app, then try again." => {
+            "Phiên bản này không còn đăng nhập được. Hãy cập nhật ứng dụng rồi thử lại."
+        }
+        "PI ID is temporarily unavailable. Try again later." => "PI ID tạm thời không phản hồi. Hãy thử lại sau.",
+        "Something went wrong with PI ID. Try again." => "Đã có lỗi khi kết nối với PI ID. Hãy thử lại.",
         "Update network unavailable: {detail}" => "Không có kết nối cập nhật: {detail}",
         "Update server returned HTTP {detail}" => "Máy chủ cập nhật trả về HTTP {detail}",
         "The update signature is invalid" => "Chữ ký bản cập nhật không hợp lệ",

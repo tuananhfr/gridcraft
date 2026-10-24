@@ -63,6 +63,9 @@ pub fn start() {
                         bridge.connect(&mut services, inbox.clone(), cc.egui_ctx.clone());
                     }
                     let mut app = SheetApp::new(session, services);
+                    if let Some(account) = crate::account::install() {
+                        app.account_hook = Some(std::sync::Arc::new(account));
+                    }
                     if clipboard.is_none() {
                         app.toast = Some(("The browser cannot read the clipboard — use Ctrl+V".into(), gridcraft_ui_egui::now_ms()));
                     }

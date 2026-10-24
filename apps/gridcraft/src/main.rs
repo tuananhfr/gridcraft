@@ -8,6 +8,7 @@
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+mod account;
 #[cfg(target_os = "macos")]
 mod apple_events;
 mod control_server;
@@ -300,11 +301,16 @@ fn services(language: Rc<std::cell::Cell<gridcraft_ui_egui::i18n::Language>>) ->
 
 /// Opens a URL or file with the system's default application.
 fn open_with_system(target: &str) {
+    if let Err(e) = launch_with_system(target) {
+        log::warn!("{e}");
+    }
+}
+
+fn launch_with_system(target: &str) -> Result<(), String> {
     // Last line of defence behind `link.open` and the click prompt: the system only ever gets
     // http, https and mailto addresses.
     let gridcraft_engine::links::LinkKind::External(target) = gridcraft_engine::links::classify(target) else {
-        log::warn!("refused to open {target:?}: only http, https and mailto links are opened");
-        return;
+        return Err(format!("refused to open {target:?}: only http, https and mailto links are opened"));
     };
     let target = target.as_str();
     let cmd = if cfg!(target_os = "macos") {
@@ -314,9 +320,7 @@ fn open_with_system(target: &str) {
     } else {
         "xdg-open"
     };
-    if let Err(e) = std::process::Command::new(cmd).arg(target).spawn() {
-        log::warn!("{cmd} {target}: {e}");
-    }
+    std::process::Command::new(cmd).arg(target).spawn().map(drop).map_err(|e| format!("{cmd} {target}: {e}"))
 }
 
 fn icon() -> Option<egui::IconData> {
@@ -412,6 +416,12 @@ fn main() -> eframe::Result<()> {
         && let Some(dir) = config_dir()
     {
         app.update_hook = Some(std::sync::Arc::new(updates::DesktopUpdates::new(dir.join("update-state.json"))));
+    }
+    // Test runs without preferences keep away from the user's credential store too.
+    if prefs_enabled()
+        && let Some(hook) = account::install(app.ui.language)
+    {
+        app.account_hook = Some(std::sync::Arc::new(hook));
     }
     language.set(app.ui.language);
     let mut drafts = if prefs_enabled() {

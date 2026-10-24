@@ -57,7 +57,7 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!max));
         }
         let narrow = app.narrow.is_narrow();
-        let fit = if narrow { title_fit(ui, rect.width()) } else { TitleFit::ALL };
+        let fit = if narrow { title_fit(ui, rect.width(), app.account_hook.is_some()) } else { TitleFit::ALL };
         ui.horizontal_centered(|ui| {
             ui.add_space(TITLE_LEFT_PAD);
             // AutoSave toggle (saves after each change when the workbook has a file).
@@ -154,6 +154,9 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
                         app.close_document_at(app.session.active_index());
                     }
                 }
+                if fit.shows(Optional::Account) {
+                    crate::account::title_button(app, ui, vec2(28.0, ch));
+                }
                 let __k = icon_button(ui, Icon::Search, t.text_dim, "Search commands (⌘⇧Space)", vec2(28.0, ch));
                 control_keytip(app, ui, &__k, "commandSearch");
                 if __k.clicked() {
@@ -218,7 +221,7 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
 }
 
 /// A narrow window's title bar: the controls that fit without overlapping (see [`TitleFit`]).
-fn title_fit(ui: &Ui, available: f32) -> TitleFit {
+fn title_fit(ui: &Ui, available: f32, account: bool) -> TitleFit {
     let gap = ui.spacing().item_spacing.x;
     let text = |label: &str| ui.painter().layout_no_wrap(tr(ui, label).to_string(), theme::ui_font(12.5), Color32::WHITE).size().x;
     // Always shown: the AutoSave switch, Save, Undo, More, the Share icon, Search and Close, with the
@@ -230,6 +233,13 @@ fn title_fit(ui: &Ui, available: f32) -> TitleFit {
         Optional::AutoSaveLabel => text("AutoSave") + gap,
         Optional::ShareLabel => text("Share") + 6.0,
         Optional::Theme | Optional::Comments => 28.0 + gap,
+        Optional::Account => {
+            if account {
+                28.0 + gap
+            } else {
+                0.0
+            }
+        }
         Optional::Home | Optional::Redo => 26.0 + gap,
         Optional::UndoList => 14.0 + gap,
     })

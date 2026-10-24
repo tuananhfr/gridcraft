@@ -131,6 +131,8 @@ pub enum Icon {
     OpenFolder,
     Info,
     Print,
+    /// Account: a head over shoulders.
+    Person,
 }
 
 struct G<'a> {
@@ -713,6 +715,10 @@ pub fn paint(p: &Painter, rect: Rect, icon: Icon, c: Color32) {
             g.line(&[(4.0, 11.5), (1.5, 11.5), (1.5, 5.5), (14.5, 5.5), (14.5, 11.5), (12.0, 11.5)], c, 1.1);
             g.line(&[(4.5, 9.0), (4.5, 14.5), (11.5, 14.5), (11.5, 9.0), (4.5, 9.0)], c, 1.1);
             g.circle(12.3, 7.6, 0.6, Some(c), None);
+        }
+        Icon::Person => {
+            g.circle(8.0, 5.0, 3.0, None, Some(c));
+            g.line(&[(2.5, 14.5), (3.1, 12.1), (4.8, 10.4), (8.0, 9.6), (11.2, 10.4), (12.9, 12.1), (13.5, 14.5)], c, 1.2);
         }
     }
 }
