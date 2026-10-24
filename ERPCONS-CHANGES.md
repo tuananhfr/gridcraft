@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: add an optional PI ID account (File › Account, a title-bar account button, lease expiry notice) behind an account hook: desktop only when built with `ERPCONS_PI_ISSUER` (erpcons-account v0.1.0), web only when the site shell's `window.erpAccount` v1 is enabled; otherwise nothing is shown and every feature stays allowed.
+
 - Both: GRID-11 imports BIFF8 .xls cell fonts and converts TCVN3/ABC and VNI cell text to Unicode, with font replacement, selection scope and one-step undo.
 
 - Both: tighten narrow status bar spacing so selection Sum stays visible at 320 px beside the notes and zoom controls.

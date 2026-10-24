@@ -36,9 +36,13 @@ pub enum Page {
     Print,
     Export,
     Options,
+    /// PI ID account; listed only while an account hook is installed.
+    Account,
 }
 
 impl Page {
+    /// Pages any build can open by id. `Account` is left out so `ui.backstage` cannot open it
+    /// without an account hook.
     pub const ALL: [Page; 8] = [Page::Home, Page::New, Page::Open, Page::Info, Page::SaveAs, Page::Print, Page::Export, Page::Options];
 
     /// The id `ui.backstage` and `ui.dialog {"name": "backstage", "page": …}` take.
@@ -52,6 +56,7 @@ impl Page {
             Page::Print => "print",
             Page::Export => "export",
             Page::Options => "options",
+            Page::Account => "account",
         }
     }
 
@@ -71,6 +76,7 @@ impl Page {
             Page::Print => "Print",
             Page::Export => "Export",
             Page::Options => "Options",
+            Page::Account => "Account",
         }
     }
 
@@ -84,6 +90,7 @@ impl Page {
             Page::Print => Icon::Print,
             Page::Export => Icon::Share,
             Page::Options => Icon::Settings,
+            Page::Account => Icon::Person,
         }
     }
 }
@@ -154,6 +161,9 @@ struct Outcome {
 /// Draws the Backstage view in place of the ribbon, formula bar, grid and sheet tabs.
 pub fn show(app: &mut SheetApp, ui: &mut Ui) {
     let Some(mut bs) = app.backstage.take() else { return };
+    if bs.page == Page::Account && app.account_hook.is_none() {
+        bs.page = Page::Home;
+    }
     let ctx = ui.ctx().clone();
     // Esc inside a text field leaves the field; it closes the view only from outside one.
     let typing = ctx.text_edit_focused();
@@ -200,6 +210,11 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
                 if nav_item(ui, Page::Options.icon(), lang.tr("Options"), bs.page == Page::Options, nav_text, nav_sel).clicked() {
                     out.page = Some(Page::Options);
                 }
+                if app.account_hook.is_some()
+                    && nav_item(ui, Page::Account.icon(), lang.tr("Account"), bs.page == Page::Account, nav_text, nav_sel).clicked()
+                {
+                    out.page = Some(Page::Account);
+                }
             });
         });
     egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.ribbon)).show(ui, |ui| {
@@ -217,6 +232,7 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
                     Page::Print => print(app, ui, &mut bs, &mut out),
                     Page::Export => export(app, ui, &mut out),
                     Page::Options => options(app, ui),
+                    Page::Account => crate::account::page(app, ui),
                 }
             });
         });

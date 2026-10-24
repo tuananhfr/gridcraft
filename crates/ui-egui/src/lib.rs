@@ -6,6 +6,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
+pub mod account;
 pub mod backstage;
 mod border_preview;
 mod calculation_notice;
@@ -313,6 +314,9 @@ pub struct SheetApp {
     pub update_hook: Option<std::sync::Arc<dyn updates::UpdateHook>>,
     #[cfg(not(target_arch = "wasm32"))]
     updates: updates::Updates,
+    /// Optional PI ID account; `None` (the default) shows no account UI at all.
+    pub account_hook: Option<std::sync::Arc<dyn account::AccountHook>>,
+    account: account::AccountState,
     /// Product identity supplied by the host; web retains the upstream default.
     pub product_name: &'static str,
     pub session: Session,
@@ -439,6 +443,8 @@ impl SheetApp {
             update_hook: None,
             #[cfg(not(target_arch = "wasm32"))]
             updates: Default::default(),
+            account_hook: None,
+            account: Default::default(),
             product_name: "GridCraft",
             session,
             ui: UiState::default(),
@@ -1319,6 +1325,7 @@ impl SheetApp {
         self.advance_close_queue();
         #[cfg(not(target_arch = "wasm32"))]
         self.poll_updates(ctx);
+        account::poll(self, ctx);
         if std::mem::take(&mut self.quit_requested) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
@@ -1528,6 +1535,7 @@ impl SheetApp {
         }
         #[cfg(not(target_arch = "wasm32"))]
         updates::dialog(self, &ctx);
+        account::warning_notice(self, &ctx);
         dialogs::show(self, &ctx);
         macro_runtime::modals(self, &ctx);
         widgets::message_box(self, &ctx);

@@ -6,6 +6,8 @@
 pub enum Optional {
     AutoSaveLabel,
     Theme,
+    /// The PI ID account button (File › Account stays reachable when it gives way).
+    Account,
     Comments,
     Home,
     UndoList,
@@ -13,8 +15,16 @@ pub enum Optional {
     Redo,
 }
 
-pub const DROP_ORDER: [Optional; 7] =
-    [Optional::AutoSaveLabel, Optional::Theme, Optional::Comments, Optional::Home, Optional::UndoList, Optional::ShareLabel, Optional::Redo];
+pub const DROP_ORDER: [Optional; 8] = [
+    Optional::AutoSaveLabel,
+    Optional::Theme,
+    Optional::Account,
+    Optional::Comments,
+    Optional::Home,
+    Optional::UndoList,
+    Optional::ShareLabel,
+    Optional::Redo,
+];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TitleFit {
