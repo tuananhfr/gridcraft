@@ -226,6 +226,12 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
             "Đăng nhập là không bắt buộc. Mọi tính năng đều dùng được khi không có tài khoản."
         }
         "Continue in your browser…" => "Tiếp tục trong trình duyệt…",
+        "Signed in to PI ID. You can close this tab and go back to the app." => {
+            "Đã đăng nhập PI ID. Bạn có thể đóng thẻ này và quay lại ứng dụng."
+        }
+        "Sign-in did not finish. Close this tab and try again in the app." => {
+            "Chưa đăng nhập xong. Hãy đóng thẻ này và thử lại trong ứng dụng."
+        }
         "Organization" => "Tổ chức",
         "Personal" => "Cá nhân",
         "License" => "Giấy phép",
