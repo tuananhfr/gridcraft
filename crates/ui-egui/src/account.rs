@@ -93,6 +93,7 @@ pub struct WarningView {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AccountError {
     Cancelled,
+    PopupBlocked,
     Network,
     Timeout,
     Denied,
@@ -110,6 +111,13 @@ pub enum AccountError {
 /// A feature that needs a paid entitlement: anything but the built-in free set (products.md §2).
 pub fn is_pro_feature(feature: &str) -> bool {
     !(feature.ends_with(".view") || feature.ends_with(".export") || feature.ends_with(".use"))
+}
+
+/// The avatar letter: the given name's first letter (Vietnamese names put it last, as the office
+/// shell does), else the email's.
+pub fn avatar_letter(name: &str, email: Option<&str>) -> Option<String> {
+    let given = name.split_whitespace().next_back().unwrap_or_default();
+    given.chars().chain(email.unwrap_or_default().chars()).find(|c| c.is_alphanumeric()).map(|c| c.to_uppercase().collect())
 }
 
 /// The UI's copy of the hook's state, refreshed once per frame.
@@ -148,6 +156,7 @@ pub fn format_date(language: Language, unix: i64) -> String {
 pub fn error_text(language: Language, error: AccountError) -> Option<String> {
     let key = match error {
         AccountError::Cancelled => return None,
+        AccountError::PopupBlocked => "The browser blocked the sign-in window. Allow pop-ups for this site and try again.",
         AccountError::Network => "Could not reach PI ID. Check your connection and try again.",
         AccountError::Timeout => "PI ID did not answer in time. Try again.",
         AccountError::Denied => "PI ID refused the request.",
@@ -196,7 +205,7 @@ pub(crate) fn title_button(app: &mut SheetApp, ui: &mut Ui, size: egui::Vec2) {
     let (tip, initial) = match &app.account.snapshot.view {
         AccountView::SignedIn(s) => {
             let name = display_name(s);
-            (name.to_string(), name.chars().next().map(|c| c.to_uppercase().collect::<String>()))
+            (name.to_string(), avatar_letter(&s.name, s.email.as_deref()))
         }
         AccountView::SigningIn => (lang.tr("Signing in…").to_string(), None),
         AccountView::Guest => (lang.tr("Sign in").to_string(), None),
@@ -254,45 +263,46 @@ pub(crate) fn page(app: &mut SheetApp, ui: &mut Ui) {
     }
 }
 
+/// Narrower than this, the account details stack (caption over value) instead of two columns.
+const TWO_COLUMNS_MIN_W: f32 = 480.0;
+const ORG_PICKER_W: f32 = 260.0;
+
 fn signed_in(hook: &dyn AccountHook, lang: Language, ui: &mut Ui, s: &SignedInView, busy: bool, t: &Tokens) {
-    ui.label(RichText::new(display_name(s)).font(theme::ui_bold(18.0)).color(t.text));
+    // One line each, elided with the full text on hover: wrapping would split an address mid-word.
+    ui.add(egui::Label::new(RichText::new(display_name(s)).font(theme::ui_bold(18.0)).color(t.text)).truncate());
     if let Some(email) = s.email.as_deref().filter(|e| !e.is_empty() && *e != display_name(s)) {
-        ui.label(RichText::new(email).font(theme::ui_font(12.5)).color(t.text_dim));
+        ui.add(egui::Label::new(RichText::new(email).font(theme::ui_font(12.5)).color(t.text_dim)).truncate());
     }
     ui.add_space(16.0);
-    egui::Grid::new("account_details").num_columns(2).spacing(vec2(18.0, 10.0)).show(ui, |ui| {
-        ui.label(lang.tr("Organization"));
-        let active = s.active_org.as_deref();
-        let selected = match active {
-            Some(id) => s.orgs.iter().find(|o| o.id == id).map_or(id, |o| o.name.as_str()).to_string(),
-            None => lang.tr("Personal").to_string(),
-        };
-        ui.add_enabled_ui(!busy, |ui| {
-            egui::ComboBox::from_id_salt("account_org").width(260.0).selected_text(selected).show_ui(ui, |ui| {
-                if ui.selectable_label(active.is_none(), lang.tr("Personal")).clicked() && active.is_some() {
-                    hook.select_org(None);
-                }
-                for org in &s.orgs {
-                    let current = active == Some(org.id.as_str());
-                    if ui.selectable_label(current, &org.name).clicked() && !current {
-                        hook.select_org(Some(org.id.clone()));
-                    }
-                }
-            });
-        });
-        ui.end_row();
-        ui.label(lang.tr("License"));
-        ui.horizontal(|ui| {
+    let organization = |ui: &mut Ui| org_picker(hook, lang, ui, s, busy);
+    let licence = |ui: &mut Ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label(licence_text(lang, s.licence));
             if s.licence == LicenceView::DeviceCapReached && ui.add_enabled(!busy, egui::Button::new(lang.tr("Retry"))).clicked() {
                 hook.retry_activation();
             }
         });
-        ui.end_row();
-        ui.label(lang.tr("Connection"));
+    };
+    let connection = |ui: &mut Ui| {
         ui.label(lang.tr(if s.online { "Connected to PI ID" } else { "Offline: showing what is saved on this device" }));
-        ui.end_row();
-    });
+    };
+    let rows: [(&str, &dyn Fn(&mut Ui)); 3] = [("Organization", &organization), ("License", &licence), ("Connection", &connection)];
+    if ui.available_width() >= TWO_COLUMNS_MIN_W {
+        egui::Grid::new("account_details").num_columns(2).spacing(vec2(18.0, 10.0)).show(ui, |ui| {
+            for (caption, value) in rows {
+                ui.label(lang.tr(caption));
+                value(ui);
+                ui.end_row();
+            }
+        });
+    } else {
+        for (caption, value) in rows {
+            ui.label(RichText::new(lang.tr(caption)).color(t.text_dim));
+            ui.add_space(2.0);
+            value(ui);
+            ui.add_space(10.0);
+        }
+    }
     if s.reauth_required {
         ui.add_space(14.0);
         ui.label(RichText::new(lang.tr("Your session has expired. Sign in again to keep using your account.")).color(t.text));
@@ -309,6 +319,32 @@ fn signed_in(hook: &dyn AccountHook, lang: Language, ui: &mut Ui, s: &SignedInVi
         if busy {
             ui.spinner();
         }
+    });
+}
+
+fn org_picker(hook: &dyn AccountHook, lang: Language, ui: &mut Ui, s: &SignedInView, busy: bool) {
+    let active = s.active_org.as_deref();
+    let selected = match active {
+        Some(id) => s.orgs.iter().find(|o| o.id == id).map_or(id, |o| o.name.as_str()).to_string(),
+        None => lang.tr("Personal").to_string(),
+    };
+    // ComboBox::width is only a minimum: a long organization name would widen it past the page.
+    let size = vec2(ui.available_width().min(ORG_PICKER_W), ui.spacing().interact_size.y);
+    ui.allocate_ui(size, |ui| {
+        ui.add_enabled_ui(!busy, |ui| {
+            egui::ComboBox::from_id_salt("account_org").width(size.x).truncate().selected_text(selected).show_ui(ui, |ui| {
+                if ui.add(egui::Button::selectable(active.is_none(), lang.tr("Personal")).truncate()).clicked() && active.is_some() {
+                    hook.select_org(None);
+                }
+                for org in &s.orgs {
+                    let current = active == Some(org.id.as_str());
+                    let item = ui.add(egui::Button::selectable(current, &org.name).truncate()).on_hover_text(&org.name);
+                    if item.clicked() && !current {
+                        hook.select_org(Some(org.id.clone()));
+                    }
+                }
+            });
+        });
     });
 }
 
@@ -357,6 +393,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_avatar_shows_the_given_name_like_the_office_shell() {
+        assert_eq!(super::avatar_letter("Nguyễn Văn An", None).as_deref(), Some("A"));
+        assert_eq!(super::avatar_letter(" ", Some("binh@example.com")).as_deref(), Some("B"));
+        assert_eq!(super::avatar_letter("", None), None);
+    }
+
+    #[test]
     fn only_features_outside_the_free_set_are_pro() {
         for free in ["bangtinh.view", "bangtinh.export", "bangtinh.use", "vanban.view"] {
             assert!(!is_pro_feature(free), "{free}");
@@ -386,6 +429,7 @@ mod tests {
             "PI ID đang bận. Hãy thử lại sau 1 phút."
         );
         let all = [
+            AccountError::PopupBlocked,
             AccountError::Network,
             AccountError::Timeout,
             AccountError::Denied,

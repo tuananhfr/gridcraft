@@ -247,6 +247,9 @@ fn errors_read_in_plain_language_and_a_cancel_is_silent() {
     open_account_page(&mut h);
     h.get_by_label("Không kết nối được PI ID. Kiểm tra mạng rồi thử lại.");
     screenshot(&mut h, "account-error-vi.png");
+    fake.set(AccountView::Guest, Some(AccountError::PopupBlocked));
+    h.run_steps(2);
+    h.get_by_label("Trình duyệt đã chặn cửa sổ đăng nhập. Hãy cho phép cửa sổ bật lên cho trang này rồi thử lại.");
     fake.set(AccountView::Guest, Some(AccountError::RateLimited { retry_after_secs: Some(120) }));
     h.run_steps(2);
     h.get_by_label("PI ID đang bận. Hãy thử lại sau 2 phút.");
@@ -295,4 +298,95 @@ fn the_account_button_never_crowds_a_narrow_title_bar() {
         open_account_page(&mut h);
         assert!(h.get_all_by_label("Tài khoản").count() >= 1);
     }
+}
+
+const PHONE: egui::Vec2 = egui::Vec2::new(390.0, 844.0);
+
+fn long_signed_in() -> AccountView {
+    let AccountView::SignedIn(mut s) = signed_in(LicenceView::Active { expires_at: EXPIRES, pro: false }, None) else { panic!() };
+    s.name = "Tôn Nữ Thị Phương Thảo Nguyễn Hoàng".into();
+    s.email = Some("tonnuthiphuongthao.nguyenhoang@congtyxaydungvidu.com.vn".into());
+    s.orgs[0].name = "Công ty Cổ phần Tư vấn Thiết kế và Xây dựng Ví dụ Miền Nam".into();
+    s.active_org = Some("org_a".into());
+    s.online = false;
+    AccountView::SignedIn(s)
+}
+
+/// The account page's own labels, buttons and pickers: below the page heading, right of the
+/// Backstage navigation.
+fn page_widgets(h: &Harness) -> Vec<(String, egui::Rect)> {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::{NodeT, by};
+    let heading = h.get_all_by_label("Tài khoản").map(|n| n.rect()).max_by(|a, b| a.left().total_cmp(&b.left())).unwrap();
+    h.query_all(by().predicate(|n| matches!(n.role(), Role::Label | Role::Button | Role::ComboBox)))
+        .filter(|n| n.rect().top() > heading.bottom() && n.rect().left() >= heading.left() - 0.5)
+        .map(|n| {
+            let node = n.accesskit_node();
+            let text = if node.role() == Role::Label { node.value() } else { node.label() };
+            (text.unwrap_or_default().to_string(), n.rect())
+        })
+        .collect()
+}
+
+#[test]
+fn the_account_page_fits_a_phone_without_breaking_names() {
+    let fake = Fake::with(long_signed_in());
+    let mut h = harness(Some(fake), PHONE, Language::Vi);
+    open_account_page(&mut h);
+    screenshot(&mut h, "gridcraft-account-signed-in-390.png");
+    // The harness frames the app with 8 pt and Backstage pages keep a 32 pt right margin.
+    let right = PHONE.x - 8.0 - 32.0 + 0.5;
+    let widgets = page_widgets(&h);
+    for label in ["Tổ chức", "Giấy phép", "Kết nối", "Đăng xuất"] {
+        assert!(widgets.iter().any(|(text, _)| text == label), "{label} is on the page: {widgets:?}");
+    }
+    for (text, rect) in &widgets {
+        assert!(rect.right() <= right, "{text:?} is clipped at 390: {rect:?}");
+    }
+    // Names and addresses stay on one line (elided), never broken mid-word.
+    for (text, max_height) in [("Tôn Nữ", 30.0), ("tonnuthiphuongthao", 22.0)] {
+        let (_, rect) = widgets.iter().find(|(t, _)| t.starts_with(text)).unwrap_or_else(|| panic!("{text}: {widgets:?}"));
+        assert!(rect.height() <= max_height, "{text} wraps: {rect:?}");
+    }
+    let picker = h.get_all_by_role(egui::accesskit::Role::ComboBox).next().expect("organization picker").rect();
+    assert!(picker.right() <= right, "organization picker {picker:?}");
+}
+
+#[test]
+fn the_account_page_keeps_two_columns_on_a_desktop() {
+    let fake = Fake::with(long_signed_in());
+    let mut h = harness(Some(fake), vec2(1280.0, 800.0), Language::Vi);
+    screenshot(&mut h, "gridcraft-titlebar-signed-in-1280.png");
+    open_account_page(&mut h);
+    screenshot(&mut h, "gridcraft-account-signed-in-1280.png");
+    let caption = h.get_by_label("Tổ chức").rect();
+    let picker = h.get_all_by_role(egui::accesskit::Role::ComboBox).next().expect("organization picker").rect();
+    assert!(picker.left() > caption.right() && picker.top() < caption.bottom(), "the picker sits beside its caption: {caption:?} {picker:?}");
+    assert!(picker.width() <= 261.0, "a long organization name elides inside the picker: {picker:?}");
+}
+
+/// Whether the title bar shows a button labelled `label` (the ribbon's own copies sit lower down).
+fn title_bar_shows(h: &Harness, label: &str) -> bool {
+    let (_, right, _) = title_layout(h);
+    h.query_all_by_label(label).any(|n| right.contains(n.rect().center()))
+}
+
+#[test]
+fn the_account_button_gives_way_once_in_a_narrowing_title_bar() {
+    let fake = Fake::with(signed_in(LicenceView::Free, None));
+    let mut h = harness(Some(fake), DESKTOP, Language::En);
+    let mut narrowest = None;
+    for width in (320..=598).rev().step_by(2) {
+        h.set_size(vec2(width as f32, 844.0));
+        h.run_steps(3);
+        if title_bar_shows(&h, "Nguyễn Văn An") {
+            assert!(narrowest.is_none_or(|w| w == width + 2), "the button comes back at {width} after giving way");
+            narrowest = Some(width);
+        }
+    }
+    // Theme and Comments give way first (title_fit::DROP_ORDER), so the button stays to about 536 pt.
+    assert!(narrowest.is_some_and(|w| w < 560), "narrowest width that keeps the account button: {narrowest:?}");
+    h.set_size(PHONE);
+    h.run_steps(3);
+    screenshot(&mut h, "gridcraft-titlebar-signed-in-390.png");
 }

@@ -6,9 +6,9 @@
 pub enum Optional {
     AutoSaveLabel,
     Theme,
+    Comments,
     /// The PI ID account button (File › Account stays reachable when it gives way).
     Account,
-    Comments,
     Home,
     UndoList,
     ShareLabel,
@@ -18,8 +18,8 @@ pub enum Optional {
 pub const DROP_ORDER: [Optional; 8] = [
     Optional::AutoSaveLabel,
     Optional::Theme,
-    Optional::Account,
     Optional::Comments,
+    Optional::Account,
     Optional::Home,
     Optional::UndoList,
     Optional::ShareLabel,
@@ -74,10 +74,10 @@ mod tests {
 
     #[test]
     fn controls_give_way_lowest_priority_first() {
-        // 250 fixed + 270 optional: 100 short of 520 hides the label and the theme switch.
+        // 250 fixed + 300 optional: 130 short of 550 hides the label, the theme switch and Comments.
         let fit = TitleFit::new(420.0, 250.0, widths);
-        assert!(!fit.shows(Optional::AutoSaveLabel) && !fit.shows(Optional::Theme));
-        assert!(fit.shows(Optional::Comments) && fit.shows(Optional::Redo));
+        assert!(!fit.shows(Optional::AutoSaveLabel) && !fit.shows(Optional::Theme) && !fit.shows(Optional::Comments));
+        assert!(fit.shows(Optional::Account) && fit.shows(Optional::Redo));
         let mut last = 0;
         for available in (200..=600).rev().step_by(10) {
             let fit = TitleFit::new(available as f32, 250.0, widths);
@@ -87,6 +87,12 @@ mod tests {
             assert!(hidden >= last, "narrower never shows more");
             last = hidden;
         }
+    }
+
+    #[test]
+    fn the_account_button_outlasts_theme_and_comments() {
+        let at = |item| DROP_ORDER.iter().position(|&o| o == item);
+        assert!(at(Optional::Account) > at(Optional::Theme) && at(Optional::Account) > at(Optional::Comments));
     }
 
     #[test]
