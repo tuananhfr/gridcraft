@@ -20,6 +20,7 @@ pub(crate) fn error_of(error: &Value) -> Option<AccountError> {
     let retry_after_secs = error.get("retryAfter").and_then(Value::as_f64).filter(|s| s.is_finite() && *s >= 0.0).map(|s| s.ceil() as u64);
     Some(match code {
         "cancelled" => AccountError::Cancelled,
+        "popup_blocked" => AccountError::PopupBlocked,
         "network" | "discovery_failed" => AccountError::Network,
         "timeout" => AccountError::Timeout,
         "access_denied" | "forbidden" => AccountError::Denied,
@@ -342,7 +343,7 @@ mod tests {
             ("unknown_org", AccountError::OrgUnavailable),
             ("session_expired", AccountError::ReauthRequired),
             ("dependency_unavailable", AccountError::ServiceUnavailable),
-            ("popup_blocked", AccountError::Other),
+            ("popup_blocked", AccountError::PopupBlocked),
         ] {
             assert_eq!(error_of(&json!({"code": code, "retryAfter": null})), Some(error), "{code}");
         }

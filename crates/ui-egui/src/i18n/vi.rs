@@ -254,6 +254,9 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Your offline license expires on {date}. Connect to the internet to renew it." => {
             "Giấy phép ngoại tuyến sẽ hết hạn vào ngày {date}. Hãy kết nối Internet để gia hạn."
         }
+        "The browser blocked the sign-in window. Allow pop-ups for this site and try again." => {
+            "Trình duyệt đã chặn cửa sổ đăng nhập. Hãy cho phép cửa sổ bật lên cho trang này rồi thử lại."
+        }
         "Could not reach PI ID. Check your connection and try again." => "Không kết nối được PI ID. Kiểm tra mạng rồi thử lại.",
         "PI ID did not answer in time. Try again." => "PI ID không phản hồi kịp. Hãy thử lại.",
         "PI ID refused the request." => "PI ID đã từ chối yêu cầu.",

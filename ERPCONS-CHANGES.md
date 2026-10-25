@@ -1,5 +1,7 @@
 # ERPCons changes
 
+- Both: PI ID account fixes: erpcons-account v0.1.1 (pure-Rust Secret Service, so Linux builds no longer need libdbus), a plain message when the browser blocks the sign-in pop-up (web), File › Account fits 390 px windows (details stack, long names and emails elide on one line), the title-bar account button gives way after Theme and Comments, and the avatar shows the given name's initial like the office shell.
+
 - Both: add an optional PI ID account (File › Account, a title-bar account button, lease expiry notice) behind an account hook: desktop only when built with `ERPCONS_PI_ISSUER` (erpcons-account v0.1.0), web only when the site shell's `window.erpAccount` v1 is enabled; otherwise nothing is shown and every feature stays allowed.
 
 - Both: GRID-11 imports BIFF8 .xls cell fonts and converts TCVN3/ABC and VNI cell text to Unicode, with font replacement, selection scope and one-step undo.
