@@ -33,6 +33,7 @@ pub mod i18n;
 pub mod icons;
 pub mod keymap;
 pub mod keytips;
+pub mod log_redact;
 mod macro_dialog;
 mod macro_runtime;
 pub mod narrow;
@@ -48,6 +49,7 @@ pub mod ribbon;
 pub mod save_as;
 pub mod save_status;
 pub mod selection_glide;
+pub mod share;
 pub mod tabs;
 pub mod text_box;
 pub mod theme;
@@ -241,6 +243,9 @@ pub struct Services {
     /// what became of the file; a workbook counts as saved only when it reports
     /// [`Delivery::Delivered`].
     pub download: Option<Box<dyn Fn(&str, &[u8], DeliveryReport)>>,
+    /// Web, with the office shell: offer a copy (name, bytes) to the system share sheet; `false`
+    /// means it wasn't taken and the copy is downloaded instead. Called inside the click.
+    pub share: Option<Box<dyn Fn(&str, &[u8]) -> bool>>,
     /// Web: start an asynchronous file pick; the bytes arrive later in `inbox`.
     pub open_async: Option<Box<dyn Fn()>>,
     /// Files delivered asynchronously (name, bytes), opened on the next frame.
@@ -290,6 +295,16 @@ impl DeliveryReport {
     fn abandoned(&self) -> bool {
         std::sync::Arc::strong_count(&self.0) == 1
     }
+}
+
+/// What became of a file that arrived as bytes ([`SheetApp::open_dropped`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Arrival {
+    /// The active workbook now.
+    Opened,
+    /// Asking for its password, which opens it.
+    AwaitingPassword,
+    Refused,
 }
 
 /// A workbook handed to the host as a download, waiting for its [`Delivery`].
@@ -1411,9 +1426,14 @@ impl SheetApp {
         }
     }
 
-    /// Opens a file read asynchronously; `true` when it is now the active workbook (a
-    /// password-protected one asks for its password first).
-    fn open_arrived(&mut self, name: &str, bytes: &[u8]) -> bool {
+    /// Web: opens a file dropped on the page; `false` when it was refused (unreadable, not a
+    /// workbook, or the document limit). A password-protected one counts as accepted: it asks.
+    pub fn open_dropped(&mut self, name: &str, bytes: &[u8]) -> bool {
+        self.open_arrived(name, bytes) != Arrival::Refused
+    }
+
+    /// Opens a file read asynchronously (a password-protected one asks for its password first).
+    fn open_arrived(&mut self, name: &str, bytes: &[u8]) -> Arrival {
         // Moved into the params: `json!` would copy a large file's base64, tens of megabytes.
         let params = Json::Object(serde_json::Map::from_iter([
             ("name".to_string(), Json::String(name.to_string())),
@@ -1424,16 +1444,16 @@ impl SheetApp {
             Ok(r) => {
                 self.backstage = None;
                 self.show_open_warnings(&r);
-                true
+                Arrival::Opened
             }
             Err(e) if e.contains(gridcraft_engine::io::PASSWORD_REQUIRED) => {
                 self.backstage = None;
                 self.open_dialog("openPassword", json!({"name": name, "base64": gridcraft_engine::io::base64_encode(bytes)}));
-                false
+                Arrival::AwaitingPassword
             }
             Err(e) => {
                 self.alert(e);
-                false
+                Arrival::Refused
             }
         };
         self.after_engine();
@@ -1443,7 +1463,7 @@ impl SheetApp {
     /// Web: opens a recovered draft named `name` as an unsaved workbook titled `name`, like a
     /// dropped file (an untouched blank Book1 is replaced). Its uid, or `None` when it didn't open.
     pub fn open_draft(&mut self, name: &str, bytes: &[u8]) -> Option<u64> {
-        if !self.open_arrived(name, bytes) {
+        if self.open_arrived(name, bytes) != Arrival::Opened {
             return None;
         }
         let d = self.session.active_mut()?;

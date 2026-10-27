@@ -662,6 +662,7 @@ const JAPANESE: &[(&str, &str)] = &[
     ("Action\nJournal", "操作ジャーナル"),
     ("About\nGridCraft", "GridCraft について"),
     ("Share", "共有"),
+    ("Share…", "共有…"),
     ("Add Chart\nElement", "グラフ要素を追加"),
     ("Change\nChart Type", "グラフの種類の変更"),
     ("Switch\nRow/Column", "行/列の切り替え"),

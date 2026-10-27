@@ -31,6 +31,8 @@ mod language;
 #[cfg(target_arch = "wasm32")]
 mod region;
 #[cfg(target_arch = "wasm32")]
+mod shell_hooks;
+#[cfg(target_arch = "wasm32")]
 mod web;
 
 #[cfg(target_arch = "wasm32")]

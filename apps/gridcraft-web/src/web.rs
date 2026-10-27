@@ -4,6 +4,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use gridcraft_engine::Session;
+use gridcraft_ui_egui::log_redact::file_label;
 use gridcraft_ui_egui::{Delivery, DeliveryReport, Inbox, Services, SheetApp};
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::JsValue;
@@ -61,6 +62,9 @@ pub fn start() {
                     }
                     if let Some(bridge) = &app_bridge {
                         bridge.connect(&mut services, inbox.clone(), cc.egui_ctx.clone());
+                    } else {
+                        // An embedding parent stores what GridCraft saves; sharing is the office shell's.
+                        services.share = crate::shell_hooks::share_service();
                     }
                     let mut app = SheetApp::new(session, services);
                     if let Some(account) = crate::account::install() {
@@ -89,7 +93,17 @@ pub fn start() {
                     }
                     // Drafts are the office shell's; an embedding parent stores what it opened itself.
                     let drafts = app_bridge.is_none().then(|| crate::drafts::Drafts::install(&cc.egui_ctx));
-                    Ok(Box::new(WebShell { app, inbox, bridge: app_bridge, clipboard, dirty, drafts, language, region, macro_time_limit_seconds }))
+                    Ok(Box::new(WebShell {
+                        app,
+                        dropped: Inbox::default(),
+                        bridge: app_bridge,
+                        clipboard,
+                        dirty,
+                        drafts,
+                        language,
+                        region,
+                        macro_time_limit_seconds,
+                    }))
                 }),
             )
             .await;
@@ -122,7 +136,9 @@ fn macro_time_limit_storage() -> Option<web_sys::Storage> {
 struct WebShell {
     app: SheetApp,
     macro_time_limit_seconds: u32,
-    inbox: Inbox,
+    /// Files dropped on the page, read and waiting to open; only these report to the shell's
+    /// `erpIntakeResult` (picked and host-sent files arrive through `Services::inbox`).
+    dropped: Inbox,
     bridge: Option<crate::host::Bridge>,
     clipboard: Option<crate::clipboard::ClipboardBridge>,
     /// Whether any open workbook has unsaved changes, for the `beforeunload` guard.
@@ -139,21 +155,30 @@ impl eframe::App for WebShell {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let dropped = ctx.input_mut(|i| std::mem::take(&mut i.raw.dropped_files));
         for f in dropped {
-            let inbox = self.inbox.clone();
+            let queue = self.dropped.clone();
             let ctx = ctx.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let name = f.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "dropped.xlsx".into());
                 match f.bytes_async().await {
                     Ok(bytes) => {
-                        inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes));
+                        queue.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes));
                         ctx.request_repaint();
                     }
-                    Err(e) => log::error!("couldn't read dropped file {name}: {e}"),
+                    Err(e) => {
+                        let size = f.web_file().map_or(0, |file| file.size() as usize);
+                        log::error!("couldn't read a dropped {}: {e}", file_label(&name, Some(size)));
+                        crate::shell_hooks::intake_result(&name, size, false);
+                    }
                 }
             });
         }
         if let Some(drafts) = &mut self.drafts {
             drafts.open_restored(&mut self.app);
+        }
+        let arrived = std::mem::take(&mut *self.dropped.lock().unwrap_or_else(|e| e.into_inner()));
+        for (name, bytes) in arrived {
+            let accepted = self.app.open_dropped(&name, &bytes);
+            crate::shell_hooks::intake_result(&name, bytes.len(), accepted);
         }
         self.app.logic(ctx);
         if let Some(clipboard) = &self.clipboard {
@@ -269,7 +294,7 @@ fn services(inbox: Inbox, ctx: egui::Context) -> Services {
         })),
         download: Some(Box::new(move |name: &str, bytes: &[u8], report: DeliveryReport| {
             if let Err(e) = download(name, bytes, report.clone(), save_ctx.clone()) {
-                log::error!("download of {name} failed: {e}");
+                log::error!("download of a {} failed: {e}", file_label(name, Some(bytes.len())));
                 report.settle(Delivery::Failed(SAVE_FAILED.into()));
             }
         })),
@@ -333,7 +358,7 @@ fn print_pdf(bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-fn mime_for(name: &str) -> &'static str {
+pub(crate) fn mime_for(name: &str) -> &'static str {
     match name.rsplit('.').next().map(str::to_ascii_lowercase).as_deref() {
         Some("xlsx") => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         Some("xlsm") => "application/vnd.ms-excel.sheet.macroEnabled.12",

@@ -75,6 +75,8 @@ fn stem(name: &str) -> &str {
 }
 
 /// The [`DROP_MACROS`] dialog's body: save as `.xlsm` instead, save without the macros, or cancel.
+/// Asked before Share… (`share` set), the chosen button shares instead: still a click, so the
+/// browser allows the share sheet.
 pub(crate) fn drop_macros_body(app: &mut SheetApp, ui: &mut egui::Ui, d: &Dialog, open: &mut bool) {
     ui.label(tr(ui, DROP_MACROS_TEXT));
     if let Some(doc) = app.session.active() {
@@ -85,23 +87,29 @@ pub(crate) fn drop_macros_body(app: &mut SheetApp, ui: &mut egui::Ui, d: &Dialog
     }
     ui.add_space(10.0);
     let path = d.values.get("path").and_then(Json::as_str).map(str::to_string);
+    let share = d.values.get("share").and_then(Json::as_bool) == Some(true);
+    let finish = |app: &mut SheetApp, params: &Json, button: &egui::Response| {
+        if share { app.share_workbook(params, button.clicked_by(egui::PointerButton::Primary)) } else { app.save_workbook_as(params) }
+    };
     ui.horizontal_wrapped(|ui| {
-        if ui.button(tr(ui, SAVE_AS_XLSM)).clicked() {
+        let xlsm = ui.button(tr(ui, SAVE_AS_XLSM));
+        if xlsm.clicked() {
             *open = false;
             let mut params = json!({"format": "xlsm"});
             // The desktop picker comes back with the name just picked, now ending in .xlsm.
             if let Some(path) = &path {
                 params["name"] = json!(std::path::Path::new(path).with_extension("xlsm").to_string_lossy());
             }
-            app.save_workbook_as(&params);
+            finish(app, &params, &xlsm);
         }
-        if ui.button(tr(ui, SAVE_AS_XLSX)).clicked() {
+        let xlsx = ui.button(tr(ui, SAVE_AS_XLSX));
+        if xlsx.clicked() {
             *open = false;
             let mut params = json!({"format": "xlsx", "dropMacros": true});
             if let Some(path) = &path {
                 params["path"] = json!(path);
             }
-            app.save_workbook_as(&params);
+            finish(app, &params, &xlsx);
         }
         if ui.button(tr(ui, "Cancel")).clicked() {
             *open = false;

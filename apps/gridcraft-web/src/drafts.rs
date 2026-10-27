@@ -13,6 +13,7 @@ use crate::draft_state::{Message, States};
 use gridcraft_engine::model::Workbook;
 use gridcraft_ui_egui::SheetApp;
 use gridcraft_ui_egui::drafts::{self, Planner};
+use gridcraft_ui_egui::log_redact::file_label;
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
@@ -91,11 +92,11 @@ impl Drafts {
                     return;
                 };
                 if !format.as_string().is_some_and(|f| drafts::FORMATS.contains(&f.as_str())) {
-                    log::warn!("erpDrafts restore of {name}: not a workbook draft ({format:?})");
+                    log::warn!("erpDrafts restore of a {}: not a workbook draft ({format:?})", file_label(&name, None));
                     return;
                 }
                 let Ok(bytes) = bytes.dyn_into::<js_sys::Uint8Array>() else {
-                    log::warn!("erpDrafts restore of {name}: bytes are not a Uint8Array");
+                    log::warn!("erpDrafts restore of a {}: bytes are not a Uint8Array", file_label(&name, None));
                     return;
                 };
                 match inbox.try_borrow_mut() {
@@ -103,7 +104,7 @@ impl Drafts {
                         queue.push(Restore { key, name, bytes: bytes.to_vec() });
                         ctx.request_repaint();
                     }
-                    Err(e) => log::warn!("erpDrafts restore of {name} dropped: {e}"),
+                    Err(e) => log::warn!("erpDrafts restore of a {} dropped: {e}", file_label(&name, Some(bytes.length() as usize))),
                 }
             })
             .into_js_value();
@@ -120,7 +121,7 @@ impl Drafts {
             let opened = app.open_draft(&r.name, &r.bytes).and_then(|uid| app.session.documents().iter().find(|d| d.uid == uid));
             match opened {
                 Some(d) => self.planner.adopt(d.uid, &r.key, &d.wb, js_sys::Date::now()),
-                None => log::warn!("couldn't reopen the draft {}", r.name),
+                None => log::warn!("couldn't reopen a draft {}", file_label(&r.name, Some(r.bytes.len()))),
             }
         }
     }
@@ -242,7 +243,7 @@ fn put(store: &JsValue, key: &str, name: &str, wb: &Workbook, tracking: &Rc<RefC
             }
         });
     } else if let Err(e) = result {
-        log::warn!("couldn't put a draft of {name}: {e:?}");
+        log::warn!("couldn't put a draft of a {}: {e:?}", file_label(name, None));
     }
     cost
 }

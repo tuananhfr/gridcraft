@@ -164,7 +164,15 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
                 }
                 let share_label = if fit.shows(Optional::ShareLabel) { "Share" } else { "" };
                 let share = small_button(ui, Icon::Share, share_label, "Share: export or save a copy", true);
+                let share_name = tr(ui, "Share").to_string();
+                share.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &share_name));
                 egui::Popup::menu(&share).show(|ui| {
+                    if app.can_share() {
+                        let item = ui.button(tr(ui, crate::share::SHARE));
+                        if item.clicked() {
+                            app.share_workbook(&json!({}), item.clicked_by(egui::PointerButton::Primary));
+                        }
+                    }
                     if ui.button(tr(ui, "Export as PDF…")).clicked() {
                         app.run_or_alert("file.exportPdf", json!({}));
                     }

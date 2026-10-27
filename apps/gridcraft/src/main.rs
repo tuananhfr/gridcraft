@@ -310,7 +310,7 @@ fn launch_with_system(target: &str) -> Result<(), String> {
     // Last line of defence behind `link.open` and the click prompt: the system only ever gets
     // http, https and mailto addresses.
     let gridcraft_engine::links::LinkKind::External(target) = gridcraft_engine::links::classify(target) else {
-        return Err(format!("refused to open {target:?}: only http, https and mailto links are opened"));
+        return Err("refused to open a link: only http, https and mailto links are opened".into());
     };
     let target = target.as_str();
     let cmd = if cfg!(target_os = "macos") {
@@ -320,7 +320,7 @@ fn launch_with_system(target: &str) -> Result<(), String> {
     } else {
         "xdg-open"
     };
-    std::process::Command::new(cmd).arg(target).spawn().map(drop).map_err(|e| format!("{cmd} {target}: {e}"))
+    std::process::Command::new(cmd).arg(target).spawn().map(drop).map_err(|e| format!("{cmd} couldn't open a link: {e}"))
 }
 
 fn icon() -> Option<egui::IconData> {
@@ -387,7 +387,9 @@ fn main() -> eframe::Result<()> {
     if let Some(logger) = logger {
         match log_dir().filter(|_| prefs_enabled()) {
             Some(dir) => match logger.attach_dir(&dir) {
-                Ok(path) => log::info!("{PRODUCT_NAME} {}, log file {}", env!("CARGO_PKG_VERSION"), path.display()),
+                Ok(path) => {
+                    log::info!("{PRODUCT_NAME} {}, log file {}", env!("CARGO_PKG_VERSION"), gridcraft_ui_egui::log_redact::home_relative(&path))
+                }
                 // Standard error only by now (`attach_dir` gave up on the file); unlike `eprintln!`, never panics.
                 Err(e) => log::warn!("no log file: {e}"),
             },

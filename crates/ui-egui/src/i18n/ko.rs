@@ -454,6 +454,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Action\nJournal" => "작업\n기록",
         "About\nGridCraft" => "GridCraft\n정보",
         "Share" => "공유",
+        "Share…" => "공유…",
         "Add Chart\nElement" => "차트\n요소 추가",
         "Change\nChart Type" => "차트 종류\n변경",
         "Switch\nRow/Column" => "행/열\n전환",

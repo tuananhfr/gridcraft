@@ -55,7 +55,7 @@ impl Bridge {
         services.download = Some(Box::new(move |name: &str, bytes: &[u8], report: DeliveryReport| match bridge.post_save(name, bytes) {
             Ok(()) => report.settle(Delivery::Delivered),
             Err(e) => {
-                log::error!("couldn't hand {name} to the page: {e}");
+                log::error!("couldn't hand a {} to the page: {e}", gridcraft_ui_egui::log_redact::file_label(name, Some(bytes.len())));
                 report.settle(Delivery::Failed(crate::web::SAVE_FAILED.into()));
             }
         }));

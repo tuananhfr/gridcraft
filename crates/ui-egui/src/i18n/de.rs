@@ -577,6 +577,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Action\nJournal" => "Aktions-\nprotokoll",
         "About\nGridCraft" => "Über\nGridCraft",
         "Share" => "Teilen",
+        "Share…" => "Teilen…",
         "Add Chart\nElement" => "Diagrammelement\nhinzufügen",
         "Change\nChart Type" => "Diagrammtyp\nändern",
         "Switch\nRow/Column" => "Zeile/Spalte\nwechseln",

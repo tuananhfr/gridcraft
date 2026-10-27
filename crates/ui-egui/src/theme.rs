@@ -215,7 +215,10 @@ fn try_load(paths: &[(&str, u32)]) -> Option<FontData> {
     for (p, index) in paths {
         if let Ok(bytes) = std::fs::read(p) {
             if !font_parses(&bytes, *index) {
-                log::warn!("skipping font {p} (face {index}): not a font file egui can read");
+                log::warn!(
+                    "skipping font {} (face {index}): not a font file egui can read",
+                    crate::log_redact::home_relative(std::path::Path::new(p))
+                );
                 continue;
             }
             let mut fd = FontData::from_owned(bytes);

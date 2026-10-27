@@ -240,7 +240,7 @@ impl AppLogger {
             }
             Err(e) => {
                 sink.no_file();
-                Err(format!("{}: {e}", dir.display()))
+                Err(format!("{}: {e}", gridcraft_ui_egui::log_redact::home_relative(dir)))
             }
         }
     }

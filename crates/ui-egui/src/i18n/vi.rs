@@ -671,6 +671,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Action\nJournal" => "Nhật ký\nThao tác",
         "About\nGridCraft" => "Giới thiệu\nBảng tính",
         "Share" => "Chia sẻ",
+        "Share…" => "Chia sẻ…",
         "Add Chart\nElement" => "Thêm Thành phần\nBiểu đồ",
         "Change\nChart Type" => "Thay đổi\nKiểu Biểu đồ",
         "Switch\nRow/Column" => "Chuyển\nHàng/Cột",
