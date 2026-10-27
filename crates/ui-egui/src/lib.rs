@@ -29,6 +29,7 @@ pub mod fonts;
 pub mod formula_bar;
 mod formula_locale;
 pub mod grid;
+pub mod host_docs;
 pub mod i18n;
 pub mod icons;
 pub mod keymap;
@@ -314,6 +315,8 @@ struct PendingSave {
     written: std::sync::Arc<gridcraft_engine::model::Workbook>,
     name: String,
     report: DeliveryReport,
+    /// A local copy of a hosted document (Save As): delivering it leaves the document unsaved.
+    copy: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -331,6 +334,8 @@ pub struct SheetApp {
     updates: updates::Updates,
     /// Optional PI ID account; `None` (the default) shows no account UI at all.
     pub account_hook: Option<std::sync::Arc<dyn account::AccountHook>>,
+    /// Web, with the office shell's `erpHost`: the owner of the documents it opened.
+    pub document_host: Option<host_docs::SharedHost>,
     account: account::AccountState,
     /// Product identity supplied by the host; web retains the upstream default.
     pub product_name: &'static str,
@@ -459,6 +464,7 @@ impl SheetApp {
             #[cfg(not(target_arch = "wasm32"))]
             updates: Default::default(),
             account_hook: None,
+            document_host: None,
             account: Default::default(),
             product_name: "GridCraft",
             session,
@@ -657,6 +663,10 @@ impl SheetApp {
         if let Some(r) = self.run_ui_command(id, &params) {
             return r;
         }
+        // Save As and a named path stay local, as for any document.
+        if id == "file.save" && params.get("path").is_none() && self.save_hosted_active() {
+            return Ok(json!({"host": true}));
+        }
         if id == "file.close" && self.defer_close_command(&params) {
             return Ok(json!({"closed": false, "waiting": true}));
         }
@@ -723,7 +733,8 @@ impl SheetApp {
         let Some(dl) = &self.services.download else { return };
         let report = DeliveryReport::default();
         if let Some(d) = self.session.active() {
-            self.pending_saves.push(PendingSave { uid: d.uid, written: d.wb.clone(), name: name.to_string(), report: report.clone() });
+            let copy = self.is_hosted(d.uid);
+            self.pending_saves.push(PendingSave { uid: d.uid, written: d.wb.clone(), name: name.to_string(), report: report.clone(), copy });
         }
         dl(name, bytes, report);
     }
@@ -740,8 +751,10 @@ impl SheetApp {
             let abandoned = p.report.abandoned();
             match p.report.take() {
                 Some(Delivery::Delivered) => {
-                    session.mark_saved(p.uid, &p.written);
-                    failures.clear(p.uid);
+                    if !p.copy {
+                        session.mark_saved(p.uid, &p.written);
+                        failures.clear(p.uid);
+                    }
                     false
                 }
                 Some(Delivery::Cancelled) => {
@@ -1479,7 +1492,7 @@ impl SheetApp {
         self.session
             .documents()
             .iter()
-            .filter(|d| !self.decrypted.contains(&d.uid))
+            .filter(|d| !self.decrypted.contains(&d.uid) && !self.is_hosted(d.uid))
             .map(|d| drafts::DraftDoc {
                 uid: d.uid,
                 wb: d.wb.clone(),

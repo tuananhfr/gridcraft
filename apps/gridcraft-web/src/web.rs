@@ -93,10 +93,17 @@ pub fn start() {
                     }
                     // Drafts are the office shell's; an embedding parent stores what it opened itself.
                     let drafts = app_bridge.is_none().then(|| crate::drafts::Drafts::install(&cc.egui_ctx));
+                    // The office shell's online documents; never beside an embedding parent.
+                    let erp_host = app_bridge
+                        .is_none()
+                        .then(crate::erp_host::detect)
+                        .flatten()
+                        .map(|host| crate::erp_host::ErpHost::install(host, &mut app, &cc.egui_ctx));
                     Ok(Box::new(WebShell {
                         app,
                         dropped: Inbox::default(),
                         bridge: app_bridge,
+                        erp_host,
                         clipboard,
                         dirty,
                         drafts,
@@ -140,8 +147,11 @@ struct WebShell {
     /// `erpIntakeResult` (picked and host-sent files arrive through `Services::inbox`).
     dropped: Inbox,
     bridge: Option<crate::host::Bridge>,
+    /// The office shell's `erpHost` v1, when it defined one.
+    erp_host: Option<crate::erp_host::ErpHost>,
     clipboard: Option<crate::clipboard::ClipboardBridge>,
-    /// Whether any open workbook has unsaved changes, for the `beforeunload` guard.
+    /// Whether any local workbook has unsaved changes, for the `beforeunload` guard (the shell
+    /// guards its own documents).
     dirty: Rc<Cell<bool>>,
     /// Draft autosave to the office shell's `window.erpDrafts`; `None` in host mode.
     drafts: Option<crate::drafts::Drafts>,
@@ -174,6 +184,9 @@ impl eframe::App for WebShell {
         }
         if let Some(drafts) = &mut self.drafts {
             drafts.open_restored(&mut self.app);
+        }
+        if let Some(erp_host) = &self.erp_host {
+            erp_host.open_requested(&mut self.app);
         }
         let arrived = std::mem::take(&mut *self.dropped.lock().unwrap_or_else(|e| e.into_inner()));
         for (name, bytes) in arrived {
@@ -214,10 +227,13 @@ impl eframe::App for WebShell {
         if let Some(bridge) = &self.bridge {
             bridge.sync(&mut self.app);
         }
+        if let Some(erp_host) = &self.erp_host {
+            erp_host.after_frame(&mut self.app, ui.ctx());
+        }
         if let Some(drafts) = &mut self.drafts {
             drafts.after_frame(&mut self.app, ui.ctx());
         }
-        self.dirty.set(self.app.session.documents().iter().any(|d| d.is_dirty()));
+        self.dirty.set(self.app.session.documents().iter().any(|d| d.is_dirty() && !self.app.is_hosted(d.uid)));
     }
 }
 

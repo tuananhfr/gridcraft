@@ -1616,6 +1616,14 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Saving…" => "Đang lưu…",
         "Save failed" => "Lưu không thành công",
         "Couldn't save '{name}': {reason}" => "Không lưu được '{name}': {reason}",
+        "Password-protected workbooks can't be opened online yet. Remove the password in Excel and upload the workbook again." => {
+            "Chưa mở được sổ làm việc có mật khẩu trên bản trực tuyến. Hãy gỡ mật khẩu trong Excel rồi tải sổ làm việc lên lại."
+        }
+        "This file can't be opened online. Only Excel workbooks (.xlsx) can be opened here." => {
+            "Không mở được tệp này trên bản trực tuyến. Ở đây chỉ mở được sổ làm việc Excel (.xlsx)."
+        }
+        "This workbook couldn't be opened." => "Không mở được sổ làm việc này.",
+        "The document couldn't be saved to the server." => "Không lưu được tài liệu lên máy chủ.",
         "Good, Bad and Neutral" => "Tốt, Xấu và Trung tính",
         "Data and Model" => "Dữ liệu và Mô hình",
         "Titles and Headings" => "Tiêu đề và Đầu đề",

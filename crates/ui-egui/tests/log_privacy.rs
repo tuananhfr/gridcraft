@@ -5,8 +5,10 @@
 use std::path::{Path, PathBuf};
 
 const MACROS: [&str; 5] = ["log::error!(", "log::warn!(", "log::info!(", "log::debug!(", "log::trace!("];
-// `p` and `f` are the usual short names for a path or a file.
-const SUSPECT_WORDS: [&str; 12] = ["name", "path", "url", "uri", "file", "filename", "title", "target", "href", "dir", "p", "f"];
+// `p` and `f` are the usual short names for a path or a file; `doc`/`docId` name an online
+// document (`erpHost`) and `bytes` its content.
+const SUSPECT_WORDS: [&str; 15] =
+    ["name", "path", "url", "uri", "file", "filename", "title", "target", "href", "dir", "p", "f", "doc", "docid", "bytes"];
 const REDACTORS: [&str; 2] = ["file_label(", "home_relative("];
 
 /// Arguments that look suspect but aren't a document: (source file, argument).
@@ -168,6 +170,7 @@ fn the_scan_catches_names_paths_and_urls() {
     assert_eq!(inline_args(&args[0]), ["name", "e"]);
     assert!(suspect("name") && suspect("r.name") && suspect("path.display()") && suspect("d.display_title()") && suspect("url"));
     assert!(suspect("p") && suspect("f.path()") && suspect("source.display()"));
+    assert!(suspect("doc_id") && suspect("docId") && suspect("doc.doc_id") && suspect("bytes") && !suspect("revision"));
     let args = split_args(invocation(r#"log::warn!("skipping font {p} (face {index})")"#, "log::warn!(".len()));
     assert!(inline_args(&args[0]).iter().any(|a| suspect(a)), "the old font path line is caught");
     assert!(!suspect("e") && !suspect("method") && !suspect("file_label(&name, Some(n))") && !suspect("home_relative(&path)"));

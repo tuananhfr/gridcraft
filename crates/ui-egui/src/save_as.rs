@@ -88,10 +88,22 @@ pub(crate) fn drop_macros_body(app: &mut SheetApp, ui: &mut egui::Ui, d: &Dialog
     ui.add_space(10.0);
     let path = d.values.get("path").and_then(Json::as_str).map(str::to_string);
     let share = d.values.get("share").and_then(Json::as_bool) == Some(true);
+    // A hosted document is stored in the host's format only, so it has no .xlsm choice.
+    let host = d.values.get("host").and_then(Json::as_u64);
     let finish = |app: &mut SheetApp, params: &Json, button: &egui::Response| {
         if share { app.share_workbook(params, button.clicked_by(egui::PointerButton::Primary)) } else { app.save_workbook_as(params) }
     };
     ui.horizontal_wrapped(|ui| {
+        if let Some(uid) = host {
+            if ui.button(tr(ui, SAVE_AS_XLSX)).clicked() {
+                *open = false;
+                app.save_hosted_dropping_macros(uid);
+            }
+            if ui.button(tr(ui, "Cancel")).clicked() {
+                *open = false;
+            }
+            return;
+        }
         let xlsm = ui.button(tr(ui, SAVE_AS_XLSM));
         if xlsm.clicked() {
             *open = false;
