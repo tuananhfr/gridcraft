@@ -28,7 +28,7 @@ impl Mode {
 
     /// The access the document gets; only `canDownload: false` turns downloads off.
     pub(crate) fn access(self, can_download: bool) -> DocAccess {
-        DocAccess { read_only: self != Mode::Edit, no_download: !can_download, commenter: self == Mode::Comment }
+        DocAccess { read_only: self != Mode::Edit, no_download: !can_download, commenter: self == Mode::Comment, edit_lock: None }
     }
 }
 /// From v2 the shell's own Share serves its documents; the title bar's would be a second one.

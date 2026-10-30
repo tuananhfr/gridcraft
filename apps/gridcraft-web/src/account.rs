@@ -3,7 +3,7 @@
 //!
 //! The shell's snapshots are read as JSON, so an unexpected shape reads as a guest, never a panic.
 
-use gridcraft_ui_egui::account::{AccountError, AccountSnapshot, AccountView, LicenceView, OrgView, SignedInView, is_pro_feature};
+use gridcraft_ui_egui::account::{AccountError, AccountSnapshot, AccountView, LicenceView, OrgView, SignedInView, is_paid_feature};
 use serde_json::Value;
 
 const API_VERSION: u64 = 1;
@@ -70,7 +70,7 @@ fn signed_in(snapshot: &Value, error: Option<AccountError>) -> SignedInView {
     let pro = snapshot
         .get("entitlements")
         .and_then(Value::as_array)
-        .is_some_and(|list| list.iter().filter_map(|e| e.get("feature").and_then(Value::as_str)).any(is_pro_feature));
+        .is_some_and(|list| list.iter().filter_map(|e| e.get("feature").and_then(Value::as_str)).any(is_paid_feature));
     SignedInView {
         name: text(user, "name").unwrap_or_default(),
         email: text(user, "email").filter(|e| !e.is_empty()),
@@ -91,7 +91,7 @@ pub use browser::install;
 mod browser {
     use std::cell::RefCell;
 
-    use gridcraft_ui_egui::account::{AccountError, AccountHook, AccountSnapshot, is_pro_feature};
+    use gridcraft_ui_egui::account::{AccountError, AccountHook, AccountSnapshot, is_paid_feature};
     use wasm_bindgen::closure::Closure;
     use wasm_bindgen::{JsCast as _, JsValue};
 
@@ -253,7 +253,8 @@ mod browser {
         // No device activation on the web.
         fn retry_activation(&self) {}
         fn allowed(&self, feature: &str) -> bool {
-            let fallback = !is_pro_feature(feature);
+            // `use` needs a lease only on desktop; the web free tier edits without one.
+            let fallback = !is_paid_feature(feature);
             let Some(api) = with_bridge(|b| b.api.clone()) else { return fallback };
             match method(&api, "allowed").map(|f| f.call1(&api, &JsValue::from_str(feature))) {
                 Some(Ok(answer)) => answer.as_bool().unwrap_or(fallback),
@@ -283,7 +284,7 @@ mod tests {
             "orgs": [{"id": "o1", "name": "Công ty A", "role": "member"}, {"id": "o2", "name": "Công ty B", "role": null}, {"name": "no id"}],
             "activeOrg": {"id": "o2", "name": "Công ty B", "role": null},
             "product": "bangtinh",
-            "entitlements": [{"id": "e1", "feature": "bangtinh.use", "scope": "personal", "orgId": null, "validTo": null, "offlineAllowed": true}],
+            "entitlements": [{"id": "e1", "feature": "erpconsoffice.use", "scope": "personal", "orgId": null, "validTo": null, "offlineAllowed": true}],
             "entitlementsFresh": true,
             "error": null
         })

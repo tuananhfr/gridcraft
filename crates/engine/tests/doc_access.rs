@@ -8,8 +8,8 @@ use gridcraft_engine::core::CellRef;
 use gridcraft_engine::doc_access::{DocAccess, NO_DOWNLOAD, READ_ONLY};
 use serde_json::{Value, json};
 
-const READ: DocAccess = DocAccess { read_only: true, no_download: false, commenter: false };
-const NO_COPY: DocAccess = DocAccess { read_only: false, no_download: true, commenter: false };
+const READ: DocAccess = DocAccess { read_only: true, no_download: false, commenter: false, edit_lock: None };
+const NO_COPY: DocAccess = DocAccess { read_only: false, no_download: true, commenter: false, edit_lock: None };
 
 /// Two sheets with values, a note, an undo step and a redo step.
 fn session(access: DocAccess) -> Session {
@@ -152,6 +152,54 @@ fn switching_access_both_ways_keeps_the_document_and_its_history() {
     assert_eq!((d.undo.len(), d.redo.len()), (undo, redo));
     s.execute("edit.undo", json!({})).unwrap();
     assert!(s.active().unwrap().wb.sheets[0].value(CellRef::new(0, 2)).is_empty(), "the edit made before is still undoable");
+}
+
+const LOCK: &str = "Sign in to edit";
+
+#[test]
+fn the_edit_lock_refuses_every_edit_but_keeps_save_and_downloads() {
+    for (id, params) in edits() {
+        let mut s = session(DocAccess::default());
+        s.set_edit_lock(Some(LOCK));
+        let d = s.active().unwrap();
+        let (wb, undo, uid) = (d.wb.clone(), d.undo.len(), d.uid);
+        let err = s.execute(id, params).unwrap_err().to_string();
+        assert!(err.contains(LOCK), "{id}: {err}");
+        let d = s.documents().iter().find(|d| d.uid == uid).unwrap();
+        assert!(Arc::ptr_eq(&d.wb, &wb) && d.undo.len() == undo, "{id} changed the document");
+    }
+    let mut s = session(DocAccess::default());
+    s.execute("cell.set", json!({"cell": "C1", "input": "typed before"})).unwrap();
+    s.set_edit_lock(Some(LOCK));
+    let path = std::env::temp_dir().join(format!("gridcraft-edit-lock-{}.xlsx", std::process::id()));
+    let saved = s.execute("file.save", json!({"path": path.to_string_lossy()}));
+    let _ = std::fs::remove_file(&path);
+    saved.expect("Save writes what was typed before the lock");
+    assert!(!s.active().unwrap().is_dirty());
+    for id in ["edit.copy", "file.saveBytes", "file.exportPdf", "file.print"] {
+        s.execute(id, json!({})).unwrap_or_else(|e| panic!("{id}: {e}"));
+    }
+    let info = s.commands().into_iter().find(|c| c.id == "file.save").unwrap();
+    assert!(info.enabled, "Save stays offered under the lock");
+    // The host's read-only still refuses Save, and its notice wins.
+    s.active_mut().unwrap().access.read_only = true;
+    assert!(s.execute("file.save", json!({})).unwrap_err().to_string().contains(READ_ONLY));
+}
+
+#[test]
+fn the_edit_lock_covers_documents_opened_later_and_lifts_without_reopening() {
+    let mut s = session(DocAccess::default());
+    s.set_edit_lock(Some(LOCK));
+    let first = s.active().unwrap().uid;
+    s.new_workbook().unwrap();
+    assert_eq!(s.edit_lock(), Some(LOCK));
+    assert!(s.execute("cell.set", json!({"cell": "A1", "input": "1"})).is_err(), "a new workbook is locked too");
+    s.set_edit_lock(None);
+    s.execute("cell.set", json!({"cell": "A1", "input": "1"})).unwrap();
+    s.set_active(0);
+    assert_eq!(s.active().unwrap().uid, first);
+    s.execute("cell.set", json!({"cell": "C1", "input": "2"})).unwrap();
+    assert!(s.documents().iter().all(|d| d.access.is_full()));
 }
 
 #[test]

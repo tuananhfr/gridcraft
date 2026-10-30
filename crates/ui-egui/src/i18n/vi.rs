@@ -251,6 +251,26 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         }
         "Sign in again" => "Đăng nhập lại",
         "Sign out" => "Đăng xuất",
+        "Editing" => "Chỉnh sửa",
+        "Checking your license…" => "Đang kiểm tra giấy phép…",
+        "Sign in with PI ID to edit" => "Đăng nhập PI ID để sửa",
+        "Choose an organization to edit" => "Chọn tổ chức để sửa",
+        "This computer was removed from your PI ID account. Sign in again to edit" => {
+            "Máy này đã bị gỡ khỏi tài khoản PI ID. Đăng nhập lại để sửa"
+        }
+        "Your plan's device limit is reached. Remove a device in PI ID, then press Retry in File › Account" => {
+            "Gói đã đủ số máy. Gỡ bớt một máy trong PI ID rồi bấm Thử lại ở Tệp › Tài khoản"
+        }
+        "This computer is not activated for editing yet" => "Máy này chưa được kích hoạt để sửa",
+        "This computer has no credential store to keep a license, so editing is off" => {
+            "Máy này không có kho lưu thông tin đăng nhập để giữ giấy phép nên chưa sửa được"
+        }
+        "Connect to the internet to renew your license and edit" => "Kết nối mạng để gia hạn giấy phép và sửa tiếp",
+        "Could not renew your license; the app keeps trying" => "Chưa gia hạn được giấy phép; ứng dụng đang tự thử lại",
+        "This organization has no ERPCons Office plan" => "Tổ chức này chưa có gói ERPCons Office",
+        "PI ID licensing is unavailable on this computer, so editing is off" => {
+            "Không dùng được giấy phép PI ID trên máy này nên chưa sửa được"
+        }
         "Your offline license expires on {date}. Connect to the internet to renew it." => {
             "Giấy phép ngoại tuyến sẽ hết hạn vào ngày {date}. Hãy kết nối Internet để gia hạn."
         }

@@ -338,7 +338,7 @@ pub(crate) fn edit<R>(s: &mut Session, f: impl FnOnce(&mut Ctx) -> Result<R>) ->
 
 pub(crate) fn commit<R>(d: &mut DocState, f: impl FnOnce(&mut Ctx) -> Result<R>) -> Result<R> {
     // Backstop for a command `DocAccess::refusal` doesn't know: every content edit lands here.
-    if d.access.read_only {
+    if d.access.locked() {
         return Err(EngineError::Other(d.access.read_only_notice().into()));
     }
     // `GRIDCRAFT_PROFILE` timing. Read the clock only when profiling, and never on wasm: there

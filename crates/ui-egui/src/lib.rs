@@ -23,6 +23,7 @@ pub mod credits;
 pub mod dialogs;
 pub mod doc_tabs;
 pub mod drafts;
+pub mod edit_lock;
 pub mod editor;
 mod font_notice;
 pub mod fonts;
@@ -841,8 +842,9 @@ impl SheetApp {
 
     /// Shows a command error: a toast for an unavailable command, else a message box.
     fn alert(&mut self, e: String) {
-        if let Some(notice) = SheetApp::access_notice(&e) {
+        if let Some(notice) = self.access_notice(&e) {
             self.toast = Some((notice.into(), now_ms()));
+            self.note_edit_refusal(notice);
         } else if e == gridcraft_engine::legacy::FAILED {
             self.message = Some((gridcraft_engine::legacy::FAILED_TITLE.into(), e));
         } else if e.contains("is not available right now") {

@@ -300,6 +300,9 @@ pub struct Session {
     /// The author the page host names for what this user writes into the file (comments, notes),
     /// instead of [`Prefs::user_name`]; not a preference, so it is never saved.
     pub author: Option<String>,
+    /// [`DocAccess::edit_lock`](doc_access::DocAccess::edit_lock) of every open document, kept
+    /// here so documents opened later get it too.
+    edit_lock: Option<&'static str>,
 }
 
 impl Session {
@@ -346,11 +349,24 @@ impl Session {
         if self.docs.len() >= MAX_DOCUMENTS { Err(EngineError::Other(TOO_MANY_DOCUMENTS.into())) } else { Ok(()) }
     }
     /// Adds `d` as the active document, unless [`MAX_DOCUMENTS`] are already open.
-    pub fn add_document(&mut self, d: DocState) -> Result<usize> {
+    pub fn add_document(&mut self, mut d: DocState) -> Result<usize> {
         self.ensure_room()?;
+        d.access.edit_lock = self.edit_lock;
         self.docs.push(d);
         self.active = self.docs.len() - 1;
         Ok(self.active)
+    }
+    /// The reason every edit is refused for now, `None` when edits are allowed.
+    pub fn edit_lock(&self) -> Option<&'static str> {
+        self.edit_lock
+    }
+    /// Locks (`Some(reason)`) or unlocks editing of every open document and of those opened
+    /// later; the host's own access of each document stays as it is.
+    pub fn set_edit_lock(&mut self, lock: Option<&'static str>) {
+        self.edit_lock = lock;
+        for d in &mut self.docs {
+            d.access.edit_lock = lock;
+        }
     }
     /// Closes document `i`. The active document stays active; closing it activates the next one
     /// that isn't hidden (else the previous), like closing a tab.
@@ -508,7 +524,7 @@ impl Session {
             && let Some((uid, wb, sel, stale)) = before
             && let Some(d) = self.docs.iter_mut().find(|d| d.uid == uid)
             && !Arc::ptr_eq(&d.wb, &wb)
-            && !d.access.read_only
+            && !d.access.locked()
         {
             d.next_transaction_id = d.next_transaction_id.max(transaction_id.saturating_add(1));
             d.undo.push(HistoryEntry { transaction_id, timestamp, stale, label: spec.label.trim_end_matches('…').to_string(), wb, selection: sel });

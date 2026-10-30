@@ -2489,7 +2489,7 @@ fn coalesce_last_undo(app: &mut SheetApp) {
     // Merge consecutive drag steps into one undo entry. A read-only document's refused steps added
     // none, so merging would drop one of its earlier steps.
     if let Some(d) = app.session.active_mut()
-        && !d.access.read_only
+        && !d.access.locked()
         && d.undo.len() >= 2
     {
         let n = d.undo.len();

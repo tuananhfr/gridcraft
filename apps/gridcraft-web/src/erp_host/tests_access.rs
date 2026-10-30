@@ -62,8 +62,12 @@ fn the_mode_vocabulary_matches_the_contract() {
     assert_eq!([None, Some("edit"), Some("comment"), Some("view")].map(Mode::parse), [Mode::Edit, Mode::Edit, Mode::Comment, Mode::View]);
     assert_eq!(Mode::parse(Some("suggest")), Mode::View, "an unknown mode can't edit");
     assert_eq!(Mode::Edit.access(true), DocAccess::default());
-    assert_eq!(Mode::Comment.access(true), DocAccess { read_only: true, no_download: false, commenter: true }, "comment is view for the content");
-    assert_eq!(Mode::View.access(false), DocAccess { read_only: true, no_download: true, commenter: false });
+    assert_eq!(
+        Mode::Comment.access(true),
+        DocAccess { read_only: true, no_download: false, commenter: true, edit_lock: None },
+        "comment is view for the content"
+    );
+    assert_eq!(Mode::View.access(false), DocAccess { read_only: true, no_download: true, commenter: false, edit_lock: None });
 }
 
 #[test]

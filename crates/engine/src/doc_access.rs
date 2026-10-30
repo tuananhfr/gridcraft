@@ -1,6 +1,7 @@
 //! Access a page host grants to one open document (web: the ERPCons office shell's view and
-//! comment modes). Session state only: unlike sheet protection it is never written into the file,
-//! so the same workbook opens editable for someone else.
+//! comment modes), plus the app's own edit lock ([`DocAccess::edit_lock`]). Session state only:
+//! unlike sheet protection it is never written into the file, so the same workbook opens editable
+//! for someone else.
 
 use crate::cmd::CommandSpec;
 
@@ -13,6 +14,10 @@ pub struct DocAccess {
     pub no_download: bool,
     /// The host's `comment` mode, read-only until comments come to the web: only its notice differs.
     pub commenter: bool,
+    /// Why the app refuses every edit for now (the desktop licence), set on all open documents by
+    /// [`crate::Session::set_edit_lock`]. Unlike `read_only`, Save keeps working, so edits made
+    /// before the lock are never lost.
+    pub edit_lock: Option<&'static str>,
 }
 
 /// Why an edit of a read-only document was refused (the interface translates it by this text).
@@ -63,15 +68,27 @@ impl DocAccess {
         self == DocAccess::default()
     }
 
-    /// The notice for an edit this read-only document refuses.
+    /// Nothing may change the document, by the host's access or the app's edit lock.
+    pub fn locked(self) -> bool {
+        self.read_only || self.edit_lock.is_some()
+    }
+
+    /// The notice for an edit this locked document refuses; the host's reason comes first.
     pub fn read_only_notice(self) -> &'static str {
-        if self.commenter { COMMENTS_LATER } else { READ_ONLY }
+        match (self.read_only, self.edit_lock) {
+            (false, Some(why)) => why,
+            _ if self.commenter => COMMENTS_LATER,
+            _ => READ_ONLY,
+        }
     }
 
     /// Why `spec` is refused on a document with this access, if it is.
     pub fn refusal(self, spec: &CommandSpec) -> Option<&'static str> {
         let id = spec.id;
-        if self.read_only && ((spec.undoable && !VIEW_ONLY.contains(&id)) || EDITS.contains(&id)) {
+        let edits = (spec.undoable && !VIEW_ONLY.contains(&id)) || EDITS.contains(&id);
+        // Saving only writes what is already in the document; the edit lock never holds it back.
+        let saves_under_lock = !self.read_only && id == "file.save";
+        if self.locked() && edits && !saves_under_lock {
             return Some(self.read_only_notice());
         }
         if self.no_download && DOWNLOADS.contains(&id) {

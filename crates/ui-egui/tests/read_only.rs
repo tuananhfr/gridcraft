@@ -68,7 +68,7 @@ fn assert_untouched(h: &Harness, what: &str) {
 
 #[test]
 fn typing_keys_and_paste_change_nothing_on_a_read_only_document() {
-    let mut h = harness(DocAccess { read_only: true, no_download: false, commenter: false });
+    let mut h = harness(DocAccess { read_only: true, no_download: false, commenter: false, edit_lock: None });
     h.input_mut().events.push(Event::Text("7".into()));
     h.run_steps(2);
     assert_untouched(&h, "typing");
@@ -96,7 +96,7 @@ fn typing_keys_and_paste_change_nothing_on_a_read_only_document() {
 
 #[test]
 fn the_fill_handle_and_double_click_change_nothing_on_a_read_only_document() {
-    let mut h = harness(DocAccess { read_only: true, no_download: false, commenter: false });
+    let mut h = harness(DocAccess { read_only: true, no_download: false, commenter: false, edit_lock: None });
     let handle = cell_pos(&h, CellRef::new(2, 1), true);
     let below = cell_pos(&h, CellRef::new(4, 1), false);
     button(&mut h, handle, true);
@@ -123,7 +123,7 @@ fn enabled(h: &Harness, label: &str) -> bool {
 
 #[test]
 fn the_home_tab_keeps_copy_and_find_on_a_read_only_document() {
-    let mut h = harness(DocAccess { read_only: true, no_download: false, commenter: false });
+    let mut h = harness(DocAccess { read_only: true, no_download: false, commenter: false, edit_lock: None });
     assert_eq!(h.state().ui.ribbon_tab, "Home");
     assert!(enabled(&h, "Copy (⌘C)") && enabled(&h, "Find & Select"));
     for label in ["Paste", "Cut (⌘X)", "Format Painter", "Sort & Filter", "Bold (⌘B)", "Italic (⌘I)", "Conditional Formatting", "Cell Styles"] {
@@ -134,7 +134,7 @@ fn the_home_tab_keeps_copy_and_find_on_a_read_only_document() {
     assert!(enabled(&h, "Find…") && enabled(&h, "Go To…") && enabled(&h, "Go To Special…"));
     assert!(!enabled(&h, "Replace…"), "replacing edits");
 
-    let h = harness(DocAccess { read_only: true, no_download: true, commenter: false });
+    let h = harness(DocAccess { read_only: true, no_download: true, commenter: false, edit_lock: None });
     assert!(!enabled(&h, "Copy (⌘C)"), "copying is a download");
     assert!(enabled(&h, "Find & Select"));
     let h = harness(DocAccess::default());
@@ -152,7 +152,7 @@ fn a_held_edit_reopens_when_its_document_is_active_and_editable_again() {
         app.session.execute("selection.set", json!({"range": "A1"})).unwrap();
         let first = app.session.active().unwrap().uid;
         app.begin_edit(Some("Third".into()), false);
-        app.set_document_access(first, DocAccess { read_only: true, no_download: false, commenter: false });
+        app.set_document_access(first, DocAccess { read_only: true, no_download: false, commenter: false, edit_lock: None });
         assert!(app.editor.is_none() && app.message.is_some());
         app.message = None;
         let i = app.session.new_workbook().unwrap();
@@ -199,7 +199,7 @@ fn the_title_bars_share_is_hidden_when_the_host_shares_the_document() {
 
 #[test]
 fn copy_is_refused_when_downloads_are_off() {
-    let mut h = harness(DocAccess { read_only: true, no_download: true, commenter: false });
+    let mut h = harness(DocAccess { read_only: true, no_download: true, commenter: false, edit_lock: None });
     // Cut is an edit too, so the read-only notice wins there.
     for (event, notice) in [(Event::Copy, NO_DOWNLOAD), (Event::Cut, READ_ONLY)] {
         h.input_mut().events.push(event);

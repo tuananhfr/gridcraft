@@ -1,12 +1,14 @@
 //! Optional PI ID account: the hook the desktop and web hosts implement, the plain view types they
 //! map their state into, and the UI (File › Account, the title-bar button, the lease warning).
 //!
-//! Without a hook nothing here is drawn and [`SheetApp::allowed`] allows everything.
+//! Without a hook nothing here is drawn, [`SheetApp::allowed`] allows everything and editing is
+//! never locked.
 
 use egui::{Align2, Color32, RichText, Sense, Ui, vec2};
 
 use crate::SheetApp;
 use crate::backstage::Page;
+use crate::edit_lock::EditLock;
 use crate::i18n::Language;
 use crate::icons::{self, Icon};
 use crate::theme::{self, Tokens};
@@ -26,6 +28,12 @@ pub trait AccountHook {
     /// Called once with the egui context so the adapter can request a repaint when its snapshot
     /// changes.
     fn attach(&self, ctx: &egui::Context);
+    /// Why editing is locked now, from cached state only (read every frame); the web never locks.
+    fn edit_lock(&self) -> Option<EditLock> {
+        None
+    }
+    /// An edit was refused by [`AccountHook::edit_lock`]; the adapter may sync sooner.
+    fn edit_refused(&self) {}
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -108,9 +116,15 @@ pub enum AccountError {
     Other,
 }
 
-/// A feature that needs a paid entitlement: anything but the built-in free set (products.md §2).
+/// A feature that needs a licence: anything but the pinned free `view` and `export`
+/// (erpcons-account ADR 0013: `erpconsoffice.use` needs a lease).
 pub fn is_pro_feature(feature: &str) -> bool {
-    !(feature.ends_with(".view") || feature.ends_with(".export") || feature.ends_with(".use"))
+    !(feature.ends_with(".view") || feature.ends_with(".export"))
+}
+
+/// A feature beyond the free plan, which also grants `use`.
+pub fn is_paid_feature(feature: &str) -> bool {
+    is_pro_feature(feature) && !feature.ends_with(".use")
 }
 
 /// The avatar letter: the given name's first letter (Vietnamese names put it last, as the office
@@ -127,6 +141,7 @@ pub(crate) struct AccountState {
     snapshot: AccountSnapshot,
     /// The warning (days, lease expiry) dismissed here, hidden before the hook reports it shown.
     dismissed_warning: Option<(u32, i64)>,
+    edit_lock: Option<EditLock>,
 }
 
 impl SheetApp {
@@ -137,12 +152,15 @@ impl SheetApp {
 }
 
 pub(crate) fn poll(app: &mut SheetApp, ctx: &egui::Context) {
-    let Some(hook) = &app.account_hook else { return };
+    let Some(hook) = app.account_hook.clone() else { return };
     if !app.account.attached {
         app.account.attached = true;
         hook.attach(ctx);
     }
     app.account.snapshot = hook.snapshot();
+    // Every frame: a lease running out offline locks without any event from the adapter.
+    app.account.edit_lock = hook.edit_lock();
+    app.set_edit_lock(app.account.edit_lock);
 }
 
 /// The local calendar date of `unix`: `dd/mm/yyyy` in Vietnamese, Excel's `m/d/yyyy` otherwise.
@@ -236,10 +254,12 @@ pub(crate) fn page(app: &mut SheetApp, ui: &mut Ui) {
     let lang = app.ui.language;
     let t = Tokens::get(ui.ctx());
     let snapshot = app.account.snapshot.clone();
+    let lock = app.account.edit_lock;
     let busy = snapshot.busy;
     match &snapshot.view {
         AccountView::Guest => {
-            ui.label(RichText::new(lang.tr("Signing in is optional. Every feature works without an account.")).color(t.text_dim));
+            let intro = lock.map_or("Signing in is optional. Every feature works without an account.", EditLock::reason);
+            ui.label(RichText::new(lang.tr(intro)).color(if lock.is_some() { t.text } else { t.text_dim }));
             ui.add_space(14.0);
             if ui.add_enabled(!busy, accent_button(lang.tr("Sign in with PI ID"), &t)).clicked() {
                 hook.sign_in();
@@ -255,7 +275,7 @@ pub(crate) fn page(app: &mut SheetApp, ui: &mut Ui) {
                 hook.cancel_sign_in();
             }
         }
-        AccountView::SignedIn(s) => signed_in(hook.as_ref(), lang, ui, s, busy, &t),
+        AccountView::SignedIn(s) => signed_in(hook.as_ref(), lang, ui, s, lock, busy, &t),
     }
     if let Some(text) = snapshot.error.and_then(|e| error_text(lang, e)) {
         ui.add_space(14.0);
@@ -267,7 +287,7 @@ pub(crate) fn page(app: &mut SheetApp, ui: &mut Ui) {
 const TWO_COLUMNS_MIN_W: f32 = 480.0;
 const ORG_PICKER_W: f32 = 260.0;
 
-fn signed_in(hook: &dyn AccountHook, lang: Language, ui: &mut Ui, s: &SignedInView, busy: bool, t: &Tokens) {
+fn signed_in(hook: &dyn AccountHook, lang: Language, ui: &mut Ui, s: &SignedInView, lock: Option<EditLock>, busy: bool, t: &Tokens) {
     // One line each, elided with the full text on hover: wrapping would split an address mid-word.
     ui.add(egui::Label::new(RichText::new(display_name(s)).font(theme::ui_bold(18.0)).color(t.text)).truncate());
     if let Some(email) = s.email.as_deref().filter(|e| !e.is_empty() && *e != display_name(s)) {
@@ -278,7 +298,8 @@ fn signed_in(hook: &dyn AccountHook, lang: Language, ui: &mut Ui, s: &SignedInVi
     let licence = |ui: &mut Ui| {
         ui.horizontal_wrapped(|ui| {
             ui.label(licence_text(lang, s.licence));
-            if s.licence == LicenceView::DeviceCapReached && ui.add_enabled(!busy, egui::Button::new(lang.tr("Retry"))).clicked() {
+            // With an edit lock, Retry sits beside its reason instead.
+            if lock.is_none() && s.licence == LicenceView::DeviceCapReached && ui.add_enabled(!busy, egui::Button::new(lang.tr("Retry"))).clicked() {
                 hook.retry_activation();
             }
         });
@@ -286,7 +307,20 @@ fn signed_in(hook: &dyn AccountHook, lang: Language, ui: &mut Ui, s: &SignedInVi
     let connection = |ui: &mut Ui| {
         ui.label(lang.tr(if s.online { "Connected to PI ID" } else { "Offline: showing what is saved on this device" }));
     };
-    let rows: [(&str, &dyn Fn(&mut Ui)); 3] = [("Organization", &organization), ("License", &licence), ("Connection", &connection)];
+    let editing = |ui: &mut Ui| {
+        ui.horizontal_wrapped(|ui| {
+            if let Some(lock) = lock {
+                ui.label(RichText::new(lang.tr(lock.reason())).color(t.danger));
+                if lock.retry_offered() && ui.add_enabled(!busy, egui::Button::new(lang.tr("Retry"))).clicked() {
+                    hook.retry_activation();
+                }
+            }
+        });
+    };
+    let mut rows: Vec<(&str, &dyn Fn(&mut Ui))> = vec![("Organization", &organization), ("License", &licence), ("Connection", &connection)];
+    if lock.is_some() {
+        rows.push(("Editing", &editing));
+    }
     if ui.available_width() >= TWO_COLUMNS_MIN_W {
         egui::Grid::new("account_details").num_columns(2).spacing(vec2(18.0, 10.0)).show(ui, |ui| {
             for (caption, value) in rows {
@@ -400,12 +434,13 @@ mod tests {
     }
 
     #[test]
-    fn only_features_outside_the_free_set_are_pro() {
-        for free in ["bangtinh.view", "bangtinh.export", "bangtinh.use", "vanban.view"] {
-            assert!(!is_pro_feature(free), "{free}");
+    fn only_view_and_export_are_free_and_use_is_not_paid() {
+        for free in ["erpconsoffice.view", "erpconsoffice.export"] {
+            assert!(!is_pro_feature(free) && !is_paid_feature(free), "{free}");
         }
-        for pro in ["bangtinh.advanced", "bangtinh.macro.run", "bangtinh.viewer"] {
-            assert!(is_pro_feature(pro), "{pro}");
+        assert!(is_pro_feature("erpconsoffice.use") && !is_paid_feature("erpconsoffice.use"), "editing needs a lease, not a paid plan");
+        for pro in ["erpconsoffice.advanced", "erpconsoffice.macro.run", "erpconsoffice.viewer"] {
+            assert!(is_pro_feature(pro) && is_paid_feature(pro), "{pro}");
         }
     }
 
