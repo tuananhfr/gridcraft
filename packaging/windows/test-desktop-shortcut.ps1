@@ -2,7 +2,7 @@
 .SYNOPSIS
   Exercise the actual MSI's desktop-shortcut choices on a disposable GitHub Windows runner.
 .DESCRIPTION
-  Compiles original no-op GUI/CLI fixtures instead of Rust, uses Bảng tính – ERPCons's existing icon,
+  Compiles an original no-op GUI fixture instead of Rust, uses Bảng tính – ERPCons's existing icon,
   and builds adjacent MSI versions. Installs the real package (including its registrations),
   checks default/explicit choices, repair and major upgrades, then uninstalls in finally.
   Run through the Packaging lint workflow, never on a developer's Windows installation.
@@ -85,9 +85,9 @@ function Assert-Package($Package) {
   $key = Join-Path $UninstallRoot $Package.Code
   $registered = Get-ItemProperty -Path $key -ErrorAction Stop
   Assert-That ($registered.DisplayVersion -eq $Package.Version) "Wrong installed product version: $($Package.Version)"
-  foreach ($exe in 'gridcraft.exe', 'gridcraft-cli.exe') {
-    Assert-That (Test-Path (Join-Path $InstallDir $exe)) "$exe missing after installation"
-  }
+  Assert-That (Test-Path (Join-Path $InstallDir 'gridcraft.exe')) 'gridcraft.exe missing after installation'
+  # The CLI bypasses the PI licence gate, so no ERPCons MSI may install it.
+  Assert-That (-not (Test-Path (Join-Path $InstallDir 'gridcraft-cli.exe'))) 'gridcraft-cli.exe must not be installed'
   Assert-That (Test-Path $StartLink) 'The existing Start Menu shortcut is missing'
   foreach ($ext in 'xlsx', 'xlsm', 'xlsb', 'ods', 'csv', 'tsv') {
     $progId = "ERPCons.BangTinh.$ext"
@@ -132,7 +132,6 @@ function Assert-Desktop([bool] $Enabled) {
 function Assert-Removed($Package) {
   Assert-That (-not (Test-Path (Join-Path $UninstallRoot $Package.Code))) 'MSI still registered after removal'
   Assert-That (-not (Test-Path (Join-Path $InstallDir 'gridcraft.exe'))) 'App executable remains after uninstall'
-  Assert-That (-not (Test-Path (Join-Path $InstallDir 'gridcraft-cli.exe'))) 'CLI executable remains after uninstall'
   Assert-That (-not (Test-Path $DesktopLink)) 'Desktop shortcut remains after uninstall'
   Assert-That (-not (Test-Path $StartLink)) 'Start Menu shortcut remains after uninstall'
   Assert-That ($null -eq (Get-OptionalRegistryValue $ChoiceKey 'DesktopShortcut')) 'Saved choice remains after uninstall'
@@ -177,10 +176,8 @@ function Uninstall-AsSystem($Package) {
 $source = Join-Path $WorkDir 'Stub.cs'
 'public static class Program { public static void Main() { } }' | Set-Content -Path $source -Encoding utf8
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-foreach ($fixture in @(@('gridcraft.exe', 'winexe'), @('gridcraft-cli.exe', 'exe'))) {
-  & $csc /nologo /platform:x64 "/target:$($fixture[1])" "/out:$(Join-Path $Bin $fixture[0])" $source
-  if ($LASTEXITCODE -ne 0) { throw 'Could not compile installer fixture' }
-}
+& $csc /nologo /platform:x64 /target:winexe "/out:$(Join-Path $Bin 'gridcraft.exe')" $source
+if ($LASTEXITCODE -ne 0) { throw 'Could not compile installer fixture' }
 $packages = @()
 foreach ($version in '90.0.0', '90.0.1', '90.0.2') {
   $msi = Join-Path $WorkDir "gridcraft-$version.msi"

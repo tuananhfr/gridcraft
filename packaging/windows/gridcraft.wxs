@@ -215,9 +215,8 @@
         <RegistryValue Root="HKLM" Key="Software\RegisteredApplications" Name="Bảng tính – ERPCons" Value="Software\ERPCons\BangTinh\Capabilities" Type="string" />
       </Component>
 
-      <Component Guid="F6E5158D-7174-4003-BEDE-6EF285584051" Id="GridcraftCli">
-        <File Id="GridcraftCliExe" Source="$(var.BinDir)\gridcraft-cli.exe" KeyPath="yes" />
-      </Component>
+      <!-- No gridcraft-cli.exe: it would edit documents without the PI licence gate. The major
+           upgrade removes the copy that earlier MSIs installed. -->
 
       <!-- Persist both on and off, independently of the optional shortcut. AppSearch reads
            this before MajorUpgrade removes the previous product. -->

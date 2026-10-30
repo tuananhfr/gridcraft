@@ -5,7 +5,10 @@
 .DESCRIPTION
   Produces, in $env:DIST (default: dist/release):
     ERPCons-BangTinh-<version>-windows-<arch>.msi            per-machine installer (WiX v5)
-    ERPCons-BangTinh-<version>-windows-<arch>-portable.zip   gridcraft.exe + gridcraft-cli.exe
+    ERPCons-BangTinh-<version>-windows-<arch>-portable.zip   gridcraft.exe
+
+  gridcraft-cli is neither built nor shipped here: it edits documents without the PI licence gate the
+  app enforces (ERPCONS-CHANGES.md). It stays in the workspace for tests and development.
 
   The binaries link the C runtime statically (+crt-static), so neither the MSI nor the portable
   zip needs the Visual C++ redistributable. Signing is delegated to sign.ps1 (skipped with a
@@ -62,22 +65,21 @@ if (-not $SkipBuild) {
   [Environment]::SetEnvironmentVariable($flagVar, '-C target-feature=+crt-static')
   # Fail the build (rather than warn) if the icon/VERSIONINFO can't be embedded.
   $env:GRIDCRAFT_REQUIRE_WINRES = '1'
-  Invoke-Native "cargo build ($Target)" { cargo build --release --locked -p gridcraft -p gridcraft-cli --target $Target }
+  Invoke-Native "cargo build ($Target)" { cargo build --release --locked -p gridcraft --target $Target }
 }
 
 $Bin = Join-Path $TargetDir "$Target\release"
 
-# Check both binaries' PE headers before packaging. Machine (COFF header) must match -Arch, so an
-# x64 build can never ship labelled arm64. Subsystem (optional header): 2 = Windows GUI, 3 = console.
-# The app must be GUI (no console window opens with it); the CLI must stay console so its output
-# reaches the terminal.
+# Check the app's PE header before packaging. Machine (COFF header) must match -Arch, so an x64
+# build can never ship labelled arm64. Subsystem (optional header) must be 2 = Windows GUI, so no
+# console window opens with the app.
 function Get-PeHeader([string] $Path) {
   $bytes = [System.IO.File]::ReadAllBytes($Path)
   $pe = [BitConverter]::ToInt32($bytes, 0x3C)
   return @{ Machine = [BitConverter]::ToUInt16($bytes, $pe + 4); Subsystem = [BitConverter]::ToUInt16($bytes, $pe + 0x5C) }
 }
 $Machine = switch ($Arch) { 'x64' { 0x8664 } 'x86' { 0x14C } 'arm64' { 0xAA64 } }
-foreach ($check in @(@('gridcraft.exe', 2), @('gridcraft-cli.exe', 3))) {
+foreach ($check in @(, @('gridcraft.exe', 2))) {
   $h = Get-PeHeader (Join-Path $Bin $check[0])
   if ($h.Machine -ne $Machine) { throw "$($check[0]) is for machine 0x$('{0:X}' -f $h.Machine), expected 0x$('{0:X}' -f $Machine) ($Arch)" }
   if ($h.Subsystem -ne $check[1]) { throw "$($check[0]) has PE subsystem $($h.Subsystem), expected $($check[1])" }
@@ -86,9 +88,9 @@ foreach ($check in @(@('gridcraft.exe', 2), @('gridcraft-cli.exe', 3))) {
 $Stage = Join-Path $TargetDir "windows-package\$Arch"
 Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Stage | Out-Null
-Copy-Item (Join-Path $Bin 'gridcraft.exe'), (Join-Path $Bin 'gridcraft-cli.exe') $Stage
+Copy-Item (Join-Path $Bin 'gridcraft.exe') $Stage
 
-& (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'gridcraft.exe') (Join-Path $Stage 'gridcraft-cli.exe')
+& (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'gridcraft.exe')
 
 # ---- MSI ---------------------------------------------------------------------------------------
 $Msi = Join-Path $Dist "ERPCons-BangTinh-$Version-$Arch.msi"
@@ -120,12 +122,4 @@ $Zip = Join-Path $Dist "ERPCons-BangTinh-$Version-$Arch.zip"
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue
 Compress-Archive -Path $Portable -DestinationPath $Zip
 
-# Smoke-test the CLI when this machine can run it. An ARM64 build made on an x64 runner can't run
-# here; .github/workflows/windows-arm64.yml installs and runs it on ARM64 instead.
-$HostArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
-if ($Arch -ne 'arm64' -or $HostArch -eq 'arm64') {
-  Invoke-Native 'gridcraft-cli --version' { & (Join-Path $Stage 'gridcraft-cli.exe') --version }
-} else {
-  Write-Output "skipping gridcraft-cli --version: an $Arch build doesn't run on this $HostArch machine"
-}
 Get-Item $Msi, $Zip | Format-Table Name, Length

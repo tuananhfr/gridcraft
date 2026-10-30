@@ -118,9 +118,11 @@ open dist/release/gridcraft-*-macos-*.dmg
 ### Windows
 
 `packaging/windows/package.ps1 -Arch x64|x86|arm64` builds with `-C target-feature=+crt-static`
-(no VC++ redistributable needed), checks both PE headers (machine matches `-Arch`; `gridcraft.exe`
-is GUI, `gridcraft-cli.exe` console), signs both executables, builds the MSI with WiX v5, signs
-the MSI, and zips a portable build.
+(no VC++ redistributable needed), checks `gridcraft.exe`'s PE header (machine matches `-Arch`,
+GUI subsystem), signs it, builds the MSI with WiX v5, signs the MSI, and zips a portable build.
+In the ERPCons fork neither the MSI nor the zip contains `gridcraft-cli.exe`: the CLI edits
+workbooks without the PI licence gate the app enforces, so Windows releases ship the app alone
+(`ERPCONS-CHANGES.md`).
 
 - `gridcraft.wxs`: per-machine install into Program Files, advertised Start Menu shortcut, App
   Paths (Win+R `gridcraft`). File types: ProgIds `GridCraft.Workbook` (`.xlsx`, `.xlsm`) and
