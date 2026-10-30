@@ -15,6 +15,7 @@ mod clip_html_style;
 pub mod clipboard_limits;
 pub mod cmd;
 pub mod display;
+pub mod doc_access;
 pub mod fill;
 pub mod io;
 mod io_csv;
@@ -126,6 +127,8 @@ pub struct DocState {
     /// The format `path`'s content was recognised as when its extension doesn't name one (an
     /// XLSX called `budget.dat`): Save writes it back in that format.
     pub content_kind: Option<io::FileKind>,
+    /// What the page host lets the user do with this document; never saved in the file.
+    pub access: doc_access::DocAccess,
 }
 
 static NEXT_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -159,6 +162,7 @@ impl DocState {
             sheet_selections: vec![],
             unlocked_ranges: vec![],
             content_kind: None,
+            access: doc_access::DocAccess::default(),
         }
     }
     pub fn is_dirty(&self) -> bool {
@@ -293,6 +297,9 @@ pub struct Session {
     /// Review › Notes › Show All Notes: every note is displayed. An application display setting
     /// (like Excel's comment indicator option), so it's not saved in the file.
     pub show_all_notes: bool,
+    /// The author the page host names for what this user writes into the file (comments, notes),
+    /// instead of [`Prefs::user_name`]; not a preference, so it is never saved.
+    pub author: Option<String>,
 }
 
 impl Session {
@@ -394,11 +401,49 @@ impl Session {
         command_specs().iter().map(|c| c.info(self)).collect()
     }
 
+    /// Whether `spec` can run now: its own condition, then the active document's [`DocState::access`].
+    pub fn command_state(&self, spec: &CommandSpec) -> std::result::Result<(), String> {
+        (spec.enabled)(self)?;
+        match self.active().and_then(|d| d.access.refusal(spec)) {
+            Some(why) => Err(why.to_string()),
+            None => Ok(()),
+        }
+    }
+
+    /// [`Session::command_state`] by command id; an unknown id is refused.
+    pub fn command_allowed(&self, id: &str) -> std::result::Result<(), String> {
+        let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()).to_string())?;
+        self.command_state(spec)
+    }
+
+    /// Open document `uid`, whether or not it is the active one.
+    pub fn document_mut(&mut self, uid: u64) -> Option<&mut DocState> {
+        self.docs.iter_mut().find(|d| d.uid == uid)
+    }
+
+    /// Moves document `from` to tab position `to`; the active document stays active.
+    pub fn move_document(&mut self, from: usize, to: usize) {
+        if from == to || from >= self.docs.len() || to >= self.docs.len() {
+            return;
+        }
+        let active = self.active().map(|d| d.uid);
+        let d = self.docs.remove(from);
+        self.docs.insert(to, d);
+        if let Some(i) = active.and_then(|uid| self.docs.iter().position(|d| d.uid == uid)) {
+            self.active = i;
+        }
+    }
+
+    /// The name written as the author of comments and notes this user adds.
+    pub fn author_name(&self) -> &str {
+        self.author.as_deref().unwrap_or(&self.prefs.user_name)
+    }
+
     /// Runs a command by id. Undoable commands record a history step when the workbook changed.
     /// Panics inside commands are caught and reported; the workbook is restored.
     pub fn execute(&mut self, id: &str, params: Json) -> Result<Json> {
         let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()))?;
-        if let Err(why) = (spec.enabled)(self) {
+        if let Err(why) = self.command_state(spec) {
             return Err(EngineError::Disabled(id.to_string(), why));
         }
         let before = self.active().map(|d| (d.uid, d.wb.clone(), d.selection.clone(), d.calc.stale.clone()));
@@ -457,11 +502,13 @@ impl Session {
                 self.last_repeatable = None;
             }
         }
+        // A read-only document's history stays as it was: only view state can change there.
         if outermost
             && self.transaction_undoable
             && let Some((uid, wb, sel, stale)) = before
             && let Some(d) = self.docs.iter_mut().find(|d| d.uid == uid)
             && !Arc::ptr_eq(&d.wb, &wb)
+            && !d.access.read_only
         {
             d.next_transaction_id = d.next_transaction_id.max(transaction_id.saturating_add(1));
             d.undo.push(HistoryEntry { transaction_id, timestamp, stale, label: spec.label.trim_end_matches('…').to_string(), wb, selection: sel });

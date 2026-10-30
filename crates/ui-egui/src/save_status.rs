@@ -52,6 +52,8 @@ impl SheetApp {
     pub(crate) fn note_save_result(&mut self, result: &Result<serde_json::Value, String>) {
         let Some(d) = self.session.active() else { return };
         match result {
+            // The read-only notice already says why; nothing was attempted.
+            Err(e) if SheetApp::access_notice(e).is_some() => {}
             Err(e) => self.save_failures.record(d.uid, d.wb.clone(), crate::clean_error(e)),
             Ok(_) if !d.is_dirty() => self.save_failures.clear(d.uid),
             Ok(_) => {}

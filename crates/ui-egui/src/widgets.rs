@@ -14,8 +14,26 @@ pub(crate) fn tr<'a>(ui: &Ui, text: &'a str) -> &'a str {
     i18n::current(ui.ctx()).tr(text)
 }
 
+/// Extra fade for a disabled control's hand-painted icon and label: egui's half opacity leaves
+/// dark and coloured icons looking live (rule 14 of the office shell's read-only modes).
+const DISABLED_INK: f32 = 0.6;
+
+/// The painter for a control's icon and label, fading them further when the control is disabled.
+pub(crate) fn ink(ui: &Ui) -> egui::Painter {
+    let mut painter = ui.painter().clone();
+    if !ui.is_enabled() {
+        painter.multiply_opacity(DISABLED_INK);
+    }
+    painter
+}
+
 /// A flat square icon button with hover highlight and tooltip.
 pub fn icon_button(ui: &mut Ui, icon: Icon, color: Color32, tip: &str, size: egui::Vec2) -> Response {
+    let painter = ink(ui);
+    paint_icon_button(ui, &painter, icon, color, tip, size)
+}
+
+fn paint_icon_button(ui: &mut Ui, painter: &egui::Painter, icon: Icon, color: Color32, tip: &str, size: egui::Vec2) -> Response {
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     let t = Tokens::get(ui.ctx());
     if resp.is_pointer_button_down_on() {
@@ -23,7 +41,7 @@ pub fn icon_button(ui: &mut Ui, icon: Icon, color: Color32, tip: &str, size: egu
     } else if resp.hovered() {
         ui.painter().rect_filled(rect, 4.0, t.hover);
     }
-    icons::paint(ui.painter(), Rect::from_center_size(rect.center(), vec2(16.0, 16.0)), icon, color);
+    icons::paint(painter, Rect::from_center_size(rect.center(), vec2(16.0, 16.0)), icon, color);
     resp.on_hover_text(tr(ui, tip))
 }
 
@@ -31,7 +49,9 @@ pub fn icon_button(ui: &mut Ui, icon: Icon, color: Color32, tip: &str, size: egu
 pub fn enabled_icon_button(ui: &mut Ui, enabled: bool, icon: Icon, tip: &str, size: egui::Vec2) -> Response {
     ui.add_enabled_ui(enabled, |ui| {
         let t = Tokens::get(ui.ctx());
-        let response = icon_button(ui, icon, if enabled { t.text_dim } else { t.text_disabled }, tip, size);
+        // Already drawn in the disabled colour: the extra fade would make it vanish.
+        let painter = ui.painter().clone();
+        let response = paint_icon_button(ui, &painter, icon, if enabled { t.text_dim } else { t.text_disabled }, tip, size);
         // Translate outside the closure: egui calls it while holding the context lock that `tr` needs.
         let label = tr(ui, tip).to_owned();
         response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &label));
@@ -50,7 +70,7 @@ pub fn toggle_button(ui: &mut Ui, icon: Icon, on: bool, tip: &str) -> Response {
     } else if resp.hovered() {
         ui.painter().rect_filled(rect, 4.0, t.hover);
     }
-    icons::paint(ui.painter(), Rect::from_center_size(rect.center(), vec2(16.0, 16.0)), icon, t.text);
+    icons::paint(&ink(ui), Rect::from_center_size(rect.center(), vec2(16.0, 16.0)), icon, t.text);
     resp.on_hover_text(tr(ui, tip))
 }
 
@@ -70,16 +90,17 @@ pub fn big_button(ui: &mut Ui, icon: Icon, label: &str, tip: &str, dropdown: boo
     } else if resp.hovered() {
         ui.painter().rect_filled(rect, 5.0, t.hover);
     }
-    icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.center().x, rect.top() + 21.0), vec2(30.0, 30.0)), icon, t.text);
+    let painter = ink(ui);
+    icons::paint(&painter, Rect::from_center_size(pos2(rect.center().x, rect.top() + 21.0), vec2(30.0, 30.0)), icon, t.text);
     for (i, line) in lines.iter().enumerate() {
         let has_arrow = dropdown && i + 1 == lines.len();
         let line_w = line.size().x + if has_arrow { arrow_space } else { 0.0 };
         let left = rect.center().x - line_w / 2.0;
         let y = rect.top() + 46.0 + i as f32 * 13.0;
-        ui.painter().galley(pos2(left, y - line.size().y / 2.0), line.clone(), t.text);
+        painter.galley(pos2(left, y - line.size().y / 2.0), line.clone(), t.text);
         if has_arrow {
             icons::paint(
-                ui.painter(),
+                &painter,
                 Rect::from_center_size(pos2(left + line_w - arrow_size / 2.0, y + 1.0), vec2(arrow_size, arrow_size)),
                 Icon::Chevron,
                 t.text_dim,
@@ -102,17 +123,13 @@ pub fn small_button(ui: &mut Ui, icon: Icon, label: &str, tip: &str, dropdown: b
     } else if resp.hovered() {
         ui.painter().rect_filled(rect, 4.0, t.hover);
     }
-    icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.left() + 12.0, rect.center().y), vec2(16.0, 16.0)), icon, t.text);
+    let painter = ink(ui);
+    icons::paint(&painter, Rect::from_center_size(pos2(rect.left() + 12.0, rect.center().y), vec2(16.0, 16.0)), icon, t.text);
     if !label.is_empty() {
-        ui.painter().text(pos2(rect.left() + 24.0, rect.center().y), Align2::LEFT_CENTER, label, font, t.text);
+        painter.text(pos2(rect.left() + 24.0, rect.center().y), Align2::LEFT_CENTER, label, font, t.text);
     }
     if dropdown {
-        icons::paint(
-            ui.painter(),
-            Rect::from_center_size(pos2(rect.right() - 7.0, rect.center().y + 1.0), vec2(10.0, 10.0)),
-            Icon::Chevron,
-            t.text_dim,
-        );
+        icons::paint(&painter, Rect::from_center_size(pos2(rect.right() - 7.0, rect.center().y + 1.0), vec2(10.0, 10.0)), Icon::Chevron, t.text_dim);
     }
     resp.on_hover_text(tr(ui, tip))
 }
@@ -130,11 +147,12 @@ pub fn split_button(ui: &mut Ui, icon: Icon, accent: Option<Color32>, tip: &str)
         ui.painter().rect_filled(rect, 4.0, t.hover);
         ui.painter().line_segment([pos2(main.right(), rect.top() + 3.0), pos2(main.right(), rect.bottom() - 3.0)], Stroke::new(1.0, t.separator));
     }
-    icons::paint(ui.painter(), Rect::from_center_size(main.center() - vec2(0.0, 2.0), vec2(16.0, 16.0)), icon, t.text);
+    let painter = ink(ui);
+    icons::paint(&painter, Rect::from_center_size(main.center() - vec2(0.0, 2.0), vec2(16.0, 16.0)), icon, t.text);
     if let Some(c) = accent {
-        ui.painter().rect_filled(Rect::from_min_size(pos2(main.left() + 4.0, main.bottom() - 5.0), vec2(17.0, 3.0)), 0.0, c);
+        painter.rect_filled(Rect::from_min_size(pos2(main.left() + 4.0, main.bottom() - 5.0), vec2(17.0, 3.0)), 0.0, c);
     }
-    icons::paint(ui.painter(), Rect::from_center_size(arrow.center(), vec2(10.0, 10.0)), Icon::Chevron, t.text_dim);
+    icons::paint(&painter, Rect::from_center_size(arrow.center(), vec2(10.0, 10.0)), Icon::Chevron, t.text_dim);
     (m.on_hover_text(tr(ui, tip)).clicked(), a)
 }
 
@@ -383,5 +401,21 @@ pub fn notice_bar(app: &mut SheetApp, ui: &mut Ui) {
     }
     if dismiss {
         app.notice = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_disabled_controls_icon_and_label_fade_well_past_egui_default() {
+        let ctx = egui::Context::default();
+        let mut output = ctx.run_ui(Default::default(), |ui| {
+            assert_eq!(super::ink(ui).opacity(), 1.0);
+            ui.disable();
+            let egui_default = ui.painter().opacity();
+            let faded = super::ink(ui).opacity();
+            assert!(faded < egui_default && faded <= 0.35, "{faded} vs egui's {egui_default}");
+        });
+        output.textures_delta.clear();
     }
 }

@@ -80,12 +80,13 @@ impl ClosedDocs {
 
 impl SheetApp {
     /// What `file.close` with `params` will close, serialized; `None` when it will ask first,
-    /// or the document was opened with its password (never kept decrypted).
+    /// the document was opened with its password (never kept decrypted), or its host owns it
+    /// (reopening would make a local copy cut off from the host).
     pub(crate) fn closing_snapshot(&self, params: &Json) -> Option<ClosedDoc> {
         let i = params.get("index").and_then(Json::as_u64).map_or(self.session.active_index(), |i| i as usize);
         let d = self.session.documents().get(i)?;
         let force = params.get("force").and_then(Json::as_bool).unwrap_or(false);
-        if (d.is_dirty() && !force) || self.decrypted.contains(&d.uid) {
+        if (d.is_dirty() && !force) || self.decrypted.contains(&d.uid) || self.is_hosted(d.uid) {
             return None;
         }
         let bytes = crate::drafts::draft_bytes(&d.wb, &d.display_title()).map_err(|e| log::warn!("closed document not kept: {e}")).ok()?;

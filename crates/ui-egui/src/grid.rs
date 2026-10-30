@@ -102,6 +102,13 @@ pub enum Drag {
     Pan,
 }
 
+impl Drag {
+    /// Whether finishing this drag changes the workbook (selection and panning don't).
+    pub fn edits(&self) -> bool {
+        !matches!(self, Drag::None | Drag::Select | Drag::Rows(_) | Drag::Cols(_) | Drag::Pan)
+    }
+}
+
 #[derive(Default)]
 pub struct GridState {
     pub drag: Drag,
@@ -2128,12 +2135,16 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
         if let Some(r) = validation_arrow(sh, geo, sel.active)
             && r.contains(p)
         {
-            app.grid.list_picker = Some(sel.active);
+            if !app.refuse_read_only_edit() {
+                app.grid.list_picker = Some(sel.active);
+            }
             return;
         }
-        // Filter dropdown buttons.
+        // Filter dropdown buttons. The menu filters and sorts, and may add the filter itself.
         if is_filter_button(sh, geo, p) {
-            app.grid.filter_menu = Some((c.col, c.row, geo.mirror_pos(p)));
+            if !app.refuse_read_only_edit() {
+                app.grid.filter_menu = Some((c.col, c.row, geo.mirror_pos(p)));
+            }
             return;
         }
         // Point mode while editing a formula: clicking inserts a reference.
@@ -2213,6 +2224,11 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
             select_to_pointer(app, geo, sh, wb, p);
         }
         return;
+    }
+
+    // A press on a read-only document may have started a drag that would edit; it ends before moving.
+    if app.read_only() && app.grid.drag.edits() {
+        app.grid.drag = Drag::None;
     }
 
     // Dragging.
@@ -2470,8 +2486,10 @@ fn select_to_pointer(app: &mut SheetApp, geo: &Geo, sh: &Sheet, wb: &Workbook, p
 }
 
 fn coalesce_last_undo(app: &mut SheetApp) {
-    // Merge consecutive drag steps into one undo entry.
+    // Merge consecutive drag steps into one undo entry. A read-only document's refused steps added
+    // none, so merging would drop one of its earlier steps.
     if let Some(d) = app.session.active_mut()
+        && !d.access.read_only
         && d.undo.len() >= 2
     {
         let n = d.undo.len();
@@ -2987,7 +3005,8 @@ fn context_menu(app: &mut SheetApp, ui: &mut egui::Ui) {
                     ui.separator();
                     continue;
                 }
-                if ui.add(egui::Button::new(lang.tr(label)).frame(false).min_size(vec2(190.0, 20.0))).clicked() {
+                let enabled = app.offers(context_menu_command(id));
+                if ui.add_enabled(enabled, egui::Button::new(lang.tr(label)).frame(false).min_size(vec2(190.0, 20.0))).clicked() {
                     close = true;
                     match id {
                         "ui:pasteSpecial" => app.open_dialog("pasteSpecial", json!({})),
@@ -3029,6 +3048,24 @@ fn context_menu(app: &mut SheetApp, ui: &mut egui::Ui) {
             && ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| !resp.response.rect.contains(p)))
     {
         app.grid.context_menu = None;
+    }
+}
+
+/// The engine command a context menu item ends in, for greying out what the document refuses.
+fn context_menu_command(id: &str) -> &str {
+    match id {
+        "ui:pasteSpecial" => "edit.pasteSpecial",
+        "ui:insertPaste" => "home.insertCopiedCells",
+        "ui:insertCells" => "home.insertCells",
+        "ui:deleteCells" => "home.deleteCells",
+        "ui:filterValue" => "data.filterBy",
+        "ui:newComment" => "review.newComment",
+        "ui:newNote" => "review.newNote",
+        "ui:formatCells" => "home.formatCells",
+        "ui:pickList" => "cell.set",
+        "ui:defineName" => "formulas.defineName",
+        "ui:insertLink" => "insert.link",
+        other => other,
     }
 }
 

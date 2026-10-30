@@ -194,7 +194,7 @@ fn rename_first_sheet(wb: &mut Workbook, path: &str) {
     }
 }
 
-pub use gridcraft_xlsx::{DROPPED_SIGNATURE, LEGACY_SIGNATURE};
+pub use gridcraft_xlsx::{DROPPED_SIGNATURE, Format as ContentFormat, LEGACY_SIGNATURE, sniff as sniff_content};
 pub const UNSIGNED_MACROS: &str = "The VBA project has changed. Its digital signature will be removed; the saved macros will be unsigned.";
 pub const REMOVED_MACROS: &str = "This format cannot preserve VBA macros. The saved file will not contain the macros.";
 pub const REMOVED_SIGNED_MACROS: &str =
