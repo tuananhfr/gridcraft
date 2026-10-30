@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 
 use erpcons_account::{Account, ApiCode, Config, Error, LicenceState, MembershipStatus, RevocationReason, SecretStore, Status, WarningStage};
 use gridcraft_ui_egui::account::{
-    AccountError, AccountHook, AccountSnapshot, AccountView, LicenceView, OrgView, SignedInView, WarningView, is_pro_feature,
+    AccountError, AccountHook, AccountSnapshot, AccountView, LicenceView, OrgView, SignedInView, WarningView, is_paid_feature, is_pro_feature,
 };
 use gridcraft_ui_egui::edit_lock::EditLock;
 use gridcraft_ui_egui::i18n::Language;
@@ -391,7 +391,9 @@ fn view_of(status: Status) -> AccountView {
         licence: match s.licence {
             // No lease: the free features only; the edit lock says why.
             LicenceState::NotActivated | LicenceState::NotEntitled => LicenceView::Free,
-            LicenceState::Active { features, expires_at, .. } => LicenceView::Active { expires_at, pro: features.iter().any(|f| is_pro_feature(f)) },
+            // The free plan's lease grants `use` and renews itself while online: it reads Free, with
+            // no 7/3/1-day warning; only features beyond it make a paid plan.
+            LicenceState::Active { features, expires_at, .. } => LicenceView::Active { expires_at, pro: features.iter().any(|f| is_paid_feature(f)) },
             LicenceState::Inactive { expires_at, .. } => LicenceView::Inactive { expires_at },
             LicenceState::DeviceRevoked => LicenceView::DeviceRevoked,
             LicenceState::DeviceCapReached => LicenceView::DeviceCapReached,
@@ -495,8 +497,20 @@ mod tests {
         assert_eq!(s.licence, LicenceView::Active { expires_at: 50, pro: false });
         assert_eq!(s.warning, Some(WarningView { days: 3, expires_at: 99 }));
         assert!(!s.online && !s.session_only && s.reauth_required);
-        let licensed = LicenceState::Active { lease_id: "l".into(), features: vec![OFFICE_VIEW.into(), OFFICE_USE.into()], expires_at: 50 };
-        assert_eq!(signed_in_view(Status::SignedIn(Box::new(signed_in(licensed)))).licence, LicenceView::Active { expires_at: 50, pro: true });
+        let free_plan = LicenceState::Active { lease_id: "l".into(), features: vec![OFFICE_VIEW.into(), OFFICE_USE.into()], expires_at: 50 };
+        assert_eq!(
+            signed_in_view(Status::SignedIn(Box::new(signed_in(free_plan)))).licence,
+            LicenceView::Active { expires_at: 50, pro: false },
+            "the free plan's lease grants editing, not a paid plan"
+        );
+        let paid = LicenceState::Active {
+            lease_id: "l".into(),
+            features: vec![OFFICE_VIEW.into(), OFFICE_USE.into(), "erpconsoffice.advanced".into()],
+            expires_at: 50,
+        };
+        let paid = signed_in_view(Status::SignedIn(Box::new(signed_in(paid))));
+        assert_eq!(paid.licence, LicenceView::Active { expires_at: 50, pro: true });
+        assert_eq!(paid.warning, Some(WarningView { days: 3, expires_at: 99 }), "a paid plan still gets the renewal warning");
         for (state, view) in [
             (LicenceState::NotActivated, LicenceView::Free),
             (LicenceState::Inactive { lease_id: "l".into(), expires_at: 7 }, LicenceView::Inactive { expires_at: 7 }),

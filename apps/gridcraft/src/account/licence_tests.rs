@@ -8,8 +8,9 @@ use erpcons_account::{Account, Clock, Config, LicenceState, MemorySecretStore, S
 use gridcraft_engine::Session;
 use gridcraft_engine::core::{CellRef, Value};
 use gridcraft_ui_egui::SheetApp;
-use gridcraft_ui_egui::account::AccountHook;
+use gridcraft_ui_egui::account::{AccountHook, AccountView, LicenceView, format_date, licence_text};
 use gridcraft_ui_egui::edit_lock::EditLock;
+use gridcraft_ui_egui::i18n::Language;
 use pi_mock::{Fault, OFFICE_PRODUCT, ORG_A, Scenario, Server, Tenant};
 use serde_json::json;
 
@@ -170,6 +171,24 @@ fn signing_in_with_the_free_plan_unlocks_the_open_workbook() {
 }
 
 #[test]
+fn the_free_plan_reads_free_and_its_lease_raises_no_expiry_warning() {
+    let env = Env::new(Scenario::office_free());
+    let hook = env.hook();
+    signed_in(&hook);
+    wait_for("the lease", || hook.edit_lock().is_none());
+    // Two days left on the 7-day lease: the library's 3-day stage.
+    env.advance(5 * DAY);
+    let status = account(&hook).status();
+    let Status::SignedIn(s) = &status else { panic!("signed in") };
+    assert!(s.warning.is_some(), "the library still raises it for `use`");
+    let AccountView::SignedIn(view) = super::view_of(status) else { panic!("signed in") };
+    let LicenceView::Active { expires_at, pro } = view.licence else { panic!("{:?}", view.licence) };
+    assert!(!pro, "the free plan is no paid plan");
+    assert_eq!(licence_text(Language::En, view.licence), format!("Free · offline until {}", format_date(Language::En, expires_at)));
+    assert_eq!(licence_text(Language::Vi, view.licence), format!("Miễn phí · dùng ngoại tuyến đến {}", format_date(Language::Vi, expires_at)));
+}
+
+#[test]
 fn a_revoked_device_locks_editing_after_a_refresh() {
     let env = Env::new(Scenario::office_free());
     let hook = env.hook();
@@ -283,7 +302,6 @@ fn an_account_that_cannot_open_keeps_editing_locked() {
 
 #[test]
 fn reasons_have_vietnamese_translations() {
-    use gridcraft_ui_egui::i18n::Language;
     for (lock, vi) in [
         (EditLock::Starting, "Đang kiểm tra giấy phép…"),
         (EditLock::SignIn, "Đăng nhập PI ID để sửa"),
