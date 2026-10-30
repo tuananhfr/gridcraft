@@ -45,7 +45,9 @@ mod pivot_captions;
 pub mod pivot_labels;
 pub mod pivot_pane;
 pub mod printing;
+pub mod read_only;
 pub mod region;
+pub mod reload_view;
 pub mod ribbon;
 pub mod save_as;
 pub mod save_status;
@@ -344,6 +346,8 @@ pub struct SheetApp {
     pub views: HashMap<(u64, usize), SheetView>,
     pub editor: Option<editor::EditState>,
     pub text_box_editor: Option<text_box::EditState>,
+    /// Cell edits a read-only switch couldn't commit, by document, reopened once it is editable.
+    pub held_edits: HashMap<u64, editor::EditState>,
     pub dialog: Option<dialogs::Dialog>,
     macro_runtime: macro_runtime::State,
     /// The File tab's Backstage view, when open (UI-only; replaces the ribbon, grid and tabs).
@@ -472,6 +476,7 @@ impl SheetApp {
             views: HashMap::new(),
             editor: None,
             text_box_editor: None,
+            held_edits: HashMap::new(),
             dialog: None,
             macro_runtime: Default::default(),
             backstage: None,
@@ -836,7 +841,9 @@ impl SheetApp {
 
     /// Shows a command error: a toast for an unavailable command, else a message box.
     fn alert(&mut self, e: String) {
-        if e == gridcraft_engine::legacy::FAILED {
+        if let Some(notice) = SheetApp::access_notice(&e) {
+            self.toast = Some((notice.into(), now_ms()));
+        } else if e == gridcraft_engine::legacy::FAILED {
             self.message = Some((gridcraft_engine::legacy::FAILED_TITLE.into(), e));
         } else if e.contains("is not available right now") {
             self.toast = Some((e, now_ms()));
@@ -1213,6 +1220,9 @@ impl SheetApp {
 
     /// Starts editing the active cell. `text` replaces the content (typing) or pre-fills it.
     pub fn begin_edit(&mut self, text: Option<String>, from_formula_bar: bool) {
+        if self.refuse_read_only_edit() {
+            return;
+        }
         if let Err(e) = self.commit_text_box_edit() {
             self.message = Some(("Text Box".into(), clean_error(&e)));
             return;
@@ -1532,6 +1542,8 @@ impl SheetApp {
         }
         let t0 = now_ms();
         self.note_active_document();
+        // After the switch above, which closes any editor of the previous document.
+        self.reopen_held_edit();
         text_box::before_ui(self, &ctx);
         // The language the widgets translate with this frame (see `i18n::current`).
         i18n::set_current(&ctx, self.ui.language);

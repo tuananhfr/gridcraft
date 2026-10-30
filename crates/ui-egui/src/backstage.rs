@@ -191,11 +191,17 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
             if nav_item(ui, Page::Info.icon(), lang.tr("Info"), bs.page == Page::Info, nav_text, nav_sel).clicked() {
                 out.page = Some(Page::Info);
             }
-            if nav_item(ui, Icon::Save, lang.tr("Save"), false, nav_text, nav_sel).clicked() {
+            let save_offered = app.offers("file.save");
+            if ui.add_enabled_ui(save_offered, |ui| nav_item(ui, Icon::Save, lang.tr("Save"), false, nav_text, nav_sel)).inner.clicked() {
                 save(app, &mut out);
             }
-            for page in [Page::SaveAs, Page::Print, Page::Export] {
-                if nav_item(ui, page.icon(), lang.tr(page.label()), bs.page == page, nav_text, nav_sel).clicked() {
+            for (page, command) in [(Page::SaveAs, "file.saveAs"), (Page::Print, "file.print"), (Page::Export, "file.exportPdf")] {
+                let offered = app.offers(command);
+                if ui
+                    .add_enabled_ui(offered, |ui| nav_item(ui, page.icon(), lang.tr(page.label()), bs.page == page, nav_text, nav_sel))
+                    .inner
+                    .clicked()
+                {
                     out.page = Some(page);
                 }
             }

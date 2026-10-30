@@ -151,12 +151,13 @@ pub fn sheet_tabs(app: &mut SheetApp, ui: &mut Ui) {
                                 if resp.clicked() {
                                     activate_sheet(app, i);
                                 }
-                                if resp.double_clicked() {
+                                if resp.double_clicked() && !app.refuse_read_only_edit() {
                                     app.grid.renaming_tab = Some(i);
                                     app.grid.rename_text = name.clone();
                                 }
                                 // Drag to reorder.
                                 if resp.drag_stopped()
+                                    && !app.read_only()
                                     && let Some(p) = ui.input(|inp| inp.pointer.interact_pos())
                                 {
                                     let dx = p.x - r.center().x;
@@ -167,8 +168,12 @@ pub fn sheet_tabs(app: &mut SheetApp, ui: &mut Ui) {
                                     }
                                 }
                                 let lang = app.ui.language;
+                                let read_only = app.read_only();
                                 resp.context_menu(|ui| {
                                     ui.set_min_width(180.0);
+                                    if read_only {
+                                        ui.disable();
+                                    }
                                     if ui.button(lang.tr("Insert Sheet")).clicked() {
                                         app.run_or_alert("home.insertSheet", json!({"before": i}));
                                     }

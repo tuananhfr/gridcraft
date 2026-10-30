@@ -62,7 +62,7 @@ pub struct CommandInfo {
 
 impl CommandSpec {
     pub fn info(&self, s: &Session) -> CommandInfo {
-        let e = (self.enabled)(s);
+        let e = s.command_state(self);
         CommandInfo {
             id: self.id,
             label: self.label,
@@ -337,6 +337,10 @@ pub(crate) fn edit<R>(s: &mut Session, f: impl FnOnce(&mut Ctx) -> Result<R>) ->
 }
 
 pub(crate) fn commit<R>(d: &mut DocState, f: impl FnOnce(&mut Ctx) -> Result<R>) -> Result<R> {
+    // Backstop for a command `DocAccess::refusal` doesn't know: every content edit lands here.
+    if d.access.read_only {
+        return Err(EngineError::Other(d.access.read_only_notice().into()));
+    }
     // `GRIDCRAFT_PROFILE` timing. Read the clock only when profiling, and never on wasm: there
     // `Instant::now` traps (`RuntimeError: unreachable`), which broke every edit in the web app.
     #[allow(clippy::disallowed_methods)]

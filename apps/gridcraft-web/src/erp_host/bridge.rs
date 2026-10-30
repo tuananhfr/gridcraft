@@ -9,55 +9,58 @@ use wasm_bindgen::JsCast as _;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
 
-use super::docs::{HostDocs, Reply};
-use super::protocol::{API_VERSION, OpenRequest, Reason, SaveResult, Shell};
+use super::docs::{FlushEntry, HostDocs, Reply};
+use super::protocol::{API_VERSIONS, Mode, OpenRequest, Reason, Request, SaveResult, Shell};
 
 /// The shell lets the page go once this has passed, whatever is still being saved.
 const FLUSH_LIMIT_MS: i32 = 10_000;
 
-/// `window.erpHost` when it is version 1, checked once at start-up.
-pub(crate) fn detect() -> Option<JsValue> {
+/// `window.erpHost` and its version when this fork speaks it, checked once at start-up.
+pub(crate) fn detect() -> Option<(JsValue, u32)> {
     let window = web_sys::window()?;
     let host = js_sys::Reflect::get(&window, &JsValue::from_str("erpHost")).ok()?;
     if !host.is_object() {
         return None;
     }
-    let version = js_sys::Reflect::get(&host, &JsValue::from_str("version")).ok()?.as_f64();
-    (version == Some(API_VERSION)).then_some(host)
+    let version = js_sys::Reflect::get(&host, &JsValue::from_str("version")).ok()?.as_f64()?;
+    API_VERSIONS.into_iter().find(|v| f64::from(*v) == version).map(|v| (host, v))
 }
 
 /// `acknowledged(docId, revision, version)` calls, applied at the end of the next frame.
 type Acks = Rc<RefCell<Vec<(String, u64, Option<u64>)>>>;
 
+type Requests = Rc<RefCell<Vec<Request>>>;
+
 pub(crate) struct ErpHost {
     docs: Rc<RefCell<HostDocs>>,
-    /// Documents `open` handed over, opened at the start of the next frame.
-    opens: Rc<RefCell<Vec<OpenRequest>>>,
+    requests: Requests,
     acks: Acks,
 }
 
 impl ErpHost {
     /// Makes `app` save the shell's documents to it and registers `open`, `flush` and `acknowledged`.
-    pub(crate) fn install(host: JsValue, app: &mut SheetApp, ctx: &egui::Context) -> ErpHost {
+    pub(crate) fn install(host: JsValue, version: u32, app: &mut SheetApp, ctx: &egui::Context) -> ErpHost {
         let docs = HostDocs::new(Rc::new(JsShell { host: host.clone(), ctx: ctx.clone() }));
-        HostDocs::connect(&docs, app);
-        let opens = Rc::new(RefCell::new(Vec::new()));
+        HostDocs::connect(&docs, app, version);
+        let requests = Requests::default();
         let acks = Acks::default();
-        if let Err(e) = ready(&host, &docs, &opens, &acks, ctx) {
+        if let Err(e) = ready(&host, version, &docs, &requests, &acks, ctx) {
             log::error!("erpHost.ready failed: {e:?}");
         }
-        ErpHost { docs, opens, acks }
+        ErpHost { docs, requests, acks }
     }
 
     /// Call before the app's `logic`: opening inside the shell's call would run outside a frame.
     pub(crate) fn open_requested(&self, app: &mut SheetApp) {
-        let requests = std::mem::take(&mut *self.opens.borrow_mut());
+        let requests = std::mem::take(&mut *self.requests.borrow_mut());
         let Ok(mut docs) = self.docs.try_borrow_mut() else {
-            self.opens.borrow_mut().extend(requests);
+            let mut queue = self.requests.borrow_mut();
+            let later = std::mem::replace(&mut *queue, requests);
+            queue.extend(later);
             return;
         };
         for request in requests {
-            docs.open(app, request);
+            docs.apply(app, request);
         }
     }
 
@@ -73,22 +76,17 @@ impl ErpHost {
     }
 }
 
-fn ready(
-    host: &JsValue,
-    docs: &Rc<RefCell<HostDocs>>,
-    opens: &Rc<RefCell<Vec<OpenRequest>>>,
-    acks: &Acks,
-    ctx: &egui::Context,
-) -> Result<(), JsValue> {
-    let queue = opens.clone();
+fn ready(host: &JsValue, version: u32, docs: &Rc<RefCell<HostDocs>>, requests: &Requests, acks: &Acks, ctx: &egui::Context) -> Result<(), JsValue> {
+    let queue = requests.clone();
     let repaint = ctx.clone();
     let open = Closure::<dyn FnMut(JsValue)>::new(move |doc: JsValue| {
-        queue.borrow_mut().push(read_doc(&doc));
+        queue.borrow_mut().push(Request::Open(read_doc(&doc, version)));
         repaint.request_repaint();
     })
     .into_js_value();
-    let docs = docs.clone();
-    let flush = Closure::<dyn FnMut() -> JsValue>::new(move || flush_promise(&docs).into()).into_js_value();
+    let entry = HostDocs::flush_entry(docs);
+    let repaint = ctx.clone();
+    let flush = Closure::<dyn FnMut() -> JsValue>::new(move || flush_promise(&entry, &repaint).into()).into_js_value();
     let queue = acks.clone();
     let repaint = ctx.clone();
     let acknowledged = Closure::<dyn FnMut(JsValue, JsValue, JsValue)>::new(move |doc_id: JsValue, revision: JsValue, version: JsValue| {
@@ -105,24 +103,45 @@ fn ready(
     js_sys::Reflect::set(&handlers, &JsValue::from_str("open"), &open)?;
     js_sys::Reflect::set(&handlers, &JsValue::from_str("flush"), &flush)?;
     js_sys::Reflect::set(&handlers, &JsValue::from_str("acknowledged"), &acknowledged)?;
+    if version >= 2 {
+        let queue = requests.clone();
+        let repaint = ctx.clone();
+        let set_mode =
+            Closure::<dyn FnMut(JsValue, JsValue, JsValue)>::new(move |doc_id: JsValue, mode: JsValue, can_download: JsValue| {
+                match doc_id.as_string() {
+                    Some(doc_id) => {
+                        let access = Mode::parse(mode.as_string().as_deref()).access(can_download.as_bool() != Some(false));
+                        queue.borrow_mut().push(Request::Mode(doc_id, access));
+                        repaint.request_repaint();
+                    }
+                    None => log::warn!("erpHost.setMode: ignored an odd call"),
+                }
+            })
+            .into_js_value();
+        let queue = requests.clone();
+        let repaint = ctx.clone();
+        let set_user = Closure::<dyn FnMut(JsValue)>::new(move |user: JsValue| {
+            queue.borrow_mut().push(Request::User(user_name(&user)));
+            repaint.request_repaint();
+        })
+        .into_js_value();
+        js_sys::Reflect::set(&handlers, &JsValue::from_str("setMode"), &set_mode)?;
+        js_sys::Reflect::set(&handlers, &JsValue::from_str("setUser"), &set_user)?;
+    }
     let ready = js_sys::Reflect::get(host, &JsValue::from_str("ready"))?.dyn_into::<js_sys::Function>()?;
     ready.call1(host, &handlers)?;
     Ok(())
 }
 
 /// Saves run synchronously here: `pagehide` may be the page's last chance, and it runs no frames.
-fn flush_promise(docs: &Rc<RefCell<HostDocs>>) -> js_sys::Promise {
+fn flush_promise(entry: &FlushEntry, ctx: &egui::Context) -> js_sys::Promise {
     js_sys::Promise::new(&mut |resolve: js_sys::Function, _reject: js_sys::Function| {
         let settle = resolve.clone();
         let done: Box<dyn FnOnce()> = Box::new(move || {
             let _ = settle.call0(&JsValue::UNDEFINED);
         });
-        match docs.try_borrow_mut() {
-            Ok(mut docs) => docs.flush(done),
-            Err(e) => {
-                log::warn!("erpHost.flush while busy: {e}");
-                done();
-            }
+        if !entry.flush(done) {
+            ctx.request_repaint();
         }
         let limit = Closure::once_into_js(move || {
             let _ = resolve.call0(&JsValue::UNDEFINED);
@@ -135,7 +154,15 @@ fn flush_promise(docs: &Rc<RefCell<HostDocs>>) -> js_sys::Promise {
     })
 }
 
-fn read_doc(doc: &JsValue) -> OpenRequest {
+/// `setUser`'s `{id, name}` name; `None` for null.
+fn user_name(user: &JsValue) -> Option<String> {
+    if !user.is_object() {
+        return None;
+    }
+    js_sys::Reflect::get(user, &JsValue::from_str("name")).ok()?.as_string()
+}
+
+fn read_doc(doc: &JsValue, version: u32) -> OpenRequest {
     let get = |key: &str| js_sys::Reflect::get(doc, &JsValue::from_str(key)).ok();
     let text = |key: &str| get(key).and_then(|v| v.as_string()).unwrap_or_default();
     let bytes = get("bytes").and_then(|v| {
@@ -147,8 +174,13 @@ fn read_doc(doc: &JsValue) -> OpenRequest {
             None
         }
     });
-    let version = get("version").as_ref().and_then(whole_number);
-    OpenRequest { doc_id: text("docId"), version, title: text("title"), format: text("format"), bytes }
+    let doc_version = get("version").as_ref().and_then(whole_number);
+    // v1 has no access modes: the document stays at full access.
+    let v2 = |key: &str| get(key).filter(|v| version >= 2 && !v.is_undefined() && !v.is_null());
+    let mode = Mode::parse(v2("mode").and_then(|v| v.as_string()).as_deref());
+    let access = mode.access(v2("canDownload").and_then(|v| v.as_bool()) != Some(false));
+    let preserve_view = v2("preserveView").and_then(|v| v.as_bool()) == Some(true);
+    OpenRequest { doc_id: text("docId"), version: doc_version, title: text("title"), format: text("format"), bytes, access, preserve_view }
 }
 
 fn whole_number(value: &JsValue) -> Option<u64> {

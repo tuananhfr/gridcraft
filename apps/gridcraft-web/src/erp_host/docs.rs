@@ -9,12 +9,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
+use gridcraft_engine::doc_access::DocAccess;
 use gridcraft_engine::model::Workbook;
 use gridcraft_ui_egui::host_docs::{self, DocumentHost, HostOpenError};
+use gridcraft_ui_egui::reload_view::ViewSnapshot;
 use gridcraft_ui_egui::{Delivery, DeliveryReport, SheetApp};
 
 use super::autosave::Timing;
-use super::protocol::{FORMAT, OpenRequest, Reason, SaveResult, Shell};
+use super::protocol::{FORMAT, OpenRequest, Reason, Request, SaveResult, Shell, shell_shares};
 
 /// Why AutoSave and `flush` leave a document alone until a manual save succeeds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,6 +61,8 @@ struct HostDoc {
     timing: Timing,
     seen_revision: u64,
     reported_dirty: bool,
+    /// v2 `mode` / `canDownload`. A read-only document is never auto-saved (rule 13).
+    access: DocAccess,
 }
 
 impl HostDoc {
@@ -69,6 +73,16 @@ impl HostDoc {
     /// Saving now would leave the VBA project out without the user having agreed.
     fn held_for_macros(&self) -> bool {
         self.drops_macros && !self.may_drop_macros
+    }
+
+    /// AutoSave and `flush` leave it alone.
+    fn idle(&self) -> bool {
+        self.stopped.is_some() || self.held_for_macros()
+    }
+
+    /// Rule 13: only `flush` still saves a document downgraded with edits in hand.
+    fn auto_saves(&self) -> bool {
+        !self.idle() && !self.access.read_only
     }
 
     /// The shell stored `written` as `revision` (rule 1); an older revision never overrides a newer one.
@@ -96,6 +110,9 @@ impl HostDoc {
 
 type Late = Rc<RefCell<Vec<(u64, u64, SaveResult)>>>;
 
+/// `flush()` calls that arrived while `HostDocs` was borrowed.
+type HeldFlushes = Rc<RefCell<Vec<Box<dyn FnOnce()>>>>;
+
 pub(crate) struct HostDocs {
     shell: Rc<dyn Shell>,
     docs: BTreeMap<u64, HostDoc>,
@@ -110,7 +127,35 @@ pub(crate) struct HostDocs {
     flush_waiters: Vec<Box<dyn FnOnce()>>,
     /// Results that arrived while `HostDocs` was borrowed.
     late: Late,
+    held_flushes: HeldFlushes,
     me: Weak<RefCell<HostDocs>>,
+}
+
+/// The shell's `flush()`. The shell may call it from inside one of this side's calls to it (its `dirty` handler
+/// does, right after a downgrade's commit) while `HostDocs` is borrowed; it then runs before that frame ends.
+pub(crate) struct FlushEntry {
+    docs: Weak<RefCell<HostDocs>>,
+    held: HeldFlushes,
+}
+
+impl FlushEntry {
+    /// Returns `false` when the flush was held for the end of the current or next frame.
+    pub(crate) fn flush(&self, done: Box<dyn FnOnce()>) -> bool {
+        let Some(docs) = self.docs.upgrade() else {
+            done();
+            return true;
+        };
+        match docs.try_borrow_mut() {
+            Ok(mut docs) => {
+                docs.flush(done);
+                true
+            }
+            Err(_) => {
+                self.held.borrow_mut().push(done);
+                false
+            }
+        }
+    }
 }
 
 /// Where the shell's answer to one `save` goes.
@@ -135,6 +180,7 @@ impl Reply {
 struct Hook {
     docs: Weak<RefCell<HostDocs>>,
     hosted: Rc<RefCell<BTreeSet<u64>>>,
+    shares: bool,
 }
 
 impl DocumentHost for Hook {
@@ -148,6 +194,10 @@ impl DocumentHost for Hook {
             Ok(mut docs) => docs.manual_save(app, uid, drop_macros),
             Err(e) => log::warn!("erpHost: save not started: {e}"),
         }
+    }
+
+    fn shares(&self) -> bool {
+        self.shares
     }
 }
 
@@ -175,21 +225,26 @@ impl HostDocs {
                 acknowledgements: Vec::new(),
                 flush_waiters: Vec::new(),
                 late: Rc::default(),
+                held_flushes: Rc::default(),
                 me: me.clone(),
             })
         })
     }
 
+    pub(crate) fn flush_entry(this: &Rc<RefCell<HostDocs>>) -> FlushEntry {
+        FlushEntry { docs: Rc::downgrade(this), held: this.borrow().held_flushes.clone() }
+    }
+
     /// Installs these documents as `app`'s document host.
-    pub(crate) fn connect(this: &Rc<RefCell<HostDocs>>, app: &mut SheetApp) {
+    pub(crate) fn connect(this: &Rc<RefCell<HostDocs>>, app: &mut SheetApp, version: u32) {
         let hosted = this.borrow().hosted.clone();
-        app.document_host = Some(Rc::new(Hook { docs: Rc::downgrade(this), hosted }));
+        app.document_host = Some(Rc::new(Hook { docs: Rc::downgrade(this), hosted, shares: shell_shares(version) }));
     }
 
     /// `open(doc)`: opens it as a new tab, replacing the one with the same `docId` (the shell
     /// reloads the latest version after a conflict), and reports `opened` once.
     pub(crate) fn open(&mut self, app: &mut SheetApp, request: OpenRequest) {
-        let OpenRequest { doc_id, version, title, format, bytes } = request;
+        let OpenRequest { doc_id, version, title, format, bytes, access, preserve_view } = request;
         if doc_id.is_empty() {
             log::warn!("erpHost.open without a docId");
             return;
@@ -208,6 +263,7 @@ impl HostDocs {
             return;
         };
         let previous = self.docs.iter().find(|(_, d)| d.doc_id == doc_id).map(|(uid, _)| *uid);
+        let kept = previous.filter(|_| preserve_view).map(|old| KeptView::of(app, old));
         // At the open limit the old copy goes first, or the latest version couldn't open.
         if let Some(old) = previous
             && app.session.documents().len() >= gridcraft_engine::MAX_DOCUMENTS
@@ -223,6 +279,10 @@ impl HostDocs {
                 if let Some(old) = &replaced {
                     log::info!("erpHost: reloaded a document, version {:?} -> {version:?}", old.version);
                 }
+                if let Some(kept) = kept {
+                    kept.restore(app, uid);
+                }
+                app.set_document_access(uid, access);
                 let Some(d) = app.session.documents().iter().find(|d| d.uid == uid) else { return };
                 let mut doc = HostDoc {
                     doc_id: doc_id.clone(),
@@ -242,6 +302,7 @@ impl HostDocs {
                     timing: Timing::default(),
                     seen_revision: d.revision,
                     reported_dirty: replaced.is_some_and(|old| old.reported_dirty),
+                    access,
                 };
                 doc.refresh(app, uid);
                 self.docs.insert(uid, doc);
@@ -258,6 +319,24 @@ impl HostDocs {
         }
     }
 
+    /// Applies one of the shell's calls that needs the app.
+    pub(crate) fn apply(&mut self, app: &mut SheetApp, request: Request) {
+        match request {
+            Request::Open(request) => self.open(app, request),
+            Request::Mode(doc_id, access) => self.set_mode(app, &doc_id, access),
+            Request::User(name) => app.session.author = name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()),
+        }
+    }
+
+    /// `setMode(docId, mode, canDownload)`: the same document and its undo history, new access.
+    /// A downgrade commits the open editor first; the shell's next `flush` saves what it held.
+    pub(crate) fn set_mode(&mut self, app: &mut SheetApp, doc_id: &str, access: DocAccess) {
+        let Some((&uid, doc)) = self.docs.iter_mut().find(|(_, d)| d.doc_id == doc_id) else { return };
+        doc.access = access;
+        app.set_document_access(uid, access);
+        doc.refresh(app, uid);
+    }
+
     fn forget(&mut self, uid: u64) -> Option<HostDoc> {
         self.hosted.borrow_mut().remove(&uid);
         self.docs.remove(&uid)
@@ -268,7 +347,7 @@ impl HostDocs {
         if app.session.active().is_some_and(|d| d.uid == uid) {
             app.store_view_state();
         }
-        let Some(doc) = self.docs.get_mut(&uid) else { return };
+        let Some(doc) = self.docs.get_mut(&uid).filter(|d| !d.access.read_only) else { return };
         doc.may_drop_macros |= drop_macros;
         doc.refresh(app, uid);
         if doc.held_for_macros() {
@@ -360,7 +439,7 @@ impl HostDocs {
     /// `flush()`: saves every document with unacknowledged edits; `done` runs once each of them
     /// has been handed to the shell.
     pub(crate) fn flush(&mut self, done: Box<dyn FnOnce()>) {
-        let uids: Vec<u64> = self.docs.iter().filter(|(_, d)| d.stopped.is_none() && !d.held_for_macros()).map(|(uid, _)| *uid).collect();
+        let uids: Vec<u64> = self.docs.iter().filter(|(_, d)| !d.idle()).map(|(uid, _)| *uid).collect();
         for uid in uids {
             self.request(uid, Reason::Flush, None);
         }
@@ -419,11 +498,12 @@ impl HostDocs {
                 doc.seen_revision = doc.revision;
                 doc.timing.edited(now);
             }
+            // A read-only document can only turn clean (its downgrade edits saved by `flush`).
             if doc.dirty != doc.reported_dirty {
                 doc.reported_dirty = doc.dirty;
                 self.shell.dirty(&doc.doc_id, doc.dirty);
             }
-            if doc.stopped.is_some() || doc.held_for_macros() || editing == Some(*uid) || !doc.timing.due(now) {
+            if !doc.auto_saves() || editing == Some(*uid) || !doc.timing.due(now) {
                 continue;
             }
             if doc.needs_save() || doc.in_flight.is_some() {
@@ -432,6 +512,10 @@ impl HostDocs {
                 // Undone back to the acknowledged state: nothing to save.
                 doc.timing.started();
             }
+        }
+        let held = std::mem::take(&mut *self.held_flushes.borrow_mut());
+        for done in held {
+            self.flush(done);
         }
         for uid in due {
             if app.session.active().is_some_and(|d| d.uid == uid) {
@@ -443,11 +527,7 @@ impl HostDocs {
             self.request(uid, Reason::Auto, Some(app));
         }
         // The cell being edited repaints on its own input; waking for it would spin.
-        self.docs
-            .iter()
-            .filter(|(uid, d)| d.stopped.is_none() && !d.held_for_macros() && editing != Some(**uid))
-            .filter_map(|(_, d)| d.timing.due_in(now))
-            .reduce(f64::min)
+        self.docs.iter().filter(|(uid, d)| d.auto_saves() && editing != Some(**uid)).filter_map(|(_, d)| d.timing.due_in(now)).reduce(f64::min)
     }
 
     #[cfg(test)]
@@ -458,6 +538,34 @@ impl HostDocs {
     #[cfg(test)]
     pub(crate) fn version(&self, uid: u64) -> Option<u64> {
         self.docs.get(&uid).and_then(|d| d.version)
+    }
+}
+
+/// Where a reloaded document was and what it showed (`preserveView`).
+struct KeptView {
+    index: Option<usize>,
+    /// The tab the user was on, when not the reloaded document.
+    active: Option<u64>,
+    view: Option<ViewSnapshot>,
+}
+
+impl KeptView {
+    fn of(app: &SheetApp, old: u64) -> KeptView {
+        let active = app.session.active().map(|d| d.uid).filter(|uid| *uid != old);
+        KeptView { index: app.document_index(Some(old)), active, view: app.view_snapshot(old) }
+    }
+
+    /// Puts the newer version `uid` in the old one's tab, showing what it showed.
+    fn restore(self, app: &mut SheetApp, uid: u64) {
+        if let (Some(index), Some(now)) = (self.index, app.document_index(Some(uid))) {
+            app.session.move_document(now, index.min(app.session.documents().len().saturating_sub(1)));
+        }
+        if let Some(i) = self.active.and_then(|other| app.document_index(Some(other))) {
+            app.session.set_active(i);
+        }
+        if let Some(view) = &self.view {
+            app.restore_view(uid, view);
+        }
     }
 }
 

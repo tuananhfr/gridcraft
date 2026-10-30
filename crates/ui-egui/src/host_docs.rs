@@ -18,6 +18,10 @@ pub trait DocumentHost {
     /// Save (Ctrl+S, the Save button, Close › Save) of hosted document `uid`. `drop_macros`: the
     /// user agreed that the saved file leaves the workbook's VBA project out.
     fn save(&self, app: &mut SheetApp, uid: u64, drop_macros: bool);
+    /// The host offers its own Share for its documents, so the title bar's is hidden for them.
+    fn shares(&self) -> bool {
+        false
+    }
 }
 
 /// Why [`SheetApp::open_hosted`] didn't open a document; the app has already told the user.
@@ -43,6 +47,11 @@ pub const HOST_SAVE_FAILED: &str = "The document couldn't be saved to the server
 impl SheetApp {
     pub fn is_hosted(&self, uid: u64) -> bool {
         self.document_host.as_ref().is_some_and(|h| h.hosts(uid))
+    }
+
+    /// Whether open document `uid` is shared through its host's own Share instead of the title bar's.
+    pub fn host_shares(&self, uid: u64) -> bool {
+        self.document_host.as_ref().is_some_and(|h| h.shares() && h.hosts(uid))
     }
 
     /// Opens a document the host stores as `name` (an `.xlsx`), as the active workbook. Its uid,
@@ -100,7 +109,8 @@ impl SheetApp {
 
     /// Routes Save of a hosted active document to its host; `false` for any other document.
     pub(crate) fn save_hosted_active(&mut self) -> bool {
-        let Some(uid) = self.session.active().map(|d| d.uid) else { return false };
+        // A read-only document goes on to the engine, which refuses Save with the read-only notice.
+        let Some(uid) = self.session.active().filter(|d| !d.access.read_only).map(|d| d.uid) else { return false };
         let Some(host) = self.document_host.clone().filter(|h| h.hosts(uid)) else { return false };
         host.save(self, uid, false);
         true

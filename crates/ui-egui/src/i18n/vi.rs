@@ -1624,6 +1624,9 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         }
         "This workbook couldn't be opened." => "Không mở được sổ làm việc này.",
         "The document couldn't be saved to the server." => "Không lưu được tài liệu lên máy chủ.",
+        "This document is read-only." => "Tài liệu này chỉ được xem, không sửa được.",
+        "Commenting on the web is coming later; for now this document is view-only." => "Nhận xét trên web sẽ có sau, hiện chỉ xem được",
+        "Downloading, printing and copying are turned off for this document." => "Tài liệu này không cho tải xuống, in hay sao chép.",
         "Good, Bad and Neutral" => "Tốt, Xấu và Trung tính",
         "Data and Model" => "Dữ liệu và Mô hình",
         "Titles and Headings" => "Tiêu đề và Đầu đề",

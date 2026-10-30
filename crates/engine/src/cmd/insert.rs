@@ -1245,7 +1245,7 @@ fn comment(s: &mut Session, p: &Json, threaded: bool) -> Result<Json> {
     let sheet = target_sheet(s, p)?;
     let at = cell_param_on(s, p, "cell", sheet)?.unwrap_or(s.doc()?.selection.active);
     let text = str_param(p, "text").unwrap_or("").to_string();
-    let author = str_param(p, "author").map(str::to_string).unwrap_or_else(|| s.prefs.user_name.clone());
+    let author = str_param(p, "author").map_or_else(|| s.author_name().to_string(), str::to_string);
     edit(s, |cx| {
         cx.sheet_mut(sheet)?.comments.insert(
             at,
@@ -1259,7 +1259,7 @@ fn reply_comment(s: &mut Session, p: &Json) -> Result<Json> {
     let sheet = target_sheet(s, p)?;
     let at = cell_param_on(s, p, "cell", sheet)?.unwrap_or(s.doc()?.selection.active);
     let text = str_param(p, "text").unwrap_or("").to_string();
-    let author = str_param(p, "author").map(str::to_string).unwrap_or_else(|| s.prefs.user_name.clone());
+    let author = str_param(p, "author").map_or_else(|| s.author_name().to_string(), str::to_string);
     edit(s, |cx| {
         let c = cx.sheet_mut(sheet)?.comments.get_mut(&at).ok_or_else(|| EngineError::Other("There's no comment in this cell.".into()))?;
         c.replies.push((author.clone(), text.clone()));

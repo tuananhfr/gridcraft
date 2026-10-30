@@ -98,7 +98,7 @@ pub fn start() {
                         .is_none()
                         .then(crate::erp_host::detect)
                         .flatten()
-                        .map(|host| crate::erp_host::ErpHost::install(host, &mut app, &cc.egui_ctx));
+                        .map(|(host, version)| crate::erp_host::ErpHost::install(host, version, &mut app, &cc.egui_ctx));
                     Ok(Box::new(WebShell {
                         app,
                         dropped: Inbox::default(),
@@ -147,7 +147,7 @@ struct WebShell {
     /// `erpIntakeResult` (picked and host-sent files arrive through `Services::inbox`).
     dropped: Inbox,
     bridge: Option<crate::host::Bridge>,
-    /// The office shell's `erpHost` v1, when it defined one.
+    /// The office shell's `erpHost` (v1 or v2), when it defined one.
     erp_host: Option<crate::erp_host::ErpHost>,
     clipboard: Option<crate::clipboard::ClipboardBridge>,
     /// Whether any local workbook has unsaved changes, for the `beforeunload` guard (the shell

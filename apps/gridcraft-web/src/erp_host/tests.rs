@@ -13,9 +13,9 @@ use serde_json::json;
 
 use super::autosave::{CHECKPOINT_MS, IDLE_MS};
 use super::docs::{HostDocs, Reply, Stop};
-use super::protocol::{API_VERSION, OpenRequest, Reason, SaveResult, Shell};
+use super::protocol::{API_VERSIONS, OpenRequest, Reason, Request, SaveResult, Shell};
 
-struct Save {
+pub(super) struct Save {
     doc_id: String,
     revision: u64,
     reason: Reason,
@@ -24,16 +24,18 @@ struct Save {
 }
 
 #[derive(Debug, PartialEq)]
-enum Call {
+pub(super) enum Call {
     Dirty(String, bool),
     Opened(String, bool, Option<String>),
     Closed(String),
 }
 
 #[derive(Default)]
-struct FakeShell {
+pub(super) struct FakeShell {
     saves: RefCell<Vec<Save>>,
     calls: RefCell<Vec<Call>>,
+    /// What the shell does inside its `dirty` handler, as the real one flushes there.
+    pub(super) on_dirty: RefCell<Option<Box<dyn Fn()>>>,
 }
 
 impl Shell for FakeShell {
@@ -42,6 +44,9 @@ impl Shell for FakeShell {
     }
     fn dirty(&self, doc_id: &str, dirty: bool) {
         self.calls.borrow_mut().push(Call::Dirty(doc_id.into(), dirty));
+        if let Some(hook) = self.on_dirty.borrow().as_ref() {
+            hook();
+        }
     }
     fn opened(&self, doc_id: &str, ok: bool, reason: Option<&str>) {
         self.calls.borrow_mut().push(Call::Opened(doc_id.into(), ok, reason.map(str::to_string)));
@@ -51,14 +56,19 @@ impl Shell for FakeShell {
     }
 }
 
-struct T {
-    app: SheetApp,
-    docs: Rc<RefCell<HostDocs>>,
-    shell: Rc<FakeShell>,
-    downloads: Rc<RefCell<Vec<DeliveryReport>>>,
+pub(super) struct T {
+    pub(super) app: SheetApp,
+    pub(super) docs: Rc<RefCell<HostDocs>>,
+    pub(super) shell: Rc<FakeShell>,
+    pub(super) downloads: Rc<RefCell<Vec<DeliveryReport>>>,
 }
 
-fn setup() -> T {
+pub(super) fn setup() -> T {
+    setup_version(2)
+}
+
+/// The app with documents from a shell that speaks `erpHost` `version`.
+pub(super) fn setup_version(version: u32) -> T {
     let downloads: Rc<RefCell<Vec<DeliveryReport>>> = Rc::default();
     let started = downloads.clone();
     let services = Services { download: Some(Box::new(move |_, _, report| started.borrow_mut().push(report))), ..Default::default() };
@@ -67,11 +77,11 @@ fn setup() -> T {
     let mut app = SheetApp::new(session, services);
     let shell = Rc::new(FakeShell::default());
     let docs = HostDocs::new(shell.clone());
-    HostDocs::connect(&docs, &mut app);
+    HostDocs::connect(&docs, &mut app, version);
     T { app, docs, shell, downloads }
 }
 
-fn xlsx(a1: &str) -> Vec<u8> {
+pub(super) fn xlsx(a1: &str) -> Vec<u8> {
     let mut s = Session::new();
     s.new_workbook();
     s.run("cell.set", json!({"cell": "A1", "input": a1})).unwrap();
@@ -80,28 +90,39 @@ fn xlsx(a1: &str) -> Vec<u8> {
 
 impl T {
     fn open_as(&mut self, doc_id: &str, format: &str, bytes: Option<Vec<u8>>) {
-        let request = OpenRequest { doc_id: doc_id.into(), version: Some(1), title: "Báo cáo".into(), format: format.into(), bytes };
-        self.docs.borrow_mut().open(&mut self.app, request);
+        self.open_request(OpenRequest {
+            doc_id: doc_id.into(),
+            version: Some(1),
+            title: "Báo cáo".into(),
+            format: format.into(),
+            bytes,
+            access: Default::default(),
+            preserve_view: false,
+        });
+    }
+
+    pub(super) fn open_request(&mut self, request: OpenRequest) {
+        self.docs.borrow_mut().apply(&mut self.app, Request::Open(request));
     }
 
     /// Opens `doc_id` and returns its uid.
-    fn open(&mut self, doc_id: &str) -> u64 {
+    pub(super) fn open(&mut self, doc_id: &str) -> u64 {
         self.open_as(doc_id, "xlsx", Some(xlsx("1")));
         self.app.session.active().unwrap().uid
     }
 
     /// One frame: the app applies settled saves, then the host documents run.
-    fn frame(&mut self, now: f64) {
+    pub(super) fn frame(&mut self, now: f64) {
         self.app.settle_saves();
         self.docs.borrow_mut().after_frame(&mut self.app, now);
     }
 
-    fn activate(&mut self, uid: u64) {
+    pub(super) fn activate(&mut self, uid: u64) {
         let i = self.app.document_index(Some(uid)).unwrap();
         self.app.session.set_active(i);
     }
 
-    fn edit(&mut self, cell: &str, input: &str) {
+    pub(super) fn edit(&mut self, cell: &str, input: &str) {
         self.app.run("cell.set", json!({"cell": cell, "input": input})).unwrap();
     }
 
@@ -109,20 +130,20 @@ impl T {
         self.app.run("file.save", json!({})).unwrap();
     }
 
-    fn resolve(&self, i: usize, result: SaveResult) {
+    pub(super) fn resolve(&self, i: usize, result: SaveResult) {
         let reply = self.shell.saves.borrow_mut()[i].reply.take().unwrap();
         reply.resolve(result);
     }
 
-    fn saves(&self) -> Vec<(String, u64, Reason)> {
+    pub(super) fn saves(&self) -> Vec<(String, u64, Reason)> {
         self.shell.saves.borrow().iter().map(|s| (s.doc_id.clone(), s.revision, s.reason)).collect()
     }
 
-    fn doc(&self, uid: u64) -> &gridcraft_engine::DocState {
+    pub(super) fn doc(&self, uid: u64) -> &gridcraft_engine::DocState {
         self.app.session.documents().iter().find(|d| d.uid == uid).unwrap()
     }
 
-    fn calls(&self) -> std::cell::Ref<'_, Vec<Call>> {
+    pub(super) fn calls(&self) -> std::cell::Ref<'_, Vec<Call>> {
         self.shell.calls.borrow()
     }
 }
@@ -533,7 +554,7 @@ fn a_save_that_would_drop_macros_asks_first() {
 
 #[test]
 fn the_shell_vocabulary_matches_the_contract() {
-    assert_eq!(API_VERSION, 1.0);
+    assert_eq!(API_VERSIONS, [1, 2]);
     assert_eq!([Reason::Auto, Reason::Manual, Reason::Flush].map(Reason::as_str), ["auto", "manual", "flush"]);
     assert_eq!(SaveResult::from_json(&json!({"status": "saved", "version": 7})), SaveResult::Saved { version: Some(7) });
     assert_eq!(SaveResult::from_json(&json!({"status": "conflict", "latestVersion": 8})), SaveResult::Conflict);
