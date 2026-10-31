@@ -20,6 +20,7 @@ mod logging;
 mod native_menu;
 mod print;
 mod updates;
+mod window_fit;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -32,6 +33,7 @@ struct App {
     sheet: SheetApp,
     drafts: Option<drafts::Drafts>,
     language: Rc<std::cell::Cell<gridcraft_ui_egui::i18n::Language>>,
+    window_fit: window_fit::WindowFit,
     #[cfg(target_os = "macos")]
     menu: Option<native_menu::NativeMenu>,
     #[cfg(target_os = "macos")]
@@ -40,6 +42,7 @@ struct App {
 
 impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.window_fit.apply(ctx);
         let language = self.sheet.ui.language;
         self.language.set(language);
         #[cfg(target_os = "macos")]
@@ -449,8 +452,8 @@ fn main() -> eframe::Result<()> {
     }
     let mut viewport = egui::ViewportBuilder::default()
         .with_title(PRODUCT_NAME)
-        .with_inner_size([1440.0, 900.0])
-        .with_min_inner_size([640.0, 420.0])
+        .with_inner_size(window_fit::DEFAULT_INNER_SIZE)
+        .with_min_inner_size(window_fit::MIN_INNER_SIZE)
         .with_app_id("vn.erpcons.bangtinh")
         .with_drag_and_drop(true);
     if cfg!(target_os = "macos") {
@@ -459,7 +462,8 @@ fn main() -> eframe::Result<()> {
     if let Some(i) = icon() {
         viewport = viewport.with_icon(i);
     }
-    let options = eframe::NativeOptions { viewport, ..Default::default() };
+    // Centred on the primary monitor, whose origin window_fit's restore position assumes.
+    let options = eframe::NativeOptions { viewport, centered: true, ..Default::default() };
     // Before eframe creates the wgpu instance: Windows starts on DirectX 12, or OpenGL when
     // DirectX 12 has no GPU driver, and never touches Vulkan unless asked (see graphics.rs).
     #[cfg(target_os = "windows")]
@@ -501,6 +505,7 @@ fn main() -> eframe::Result<()> {
                     sheet: app,
                     drafts: pending_drafts.take(),
                     language: language.clone(),
+                    window_fit: window_fit::WindowFit::default(),
                     #[cfg(target_os = "macos")]
                     menu: None,
                     #[cfg(target_os = "macos")]
