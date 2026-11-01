@@ -6,6 +6,7 @@
 //! - `*`: the whole workbook (the sheet list, renames, workbook settings).
 
 use gridcraft_core::CellRef;
+use gridcraft_model::is_valid_sheet_uid;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Region {
@@ -23,16 +24,23 @@ impl Region {
         }
     }
 
+    /// Only the canonical spelling ([`Region::id`]) parses: the server compares ids as strings, so
+    /// an alias (`b2`, `$B$2`, `B02`) of a held cell would get a lock of its own.
     pub fn parse(id: &str) -> Option<Region> {
+        let region = Region::parse_loose(id)?;
+        (region.id() == id).then_some(region)
+    }
+
+    fn parse_loose(id: &str) -> Option<Region> {
         if id == "*" {
             return Some(Region::Book);
         }
         if let Some(uid) = id.strip_prefix("sheet:") {
-            return (!uid.is_empty() && !uid.contains(':')).then(|| Region::Sheet(uid.to_string()));
+            return is_valid_sheet_uid(uid).then(|| Region::Sheet(uid.to_string()));
         }
         let (uid, a1) = id.strip_prefix("cell:")?.split_once(':')?;
         let cell = CellRef::parse(a1)?;
-        (!uid.is_empty() && cell.is_valid()).then(|| Region::Cell { sheet: uid.to_string(), cell })
+        (is_valid_sheet_uid(uid) && cell.is_valid()).then(|| Region::Cell { sheet: uid.to_string(), cell })
     }
 
     /// The sheet uid the region lies on (`None` for the whole workbook).
