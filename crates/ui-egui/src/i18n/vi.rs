@@ -1655,6 +1655,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Keep mine" => "Giữ bản của tôi",
         "Use theirs" => "Dùng bản mới",
         "Commenting on the web is coming later; for now this document is view-only." => "Nhận xét trên web sẽ có sau, hiện chỉ xem được",
+        "You can comment on this document; its content is view-only." => "Bạn có thể nhận xét, còn nội dung tài liệu chỉ xem được.",
         "Downloading, printing and copying are turned off for this document." => "Tài liệu này không cho tải xuống, in hay sao chép.",
         "Good, Bad and Neutral" => "Tốt, Xấu và Trung tính",
         "Data and Model" => "Dữ liệu và Mô hình",

@@ -12,8 +12,10 @@ pub struct DocAccess {
     pub read_only: bool,
     /// Save As, Export, Print and copying content out of it are refused.
     pub no_download: bool,
-    /// The host's `comment` mode, read-only until comments come to the web: only its notice differs.
+    /// The host's `comment` mode: read-only for the content; only its notice differs.
     pub commenter: bool,
+    /// The host takes comments itself (Cloud comments, outside the file): a commenter is told so.
+    pub comments_here: bool,
     /// Why the app refuses every edit for now (the desktop licence), set on all open documents by
     /// [`crate::Session::set_edit_lock`]. Unlike `read_only`, Save keeps working, so edits made
     /// before the lock are never lost.
@@ -24,6 +26,8 @@ pub struct DocAccess {
 pub const READ_ONLY: &str = "This document is read-only.";
 /// Why an edit of a `comment`-mode document was refused.
 pub const COMMENTS_LATER: &str = "Commenting on the web is coming later; for now this document is view-only.";
+/// Why an edit of a `comment`-mode document was refused when the host shows Cloud comments.
+pub const COMMENTS_HERE: &str = "You can comment on this document; its content is view-only.";
 /// Why Save As, Export, Print or Copy was refused.
 pub const NO_DOWNLOAD: &str = "Downloading, printing and copying are turned off for this document.";
 
@@ -77,6 +81,7 @@ impl DocAccess {
     pub fn read_only_notice(self) -> &'static str {
         match (self.read_only, self.edit_lock) {
             (false, Some(why)) => why,
+            _ if self.commenter && self.comments_here => COMMENTS_HERE,
             _ if self.commenter => COMMENTS_LATER,
             _ => READ_ONLY,
         }

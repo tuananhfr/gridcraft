@@ -6,12 +6,16 @@
 //! the view (`preserveView`), `setUser` names the author and `setClientId` gives the prefix of
 //! the ids this page makes (sheet uids), so concurrent editors never make the same one. v3 (found
 //! by its `regionWillEdit`) adds region co-editing: locks, region payloads, presence on the grid
-//! and per-user undo (`live`). Without `erpHost` v1 or v2 nothing here runs and the page behaves
-//! as before.
+//! and per-user undo (`live`). A shell with `commentClicked` gets the comment calls: anchors,
+//! marks and focus for Cloud comments, which never enter the file (`comments`). Without
+//! `erpHost` v1 or v2 nothing here runs and the page behaves as before.
 
 mod autosave;
 #[cfg(target_arch = "wasm32")]
 mod bridge;
+mod comments;
+#[cfg(target_arch = "wasm32")]
+mod comments_js;
 mod docs;
 mod live;
 #[cfg(target_arch = "wasm32")]
@@ -21,6 +25,8 @@ mod protocol;
 mod tests;
 #[cfg(test)]
 mod tests_access;
+#[cfg(test)]
+mod tests_comments;
 #[cfg(test)]
 mod tests_live;
 

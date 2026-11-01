@@ -17,6 +17,7 @@ mod clipboard;
 mod close_after_save;
 pub mod close_many;
 pub mod closed_docs;
+pub mod comment_marks;
 pub mod control;
 mod craft_fonts;
 pub mod credits;
@@ -350,6 +351,8 @@ pub struct SheetApp {
     pub text_box_editor: Option<text_box::EditState>,
     /// Cell edits a read-only switch couldn't commit, by document, reopened once it is editable.
     pub held_edits: HashMap<u64, editor::EditState>,
+    /// Cloud comment marks the web shell shows (`erpHost` comment calls); empty on the desktop.
+    pub comment_marks: comment_marks::CommentMarks,
     pub dialog: Option<dialogs::Dialog>,
     macro_runtime: macro_runtime::State,
     /// The File tab's Backstage view, when open (UI-only; replaces the ribbon, grid and tabs).
@@ -479,6 +482,7 @@ impl SheetApp {
             editor: None,
             text_box_editor: None,
             held_edits: HashMap::new(),
+            comment_marks: Default::default(),
             dialog: None,
             macro_runtime: Default::default(),
             backstage: None,

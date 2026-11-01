@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use gridcraft_engine::Session;
 use gridcraft_engine::core::CellRef;
-use gridcraft_engine::doc_access::{COMMENTS_LATER, DocAccess, NO_DOWNLOAD, READ_ONLY};
+use gridcraft_engine::doc_access::{COMMENTS_HERE, COMMENTS_LATER, DocAccess, NO_DOWNLOAD, READ_ONLY};
 use gridcraft_ui_egui::SheetView;
 use gridcraft_ui_egui::i18n::Language;
 use gridcraft_ui_egui::save_status::SaveState;
@@ -64,10 +64,10 @@ fn the_mode_vocabulary_matches_the_contract() {
     assert_eq!(Mode::Edit.access(true), DocAccess::default());
     assert_eq!(
         Mode::Comment.access(true),
-        DocAccess { read_only: true, no_download: false, commenter: true, edit_lock: None },
+        DocAccess { read_only: true, no_download: false, commenter: true, edit_lock: None, comments_here: false },
         "comment is view for the content"
     );
-    assert_eq!(Mode::View.access(false), DocAccess { read_only: true, no_download: true, commenter: false, edit_lock: None });
+    assert_eq!(Mode::View.access(false), DocAccess { read_only: true, no_download: true, commenter: false, edit_lock: None, comments_here: false });
 }
 
 #[test]
@@ -156,6 +156,22 @@ fn comment_mode_says_comments_come_later() {
     assert_eq!(t.app.toast.as_ref().map(|(m, _)| m.as_str()), Some(COMMENTS_LATER), "Ctrl+S too");
     assert_eq!(Language::Vi.tr(COMMENTS_LATER), "Nhận xét trên web sẽ có sau, hiện chỉ xem được");
     assert_eq!(Language::Vi.tr(READ_ONLY), "Tài liệu này chỉ được xem, không sửa được.", "view mode keeps its notice");
+}
+
+#[test]
+fn comment_mode_points_to_the_shells_comments_when_it_has_them() {
+    let mut t = setup();
+    t.docs.borrow_mut().set_comments(true);
+    let uid = t.open_with("d1", Mode::Comment.access(true));
+    assert!(t.doc(uid).access.comments_here);
+    t.app.begin_edit(Some("9".into()), false);
+    assert_eq!(t.app.toast.as_ref().map(|(m, _)| m.as_str()), Some(COMMENTS_HERE));
+    assert_eq!(Language::Vi.tr(COMMENTS_HERE), "Bạn có thể nhận xét, còn nội dung tài liệu chỉ xem được.");
+    // A switch to view mode drops it; back to comment mode brings it again.
+    t.set_mode("d1", Mode::View, true);
+    assert!(!t.doc(uid).access.comments_here);
+    t.set_mode("d1", Mode::Comment, true);
+    assert!(t.doc(uid).access.comments_here);
 }
 
 #[test]

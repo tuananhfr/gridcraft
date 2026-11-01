@@ -129,6 +129,8 @@ pub(crate) struct HostDocs {
     late: Late,
     held_flushes: HeldFlushes,
     me: Weak<RefCell<HostDocs>>,
+    /// The shell shows Cloud comments, so its commenters can comment here.
+    comments: bool,
 }
 
 /// The shell's `flush()`. The shell may call it from inside one of this side's calls to it (its `dirty` handler
@@ -227,8 +229,18 @@ impl HostDocs {
                 late: Rc::default(),
                 held_flushes: Rc::default(),
                 me: me.clone(),
+                comments: false,
             })
         })
+    }
+
+    /// The shell takes Cloud comments (`erpHost.commentClicked`).
+    pub(crate) fn set_comments(&mut self, on: bool) {
+        self.comments = on;
+    }
+
+    fn with_comments(&self, access: DocAccess) -> DocAccess {
+        DocAccess { comments_here: self.comments && access.commenter, ..access }
     }
 
     pub(crate) fn flush_entry(this: &Rc<RefCell<HostDocs>>) -> FlushEntry {
@@ -245,6 +257,7 @@ impl HostDocs {
     /// reloads the latest version after a conflict), and reports `opened` once.
     pub(crate) fn open(&mut self, app: &mut SheetApp, request: OpenRequest) {
         let OpenRequest { doc_id, version, title, format, bytes, access, preserve_view } = request;
+        let access = self.with_comments(access);
         if doc_id.is_empty() {
             log::warn!("erpHost.open without a docId");
             return;
@@ -341,6 +354,7 @@ impl HostDocs {
     /// `setMode(docId, mode, canDownload)`: the same document and its undo history, new access.
     /// A downgrade commits the open editor first; the shell's next `flush` saves what it held.
     pub(crate) fn set_mode(&mut self, app: &mut SheetApp, doc_id: &str, access: DocAccess) {
+        let access = self.with_comments(access);
         let Some((&uid, doc)) = self.docs.iter_mut().find(|(_, d)| d.doc_id == doc_id) else { return };
         doc.access = access;
         app.set_document_access(uid, access);

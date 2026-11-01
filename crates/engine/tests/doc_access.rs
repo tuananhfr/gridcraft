@@ -8,8 +8,8 @@ use gridcraft_engine::core::CellRef;
 use gridcraft_engine::doc_access::{DocAccess, NO_DOWNLOAD, READ_ONLY};
 use serde_json::{Value, json};
 
-const READ: DocAccess = DocAccess { read_only: true, no_download: false, commenter: false, edit_lock: None };
-const NO_COPY: DocAccess = DocAccess { read_only: false, no_download: true, commenter: false, edit_lock: None };
+const READ: DocAccess = DocAccess { read_only: true, no_download: false, commenter: false, edit_lock: None, comments_here: false };
+const NO_COPY: DocAccess = DocAccess { read_only: false, no_download: true, commenter: false, edit_lock: None, comments_here: false };
 
 /// Two sheets with values, a note, an undo step and a redo step.
 fn session(access: DocAccess) -> Session {

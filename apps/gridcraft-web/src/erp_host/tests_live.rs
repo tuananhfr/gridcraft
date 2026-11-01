@@ -9,7 +9,7 @@ use super::live::{self, LiveMsg, cursors_of, locks_of};
 use super::protocol::OpenRequest;
 use super::tests::{T, setup, xlsx};
 
-fn page() -> T {
+pub(super) fn page() -> T {
     let mut t = setup();
     t.open_request(OpenRequest {
         doc_id: "d1".into(),
@@ -26,7 +26,7 @@ fn page() -> T {
 }
 
 /// Runs frames on both pages until the room has nothing left to deliver.
-fn exchange(pages: &mut [T; 2], locks: &mut Vec<(String, usize)>, now: f64) {
+pub(super) fn exchange(pages: &mut [T; 2], locks: &mut Vec<(String, usize)>, now: f64) {
     for _ in 0..20 {
         let mut inbox: [Vec<LiveMsg>; 2] = [vec![], vec![]];
         let mut moved = false;
@@ -157,11 +157,9 @@ fn co_editing_texts_are_in_the_vietnamese_catalog() {
     let vi = Language::Vi;
     let locked = Feedback { text: LOCKED_BY, name: "An Nguyễn".into() };
     assert_eq!(locked.fill(&vi.tr_message(LOCKED_BY)), "An Nguyễn đang sửa phần này.");
-    for (en, want) in [
-        ("Changed while you were away", "Có thay đổi khi bạn vắng mặt"),
-        ("Keep mine", "Giữ bản của tôi"),
-        ("Use theirs", "Dùng bản mới"),
-    ] {
+    for (en, want) in
+        [("Changed while you were away", "Có thay đổi khi bạn vắng mặt"), ("Keep mine", "Giữ bản của tôi"), ("Use theirs", "Dùng bản mới")]
+    {
         assert_eq!(vi.tr(en), want);
     }
     for text in [LOCK_DENIED, NOTHING_TO_UNDO, "Someone else changed this part while you were offline. Which version do you keep?"] {

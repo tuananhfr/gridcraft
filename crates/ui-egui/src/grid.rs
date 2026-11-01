@@ -593,6 +593,7 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
     };
     let resp = ui.allocate_rect(rect, Sense::click_and_drag());
     app.grid.rect = Some(rect);
+    app.comment_marks.refresh(&app.session);
     let Some(d) = app.session.active() else { return };
     let wb: Arc<Workbook> = d.wb.clone();
     let si = wb.active_sheet;
@@ -772,6 +773,7 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
     let objects = crate::chartview::paint_objects(app, &painter.with_clip_rect(geo.cells), &geo, &wb, si, sh);
     paint_overlays(app, ui, &painter.with_clip_rect(geo.cells), &geo, &wb, si, sh, &sel);
     crate::live_overlay::paint(app, &painter.with_clip_rect(geo.cells), &geo, sh);
+    crate::comment_marks::paint(app, &painter.with_clip_rect(geo.cells), &geo, sh);
     if sh.view == gridcraft_engine::model::SheetViewMode::PageBreakPreview {
         paint_pages(app, &painter.with_clip_rect(geo.cells), &geo, sh);
     }
@@ -1838,6 +1840,12 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
     // Hit-testing works in logical coordinates (see `Geo::rtl`).
     let pos = pointer.interact_pos().or(pointer.hover_pos()).map(|p| geo.mirror_pos(p));
     let in_cells = pos.is_some_and(|p| geo.in_cells(p));
+    if primary_clicked
+        && let Some(p) = pos.filter(|_| in_cells)
+        && let Some(doc) = app.session.active().map(|d| d.uid)
+    {
+        app.comment_marks.click(doc, &sh.uid, geo.cell_at(sh, p));
+    }
     let in_col_header = pos.is_some_and(|p| p.y < geo.cells.top() && p.y >= geo.head_top() && p.x >= geo.cells.left());
     let in_row_header = pos.is_some_and(|p| p.x < geo.cells.left() && p.x >= geo.head_left() && p.y >= geo.cells.top());
     let in_corner = pos.is_some_and(|p| p.x < geo.cells.left() && p.y < geo.cells.top() && p.x >= geo.head_left() && p.y >= geo.head_top());

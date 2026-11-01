@@ -2,7 +2,7 @@
 //! downloads, or that the app's edit lock covers ([`DocAccess`]). The engine refuses the commands
 //! themselves; this keeps editors, drags and menus from starting what would only be refused.
 
-use gridcraft_engine::doc_access::{COMMENTS_LATER, DocAccess, NO_DOWNLOAD, READ_ONLY};
+use gridcraft_engine::doc_access::{COMMENTS_HERE, COMMENTS_LATER, DocAccess, NO_DOWNLOAD, READ_ONLY};
 
 use crate::SheetApp;
 
@@ -117,7 +117,7 @@ impl SheetApp {
 
     /// The notice for a refusal caused by the document's access or the edit lock, untranslated.
     pub(crate) fn access_notice(&self, error: &str) -> Option<&'static str> {
-        [READ_ONLY, COMMENTS_LATER, NO_DOWNLOAD].into_iter().chain(self.session.edit_lock()).find(|why| error.ends_with(why))
+        [READ_ONLY, COMMENTS_LATER, COMMENTS_HERE, NO_DOWNLOAD].into_iter().chain(self.session.edit_lock()).find(|why| error.ends_with(why))
     }
 
     /// Refuses starting an edit of a locked document with the usual notice.
