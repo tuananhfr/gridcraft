@@ -357,7 +357,8 @@ impl Live {
         };
         match payload {
             Ok(p) => self.calls.push(Call::Changed(region.id(), p)),
-            Err(e) => log::warn!("live: no payload for an edit: {e}"),
+            // The reason can quote sheet names, which are content.
+            Err(_) => log::warn!("live: no payload for an edit; it stays on this page"),
         }
         self.touch(region);
     }
@@ -511,8 +512,8 @@ impl Session {
                     None => return,
                 };
                 self.active = i;
-                if let Err(e) = self.execute(&id, params) {
-                    log::warn!("live: a command waiting for its lock failed: {e}");
+                if self.execute(&id, params).is_err() {
+                    log::warn!("live: {id}, waiting for its lock, failed");
                 }
                 self.active = active;
                 if let Some(d) = self.docs.get_mut(i) {
