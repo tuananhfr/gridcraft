@@ -37,6 +37,10 @@ pub const NATIVE: Limits = Limits { entry: 512 * MIB, total: 1024 * MIB, entries
 /// 2 GiB heap. 50,000 entries is many times what a workbook with a thousand sheets uses.
 pub const WEB: Limits = Limits { entry: 256 * MIB, total: 512 * MIB, entries: 50_000, ratio: RATIO, ratio_floor: RATIO_FLOOR };
 
+/// A whole workbook another member sends while co-editing (at most 1 MiB, base64): it opens
+/// without anyone choosing to, on every member's page, and again for each late joiner.
+pub const LIVE: Limits = Limits { entry: 48 * MIB, total: 64 * MIB, entries: 5_000, ratio: RATIO, ratio_floor: RATIO_FLOOR };
+
 /// The limits for a target: [`WEB`] for wasm32, [`NATIVE`] otherwise.
 pub const fn for_target(wasm32: bool) -> Limits {
     if wasm32 { WEB } else { NATIVE }
@@ -55,7 +59,8 @@ mod tests {
         assert_eq!(for_target(false), NATIVE);
         assert_eq!(LIMITS, for_target(cfg!(target_arch = "wasm32")));
         const { assert!(WEB.entry < NATIVE.entry && WEB.total < NATIVE.total && WEB.entries < NATIVE.entries) };
-        for l in [WEB, NATIVE] {
+        const { assert!(LIVE.entry < WEB.entry && LIVE.total < WEB.total && LIVE.entries < WEB.entries) };
+        for l in [LIVE, WEB, NATIVE] {
             assert!(l.entry <= l.total && l.ratio_floor < l.entry && l.ratio >= 100);
         }
     }

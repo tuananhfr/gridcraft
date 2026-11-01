@@ -79,6 +79,20 @@ pub fn open_bytes_with_password(name: &str, bytes: &[u8], password: Option<&str>
     Ok((wb, warnings))
 }
 
+/// Opens a whole workbook another member sent while co-editing: XLSX only, within
+/// [`gridcraft_xlsx::limits::LIVE`]. Errors say no more than that, as they reach the log.
+pub(crate) fn open_live_xlsx(bytes: &[u8]) -> std::result::Result<Workbook, &'static str> {
+    if gridcraft_xlsx::sniff(bytes) != gridcraft_xlsx::Format::Xlsx {
+        return Err("the workbook payload is not an XLSX package");
+    }
+    let (mut wb, _) = gridcraft_xlsx::read_xlsx_with(bytes, gridcraft_xlsx::limits::LIVE).map_err(|e| match e {
+        gridcraft_xlsx::IoError::TooLarge(_) => "the workbook payload is too large",
+        _ => "unreadable workbook",
+    })?;
+    fit_imported_rows(&mut wb);
+    Ok(wb)
+}
+
 /// Excel auto-fits rows to their tallest font when opening a file: rows without a user-set
 /// height grow to fit their content. Rows the file made taller keep their height — our
 /// line-height estimate can differ from Excel's, and shrinking files that already look

@@ -92,6 +92,11 @@ pub fn read_xlsx(bytes: &[u8]) -> Result<(Workbook, ReadReport), IoError> {
     read::read_xlsx(bytes)
 }
 
+/// [`read_xlsx`] within `limits` instead of the build's [`limits::LIMITS`].
+pub fn read_xlsx_with(bytes: &[u8], limits: limits::Limits) -> Result<(Workbook, ReadReport), IoError> {
+    read::read_xlsx_with(bytes, limits)
+}
+
 /// Which member of the SpreadsheetML family a package is saved as. Only the content type of the
 /// workbook part differs (ECMA-376 Part 1 Workbook part; MS-OI29500 adds the macro-enabled types).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

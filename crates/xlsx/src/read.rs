@@ -67,7 +67,11 @@ pub fn find_rel<'r>(rels: &'r [Rel], kind: &str) -> Option<&'r Rel> {
 }
 
 pub fn read_xlsx(bytes: &[u8]) -> Result<(Workbook, ReadReport), IoError> {
-    let pkg = Package::open(bytes)?;
+    read_xlsx_with(bytes, crate::limits::LIMITS)
+}
+
+pub fn read_xlsx_with(bytes: &[u8], limits: crate::limits::Limits) -> Result<(Workbook, ReadReport), IoError> {
+    let pkg = Package::open_with(bytes, limits)?;
     let mut cx = Ctx {
         pkg,
         report: ReadReport::default(),

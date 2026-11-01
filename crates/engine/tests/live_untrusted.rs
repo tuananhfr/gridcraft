@@ -162,3 +162,30 @@ fn an_oversized_payload_is_refused_unread() {
     let big = json!({"v": 1, "k": "cell", "t": null, "c": {"s": "x".repeat(3 << 20)}, "y": []});
     refused(&mut room, "cell:f1:A1", &big.to_string());
 }
+
+fn with_entries(xlsx: &[u8], extra: usize) -> Vec<u8> {
+    use std::io::Write;
+    let mut src = zip::ZipArchive::new(std::io::Cursor::new(xlsx)).unwrap();
+    let mut z = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for i in 0..src.len() {
+        z.raw_copy_file(src.by_index(i).unwrap()).unwrap();
+    }
+    for i in 0..extra {
+        z.start_file(format!("x/{i}"), zip::write::SimpleFileOptions::default()).unwrap();
+        z.write_all(b"").unwrap();
+    }
+    z.finish().unwrap().into_inner()
+}
+
+#[test]
+fn a_whole_workbook_payload_is_an_xlsx_within_the_rooms_limits() {
+    let mut room = Room::new(book());
+    let book_of = |bytes: &[u8]| json!({"v": 1, "k": "book", "x": io::base64_encode(bytes)}).to_string();
+    refused(&mut room, "*", &book_of(b"a,b\n1,2\n"));
+    let honest = io::save_bytes(&book(), "b.xlsx").unwrap();
+    // Within what a browser tab opens from a file, past what a payload applied unasked may hold.
+    refused(&mut room, "*", &book_of(&with_entries(&honest, 6_000)));
+    let err = room.clients[1].live_apply_remote("*", &book_of(b"PK\x03\x04 Sheet1 secret")).unwrap_err();
+    assert!(!err.contains("secret") && !err.contains("Sheet1"), "{err}");
+    room.clients[1].live_apply_remote("*", &book_of(&honest)).unwrap();
+}

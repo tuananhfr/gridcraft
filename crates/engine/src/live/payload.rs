@@ -321,7 +321,7 @@ pub(crate) fn decode_book(payload: &str) -> Result<Workbook, String> {
     let v = parse(payload)?;
     header(&v, "book")?;
     let bytes = v.get("x").and_then(Json::as_str).and_then(crate::io::base64_decode).ok_or("unreadable workbook")?;
-    let (mut wb, _) = crate::io::open_bytes("live.xlsx", &bytes).map_err(|e| e.to_string())?;
+    let mut wb = crate::io::open_live_xlsx(&bytes)?;
     wb.fill_missing_sheet_uids();
     Ok(wb)
 }
