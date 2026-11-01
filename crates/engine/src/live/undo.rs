@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use gridcraft_formula::adjust::inverse;
-use gridcraft_model::Workbook;
+use gridcraft_model::{DefinedName, Workbook};
 use serde_json::{Value as Json, json};
 
 use super::content::{self, data_at, put_cell};
@@ -35,7 +35,9 @@ impl Step {
             }
             Region::Sheet(uid) => {
                 let (Some(a), Some(b)) = (sheet_by_uid(now, uid), sheet_by_uid(&self.after, uid)) else { return false };
-                content::sheet_content_eq(now, a, &self.after, b) && self.side_cells_eq(now, &self.after)
+                content::sheet_content_eq(now, a, &self.after, b)
+                    && self.side_cells_eq(now, &self.after)
+                    && self.changed_names().iter().all(|k| find_name(&now.names, k) == find_name(&self.after.names, k))
             }
             Region::Book => content::book_content_eq(now, &self.after),
         }
@@ -59,6 +61,15 @@ impl Step {
             out.extend(content::changed_cells(x, y).into_iter().map(|c| (x.uid.clone(), c)));
         }
         out
+    }
+
+    /// The defined names this step added, removed or re-pointed, as (name, scope).
+    fn changed_names(&self) -> Vec<NameKey> {
+        let mut keys: Vec<NameKey> = self.before.names.iter().chain(&self.after.names).map(|n| (n.name.clone(), n.scope)).collect();
+        keys.sort();
+        keys.dedup();
+        keys.retain(|k| find_name(&self.before.names, k) != find_name(&self.after.names, k));
+        keys
     }
 
     /// `now` with this step's region as it was before the step.
@@ -105,8 +116,22 @@ impl Step {
                         put_cell(&mut wb, i, cell, data_at(&self.before, j, cell).as_ref());
                     }
                 }
-                if self.before.names != self.after.names {
-                    wb.names = self.before.names.clone();
+                // Only the names this step changed: others may have added or edited names since.
+                for k in self.changed_names() {
+                    let old = find_name(&self.before.names, &k).cloned();
+                    let at = wb.names.iter().position(|n| n.name == k.0 && n.scope == k.1);
+                    match (at, old) {
+                        (Some(i), Some(old)) => {
+                            if let Some(n) = wb.names.get_mut(i) {
+                                *n = old;
+                            }
+                        }
+                        (Some(i), None) => {
+                            wb.names.remove(i);
+                        }
+                        (None, Some(old)) => wb.names.push(old),
+                        (None, None) => {}
+                    }
                 }
                 // Undoing rows/columns moves cells back: ids taken meanwhile follow them.
                 if let Some(steps) = self.after.structure.steps_since(self.before.structure_seq()) {
@@ -123,6 +148,12 @@ impl Step {
             }
         }
     }
+}
+
+type NameKey = (String, Option<usize>);
+
+fn find_name<'a>(names: &'a [DefinedName], (name, scope): &NameKey) -> Option<&'a DefinedName> {
+    names.iter().find(|n| n.name == *name && n.scope == *scope)
 }
 
 fn sheet_by_uid<'a>(wb: &'a Workbook, uid: &str) -> Option<&'a gridcraft_model::Sheet> {

@@ -189,3 +189,23 @@ fn a_whole_workbook_payload_is_an_xlsx_within_the_rooms_limits() {
     assert!(!err.contains("secret") && !err.contains("Sheet1"), "{err}");
     room.clients[1].live_apply_remote("*", &book_of(&honest)).unwrap();
 }
+
+#[test]
+fn undo_of_a_sheet_step_keeps_names_others_added_since() {
+    let mut wb = book();
+    wb.names.push(DefinedName { name: "Data".into(), scope: None, formula: "Sheet1!$A$5".into(), comment: String::new(), hidden: false });
+    let mut room = Room::new(wb);
+    room.run(0, "home.insertRows", json!({"rows": "2:2"}));
+    room.settle();
+    let names = |s: &Session| s.doc().unwrap().wb.names.iter().map(|n| (n.name.clone(), n.formula.clone())).collect::<Vec<_>>();
+    assert_eq!(names(&room.clients[1]), [("Data".to_string(), "Sheet1!$A$6".to_string())]);
+    room.run(1, "formulas.defineName", json!({"name": "Other", "refersTo": "=Two!$A$1"}));
+    room.settle();
+    room.run(0, "edit.undo", json!({}));
+    room.settle();
+    same(&room);
+    let after = names(&room.clients[1]);
+    assert!(after.contains(&("Other".to_string(), "Two!$A$1".to_string())), "{after:?}");
+    assert!(after.contains(&("Data".to_string(), "Sheet1!$A$5".to_string())), "{after:?}");
+    assert_eq!(names(&room.clients[0]), after);
+}
