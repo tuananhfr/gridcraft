@@ -23,10 +23,10 @@ pub(super) fn check_json(v: &Json) -> Result<(), &'static str> {
     while let Some(v) = todo.pop() {
         match v {
             Json::Object(m) => {
-                if let (Some(start), Some(end), 2) = (m.get("start").and_then(cell_of), m.get("end").and_then(cell_of), m.len()) {
-                    if start.0 > end.0 || start.1 > end.1 {
-                        return Err(REFUSED);
-                    }
+                if let (Some(start), Some(end), 2) = (m.get("start").and_then(cell_of), m.get("end").and_then(cell_of), m.len())
+                    && (start.0 > end.0 || start.1 > end.1)
+                {
+                    return Err(REFUSED);
                 }
                 if let Some((row, col)) = cell_of(v)
                     && (row >= u64::from(MAX_ROWS) || col >= u64::from(MAX_COLS))
