@@ -10,6 +10,7 @@
 pub mod anchor;
 mod apply;
 mod content;
+mod guard;
 mod payload;
 pub mod region;
 mod undo;

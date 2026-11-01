@@ -275,7 +275,10 @@ pub(crate) fn decode_sheet(payload: &str) -> Result<SheetPayload, String> {
     let v = parse(payload)?;
     header(&v, "sheet")?;
     let styles = styles_from(&v);
-    let sheet: Sheet = serde_json::from_value(v.get("s").cloned().unwrap_or(Json::Null)).map_err(|_| "unreadable sheet")?;
+    let s = v.get("s").cloned().unwrap_or(Json::Null);
+    super::guard::check_json(&s)?;
+    let sheet: Sheet = serde_json::from_value(s).map_err(|_| "unreadable sheet")?;
+    super::guard::check_sheet(&sheet)?;
     let cell_map = |m: &Json| -> Vec<(CellRef, Option<CellData>)> {
         m.as_object()
             .map(|m| {

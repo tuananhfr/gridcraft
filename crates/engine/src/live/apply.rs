@@ -76,6 +76,9 @@ fn replace_sheet(wb: &mut Workbook, index: usize, uid: &str, p: SheetPayload, li
     }
     sh.uid = uid.to_string();
     sh.cells = CellStore::new();
+    // Spills are recalculated here, never taken from a peer.
+    sh.spill.clear();
+    sh.spill_ranges.clear();
     for line in sh.cols.values_mut().chain(sh.rows.values_mut()) {
         if let Some(id) = line.style {
             line.style = styles.get(id.0 as usize).map(|s| wb.styles.intern(s.clone()));

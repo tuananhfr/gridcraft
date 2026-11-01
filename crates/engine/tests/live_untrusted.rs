@@ -65,3 +65,33 @@ fn aliases_of_a_cell_region_are_not_regions() {
     refused(&mut room, "cell:f1:b2", p);
     refused(&mut room, "cell:f1:$B$2", p);
 }
+
+#[test]
+fn a_sheet_payload_with_references_off_the_sheet_or_absurd_sizes_is_refused() {
+    let mut room = Room::new(book());
+    let honest = sheet_payload(&mut room);
+    let cell = |row: u64, col: u64| json!({"row": row, "col": col});
+    let line = |size: Json, outline: u64| json!({"size": size, "hidden": false, "outline": outline, "collapsed": false, "style": null});
+    let values = json!({"Values": {"values": ["a"], "blanks": false}});
+    let hostile: Vec<(&str, Json)> = vec![
+        ("autofilter", json!({"range": {"start": cell(0, 0), "end": cell(0, 4_294_967_295)}, "criteria": []})),
+        ("autofilter", json!({"range": {"start": cell(0, 0), "end": cell(9, 2)}, "criteria": [[4_294_967_295u64, values]]})),
+        ("merges", json!([{"start": cell(5, 5), "end": cell(1, 1)}])),
+        ("merges", json!([{"start": cell(0, 0), "end": cell(1_048_576, 0)}])),
+        ("freeze", json!([4_294_967_295u64, 0])),
+        ("default_row_height", json!(1e-30)),
+        ("default_col_width", json!(-64.0)),
+        ("default_col_width", json!(1e30)),
+        ("rows", json!({"4294967295": line(json!(20.0), 0)})),
+        ("cols", json!({"16384": line(Json::Null, 0)})),
+        ("cols", json!({"3": line(json!(-1.0), 0)})),
+        ("rows", json!({"3": line(json!(1e9), 0)})),
+        ("rows", json!({"3": line(Json::Null, 200)})),
+    ];
+    for (key, value) in hostile {
+        let mut p = honest.clone();
+        p["s"][key] = value;
+        refused(&mut room, "sheet:f1", &p.to_string());
+    }
+    room.clients[1].live_apply_remote("sheet:f1", &honest.to_string()).unwrap();
+}
