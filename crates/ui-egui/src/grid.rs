@@ -771,6 +771,7 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
     // Objects above cells.
     let objects = crate::chartview::paint_objects(app, &painter.with_clip_rect(geo.cells), &geo, &wb, si, sh);
     paint_overlays(app, ui, &painter.with_clip_rect(geo.cells), &geo, &wb, si, sh, &sel);
+    crate::live_overlay::paint(app, &painter.with_clip_rect(geo.cells), &geo, sh);
     if sh.view == gridcraft_engine::model::SheetViewMode::PageBreakPreview {
         paint_pages(app, &painter.with_clip_rect(geo.cells), &geo, sh);
     }

@@ -1645,6 +1645,15 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "This workbook couldn't be opened." => "Không mở được sổ làm việc này.",
         "The document couldn't be saved to the server." => "Không lưu được tài liệu lên máy chủ.",
         "This document is read-only." => "Tài liệu này chỉ được xem, không sửa được.",
+        "Someone else is editing this part: {name}." => "{name} đang sửa phần này.",
+        "Someone else is editing this part; your change was not made." => "Có người khác đang sửa phần này nên thay đổi của bạn chưa được thực hiện.",
+        "Nothing of yours left to undo." => "Không còn thao tác nào của bạn để hoàn tác.",
+        "Changed while you were away" => "Có thay đổi khi bạn vắng mặt",
+        "Someone else changed this part while you were offline. Which version do you keep?" => {
+            "Trong lúc bạn mất kết nối, người khác đã sửa phần này. Bạn muốn giữ bản nào?"
+        }
+        "Keep mine" => "Giữ bản của tôi",
+        "Use theirs" => "Dùng bản mới",
         "Commenting on the web is coming later; for now this document is view-only." => "Nhận xét trên web sẽ có sau, hiện chỉ xem được",
         "Downloading, printing and copying are turned off for this document." => "Tài liệu này không cho tải xuống, in hay sao chép.",
         "Good, Bad and Neutral" => "Tốt, Xấu và Trung tính",

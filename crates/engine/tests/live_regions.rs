@@ -219,7 +219,7 @@ fn a_region_someone_holds_refuses_the_others() {
     // A command on that cell is taken back at once, with feedback.
     room.run(1, "cell.set", json!({"cell": "B2", "input": "theirs"}));
     assert_eq!(input(&room.clients[1], 0, "B2"), "");
-    assert!(room.clients[1].live.as_mut().unwrap().take_feedback().unwrap().contains("User 0"));
+    assert!(room.clients[1].live.as_mut().unwrap().take_feedback().unwrap().name == "User 0");
     // A whole-sheet edit clashes with the held cell too.
     room.run(1, "home.insertRows", json!({"rows": "1:1"}));
     assert_eq!(room.clients[1].doc().unwrap().wb.structure_seq(), 0);

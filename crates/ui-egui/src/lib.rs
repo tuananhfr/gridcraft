@@ -35,6 +35,7 @@ pub mod i18n;
 pub mod icons;
 pub mod keymap;
 pub mod keytips;
+mod live_overlay;
 pub mod log_redact;
 mod macro_dialog;
 mod macro_runtime;
@@ -1251,6 +1252,12 @@ impl SheetApp {
             Some(t) => (t, true),
             None => (current.clone(), false),
         };
+        // Co-editing: the cell's lock is asked for now, so it is ours by the time the edit commits.
+        if self.session.live_begin_cell_edit(at).is_err() {
+            return;
+        }
+        let Some(d) = self.session.active() else { return };
+        let Some(sh) = d.wb.active() else { return };
         let mut ed = editor::EditState::new(d.wb.active_sheet, at, text, replace, from_formula_bar);
         ed.locale = locale;
         ed.region = self.ui.region();
@@ -1300,6 +1307,7 @@ impl SheetApp {
         let r = self.session.run(if fill_selection { "range.fill" } else { "cell.set" }, params);
         match r {
             Ok(_) => {
+                self.session.live_end_cell_edit();
                 self.circular_notice_after_edit(before);
                 self.clear_calculation_notice_if_resolved();
                 if dr != 0 || dc != 0 {
@@ -1318,6 +1326,7 @@ impl SheetApp {
     }
 
     pub fn cancel_edit(&mut self) {
+        self.session.live_end_cell_edit();
         self.editor = None;
         self.session.mode = gridcraft_engine::Mode::Ready;
     }

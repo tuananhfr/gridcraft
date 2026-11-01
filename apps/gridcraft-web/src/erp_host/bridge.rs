@@ -10,6 +10,7 @@ use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
 
 use super::docs::{FlushEntry, HostDocs, Reply};
+use super::live_js::{self, Conflicts, Inbox};
 use super::protocol::{API_VERSIONS, Mode, OpenRequest, Reason, Request, SaveResult, Shell};
 
 /// The shell lets the page go once this has passed, whatever is still being saved.
@@ -31,10 +32,18 @@ type Acks = Rc<RefCell<Vec<(String, u64, Option<u64>)>>>;
 
 type Requests = Rc<RefCell<Vec<Request>>>;
 
+/// `erpHost` v3: region co-editing, when the shell offers it.
+struct Regions {
+    host: JsValue,
+    inbox: Inbox,
+    conflicts: Conflicts,
+}
+
 pub(crate) struct ErpHost {
     docs: Rc<RefCell<HostDocs>>,
     requests: Requests,
     acks: Acks,
+    regions: Option<Regions>,
 }
 
 impl ErpHost {
@@ -44,10 +53,12 @@ impl ErpHost {
         HostDocs::connect(&docs, app, version);
         let requests = Requests::default();
         let acks = Acks::default();
-        if let Err(e) = ready(&host, version, &docs, &requests, &acks, ctx) {
+        let regions =
+            live_js::speaks_regions(&host).then(|| Regions { host: host.clone(), inbox: Inbox::default(), conflicts: Conflicts::default() });
+        if let Err(e) = ready(&host, version, &docs, &requests, &acks, regions.as_ref(), ctx) {
             log::error!("erpHost.ready failed: {e:?}");
         }
-        ErpHost { docs, requests, acks }
+        ErpHost { docs, requests, acks, regions }
     }
 
     /// Call before the app's `logic`: opening inside the shell's call would run outside a frame.
@@ -62,10 +73,20 @@ impl ErpHost {
         for request in requests {
             docs.apply(app, request);
         }
+        if let Some(regions) = &self.regions {
+            super::live::follow(app, docs.live_target());
+            let messages = std::mem::take(&mut *regions.inbox.borrow_mut());
+            super::live::deliver(app, messages);
+        }
     }
 
     /// Call at the end of every frame.
     pub(crate) fn after_frame(&self, app: &mut SheetApp, ctx: &egui::Context) {
+        if let Some(regions) = &self.regions {
+            let calls = super::live::after_frame(app, js_sys::Date::now());
+            live_js::call(&regions.host, calls, &regions.inbox, ctx);
+            live_js::ask_conflict(&regions.conflicts, app, ctx);
+        }
         let Ok(mut docs) = self.docs.try_borrow_mut() else { return };
         for (doc_id, revision, version) in std::mem::take(&mut *self.acks.borrow_mut()) {
             docs.acknowledged(&doc_id, revision, version);
@@ -76,7 +97,15 @@ impl ErpHost {
     }
 }
 
-fn ready(host: &JsValue, version: u32, docs: &Rc<RefCell<HostDocs>>, requests: &Requests, acks: &Acks, ctx: &egui::Context) -> Result<(), JsValue> {
+fn ready(
+    host: &JsValue,
+    version: u32,
+    docs: &Rc<RefCell<HostDocs>>,
+    requests: &Requests,
+    acks: &Acks,
+    regions: Option<&Regions>,
+    ctx: &egui::Context,
+) -> Result<(), JsValue> {
     let queue = requests.clone();
     let repaint = ctx.clone();
     let open = Closure::<dyn FnMut(JsValue)>::new(move |doc: JsValue| {
@@ -138,6 +167,9 @@ fn ready(host: &JsValue, version: u32, docs: &Rc<RefCell<HostDocs>>, requests: &
         js_sys::Reflect::set(&handlers, &JsValue::from_str("setMode"), &set_mode)?;
         js_sys::Reflect::set(&handlers, &JsValue::from_str("setUser"), &set_user)?;
         js_sys::Reflect::set(&handlers, &JsValue::from_str("setClientId"), &set_client_id)?;
+    }
+    if let Some(regions) = regions {
+        live_js::register(&handlers, &regions.inbox, &regions.conflicts, ctx)?;
     }
     let ready = js_sys::Reflect::get(host, &JsValue::from_str("ready"))?.dyn_into::<js_sys::Function>()?;
     ready.call1(host, &handlers)?;

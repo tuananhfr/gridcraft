@@ -127,7 +127,7 @@ pub struct Live {
     asking: BTreeMap<Region, Vec<Action>>,
     others: Vec<Lock>,
     cursors: Vec<Cursor>,
-    feedback: Option<String>,
+    feedback: Option<Feedback>,
     editor: Option<Region>,
     editor_denied: bool,
     layouts: HashMap<String, Layout>,
@@ -143,6 +143,27 @@ pub struct Live {
     selection_sent: Option<(String, String)>,
     leader: bool,
     now: f64,
+}
+
+/// A message for the user: `text` is English for the interface to translate, with `{name}`
+/// standing for `name`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Feedback {
+    pub text: &'static str,
+    pub name: String,
+}
+
+impl Feedback {
+    fn plain(text: &'static str) -> Feedback {
+        Feedback { text, name: String::new() }
+    }
+    fn locked_by(name: String) -> Feedback {
+        Feedback { text: LOCKED_BY, name }
+    }
+    /// `text` (already translated) with the name put in.
+    pub fn fill(&self, text: &str) -> String {
+        text.replace("{name}", if self.name.is_empty() { "?" } else { &self.name })
+    }
 }
 
 /// Why an edit can't go ahead now.
@@ -204,8 +225,8 @@ impl Live {
     pub fn take_calls(&mut self) -> Vec<Call> {
         std::mem::take(&mut self.calls)
     }
-    /// A message for the user (English; the interface translates it).
-    pub fn take_feedback(&mut self) -> Option<String> {
+    /// A message for the user.
+    pub fn take_feedback(&mut self) -> Option<Feedback> {
         self.feedback.take()
     }
     /// The in-cell editor's cell went to someone else: the interface closes the editor.
@@ -270,10 +291,6 @@ impl Live {
             Some(lock) => Verdict::Blocked(lock.name.clone()),
             None => Verdict::Ask,
         }
-    }
-
-    fn blocked_message(name: &str) -> String {
-        LOCKED_BY.replace("{name}", if name.is_empty() { "?" } else { name })
     }
 
     fn ask(&mut self, region: Region, action: Option<Action>) {
@@ -432,7 +449,7 @@ impl Session {
                 d.calc.rebuild(&d.wb);
                 d.calc.stale = stale.clone();
                 match verdict {
-                    Verdict::Blocked(name) => live.feedback = Some(Live::blocked_message(&name)),
+                    Verdict::Blocked(name) => live.feedback = Some(Feedback::locked_by(name)),
                     _ => live.ask(
                         region,
                         Some(Action::Command { id: id.to_string(), params: params.clone(), selection: sel.clone(), sheet: wb_before.active_sheet }),
@@ -452,7 +469,7 @@ impl Session {
             if granted {
                 live.held.insert(region.clone(), live.now);
             } else {
-                live.feedback = Some(LOCK_DENIED.into());
+                live.feedback = Some(Feedback::plain(LOCK_DENIED));
                 if live.editor.as_ref() == Some(&region) {
                     live.editor = None;
                     live.editor_denied = true;
@@ -511,7 +528,7 @@ impl Session {
         let Some(live) = self.live.as_mut() else { return };
         live.held.remove(&region);
         live.asking.remove(&region);
-        live.feedback = Some(LOCK_DENIED.into());
+        live.feedback = Some(Feedback::plain(LOCK_DENIED));
         if live.editor.as_ref() == Some(&region) {
             live.editor = None;
             live.editor_denied = true;
@@ -529,7 +546,7 @@ impl Session {
         let region = Region::Cell { sheet: uid, cell };
         match live.verdict(&region) {
             Verdict::Blocked(name) => {
-                live.feedback = Some(Live::blocked_message(&name));
+                live.feedback = Some(Feedback::locked_by(name.clone()));
                 Err(name)
             }
             Verdict::Held => {

@@ -319,6 +319,11 @@ impl HostDocs {
         }
     }
 
+    /// The newest document the shell opened (the one its live room shares) and its version.
+    pub(crate) fn live_target(&self) -> Option<(u64, Option<u64>)> {
+        self.docs.iter().next_back().map(|(uid, d)| (*uid, d.version))
+    }
+
     /// Applies one of the shell's calls that needs the app.
     pub(crate) fn apply(&mut self, app: &mut SheetApp, request: Request) {
         match request {

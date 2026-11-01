@@ -4,18 +4,25 @@
 //! revision the shell acknowledged. They never go to `erpDrafts`. v2 adds access modes: `view`
 //! and `comment` documents can't change and are never auto-saved (`setMode`), a reload can keep
 //! the view (`preserveView`), `setUser` names the author and `setClientId` gives the prefix of
-//! the ids this page makes (sheet uids), so concurrent editors never make the same one. Without
-//! `erpHost` v1 or v2 nothing here runs and the page behaves as before.
+//! the ids this page makes (sheet uids), so concurrent editors never make the same one. v3 (found
+//! by its `regionWillEdit`) adds region co-editing: locks, region payloads, presence on the grid
+//! and per-user undo (`live`). Without `erpHost` v1 or v2 nothing here runs and the page behaves
+//! as before.
 
 mod autosave;
 #[cfg(target_arch = "wasm32")]
 mod bridge;
 mod docs;
+mod live;
+#[cfg(target_arch = "wasm32")]
+mod live_js;
 mod protocol;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod tests_access;
+#[cfg(test)]
+mod tests_live;
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) use bridge::{ErpHost, detect};

@@ -158,7 +158,7 @@ impl Session {
         loop {
             let stack = if redo { &mut live.redo } else { &mut live.undo };
             let Some(step) = stack.pop() else {
-                live.feedback = Some(NOTHING_TO_UNDO.into());
+                live.feedback = Some(super::Feedback::plain(NOTHING_TO_UNDO));
                 return Ok(json!({"undone": 0}));
             };
             if !step.current(&d.wb) {
@@ -167,7 +167,7 @@ impl Session {
             match live.verdict(&step.region) {
                 Verdict::Held => {}
                 Verdict::Blocked(name) => {
-                    live.feedback = Some(Live::blocked_message(&name));
+                    live.feedback = Some(super::Feedback::locked_by(name));
                     let stack = if redo { &mut live.redo } else { &mut live.undo };
                     stack.push(step);
                     return Ok(json!({"undone": 0}));
