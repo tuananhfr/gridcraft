@@ -9,6 +9,7 @@
 pub mod catalog;
 pub mod cf;
 pub mod circular;
+pub mod client_ids;
 mod clip_html;
 mod clip_html_inline;
 mod clip_html_style;
@@ -129,6 +130,8 @@ pub struct DocState {
     pub content_kind: Option<io::FileKind>,
     /// What the page host lets the user do with this document; never saved in the file.
     pub access: doc_access::DocAccess,
+    /// Where ids this document gets while editing come from (the session's, once added).
+    pub ids: client_ids::ClientIds,
 }
 
 static NEXT_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -142,6 +145,7 @@ pub const TOO_MANY_DOCUMENTS: &str = "You can have up to 10 documents open. Clos
 impl DocState {
     pub fn new(mut wb: Workbook, path: Option<String>, title: String) -> DocState {
         let mut calc = Calc::new();
+        wb.fill_missing_sheet_uids();
         // Manual workbooks retain the producer's caches on open, including volatile formulas.
         calc.structural_changed(&mut wb);
         let wb = Arc::new(wb);
@@ -163,6 +167,7 @@ impl DocState {
             unlocked_ranges: vec![],
             content_kind: None,
             access: doc_access::DocAccess::default(),
+            ids: client_ids::ClientIds::default(),
         }
     }
     pub fn is_dirty(&self) -> bool {
@@ -303,6 +308,8 @@ pub struct Session {
     /// [`DocAccess::edit_lock`](doc_access::DocAccess::edit_lock) of every open document, kept
     /// here so documents opened later get it too.
     edit_lock: Option<&'static str>,
+    /// The id source of every open document (`erpHost.setClientId`).
+    ids: client_ids::ClientIds,
 }
 
 impl Session {
@@ -352,6 +359,7 @@ impl Session {
     pub fn add_document(&mut self, mut d: DocState) -> Result<usize> {
         self.ensure_room()?;
         d.access.edit_lock = self.edit_lock;
+        d.ids = self.ids.clone();
         self.docs.push(d);
         self.active = self.docs.len() - 1;
         Ok(self.active)
@@ -367,6 +375,14 @@ impl Session {
         for d in &mut self.docs {
             d.access.edit_lock = lock;
         }
+    }
+    /// Makes ids created from now on carry `prefix` (6 lowercase hex digits), in every open
+    /// document and those opened later; `false` and no change for anything else.
+    pub fn set_client_prefix(&mut self, prefix: &str) -> bool {
+        self.ids.set_prefix(prefix)
+    }
+    pub fn client_prefix(&self) -> String {
+        self.ids.prefix()
     }
     /// Closes document `i`. The active document stays active; closing it activates the next one
     /// that isn't hidden (else the previous), like closing a tab.

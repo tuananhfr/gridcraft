@@ -246,6 +246,34 @@ fn adjust_ref(r: &Reference, edit: &Edit) -> Option<Reference> {
     }
 }
 
+/// Where cell `c` of the edited sheet lands after `edit`, following it as a reference to it would;
+/// `None` when the edit deletes it or pushes it off the sheet. For `MoveToSheet` the sheet change
+/// is the caller's.
+pub fn adjust_cell(c: gridcraft_core::CellRef, edit: &Edit) -> Option<gridcraft_core::CellRef> {
+    let r = Reference { sheet: SheetSel::Current, kind: RefKind::Cell(Anchor { row: c.row, col: c.col, row_abs: false, col_abs: false }) };
+    match adjust_ref(&r, edit)?.kind {
+        RefKind::Cell(a) => Some(a.cell()),
+        _ => None,
+    }
+}
+
+/// The edit that takes positions back to before `edit`. Lines an insert added and cells a move
+/// overwrote have no earlier position: the inverse deletes the former and leaves the latter.
+/// The inverse of `MoveToSheet` is the `Move` back out of its destination block, on that sheet.
+pub fn inverse(edit: &Edit) -> Edit {
+    match edit {
+        Edit::Insert { axis, at, count } => Edit::Delete { axis: *axis, at: *at, count: *count },
+        Edit::Delete { axis, at, count } => Edit::Insert { axis: *axis, at: *at, count: *count },
+        Edit::InsertCells { axis, range } => Edit::DeleteCells { axis: *axis, range: *range },
+        Edit::DeleteCells { axis, range } => Edit::InsertCells { axis: *axis, range: *range },
+        Edit::Move { from, to_row, to_col } | Edit::MoveToSheet { from, to_row, to_col, .. } => {
+            let start = gridcraft_core::CellRef::new(*to_row, *to_col);
+            let end = start.offset_clamped(i64::from(from.height()) - 1, i64::from(from.width()) - 1);
+            Edit::Move { from: RangeRef::new(start, end), to_row: from.start.row, to_col: from.start.col }
+        }
+    }
+}
+
 /// Renames sheet references `old` → `new`.
 pub fn rename_sheet(e: Expr, old: &str, new: &str) -> Expr {
     e.map(&mut |x| match x {

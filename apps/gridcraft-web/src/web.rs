@@ -48,6 +48,9 @@ pub fn start() {
                 Box::new(move |cc| {
                     let inbox: Inbox = Inbox::default();
                     let mut session = Session::new();
+                    // The engine has no random source on wasm; the shell's `setClientId` replaces this.
+                    let random = (js_sys::Math::random() * f64::from(0x100_0000)) as u32 & 0xff_ffff;
+                    session.set_client_prefix(&format!("{random:06x}"));
                     // In host mode the parent sends the workbook to edit; no sample meanwhile.
                     let q = if app_bridge.is_some() { String::new() } else { query() };
                     if let Some(name) = q.split(['?', '&']).find_map(|kv| kv.strip_prefix("sample=")) {

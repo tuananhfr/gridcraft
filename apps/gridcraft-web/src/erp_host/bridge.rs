@@ -125,8 +125,19 @@ fn ready(host: &JsValue, version: u32, docs: &Rc<RefCell<HostDocs>>, requests: &
             repaint.request_repaint();
         })
         .into_js_value();
+        let queue = requests.clone();
+        let repaint = ctx.clone();
+        let set_client_id = Closure::<dyn FnMut(JsValue)>::new(move |prefix: JsValue| match prefix.as_string() {
+            Some(prefix) => {
+                queue.borrow_mut().push(Request::ClientId(prefix));
+                repaint.request_repaint();
+            }
+            None => log::warn!("erpHost.setClientId: ignored an odd call"),
+        })
+        .into_js_value();
         js_sys::Reflect::set(&handlers, &JsValue::from_str("setMode"), &set_mode)?;
         js_sys::Reflect::set(&handlers, &JsValue::from_str("setUser"), &set_user)?;
+        js_sys::Reflect::set(&handlers, &JsValue::from_str("setClientId"), &set_client_id)?;
     }
     let ready = js_sys::Reflect::get(host, &JsValue::from_str("ready"))?.dyn_into::<js_sys::Function>()?;
     ready.call1(host, &handlers)?;

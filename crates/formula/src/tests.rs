@@ -366,3 +366,36 @@ fn prints_long_flat_chain_without_deep_recursion() {
     assert_eq!(text, vec!["1"; 20001].join("+"));
     assert_eq!(r1c1, text);
 }
+
+#[test]
+fn cells_follow_structural_edits_like_references() {
+    use crate::adjust::{adjust_cell, inverse};
+    use gridcraft_core::{CellRef, RangeRef};
+    let cell = |a1: &str| CellRef::parse(a1).unwrap();
+    let ins = Edit::Insert { axis: Axis::Rows, at: 2, count: 2 };
+    assert_eq!(adjust_cell(cell("B2"), &ins), Some(cell("B2")));
+    assert_eq!(adjust_cell(cell("B3"), &ins), Some(cell("B5")));
+    let del = Edit::Delete { axis: Axis::Cols, at: 1, count: 2 };
+    assert_eq!(adjust_cell(cell("A9"), &del), Some(cell("A9")));
+    assert_eq!(adjust_cell(cell("C9"), &del), None);
+    assert_eq!(adjust_cell(cell("E9"), &del), Some(cell("C9")));
+    let cells = Edit::InsertCells { axis: Axis::Rows, range: RangeRef::parse("B2:C3").unwrap() };
+    assert_eq!(adjust_cell(cell("B4"), &cells), Some(cell("B6")));
+    assert_eq!(adjust_cell(cell("D4"), &cells), Some(cell("D4")));
+    let mv = Edit::Move { from: RangeRef::parse("A1:B2").unwrap(), to_row: 9, to_col: 3 };
+    assert_eq!(adjust_cell(cell("B2"), &mv), Some(cell("E11")));
+    assert_eq!(adjust_cell(cell("C3"), &mv), Some(cell("C3")));
+    // The last row pushed off the sheet is gone.
+    let last = CellRef::new(gridcraft_core::MAX_ROWS - 1, 0);
+    assert_eq!(adjust_cell(last, &Edit::Insert { axis: Axis::Rows, at: 0, count: 1 }), None);
+    // Every surviving cell comes back through the inverse (cells a move overwrote aside).
+    for edit in [ins, del, cells, mv, Edit::DeleteCells { axis: Axis::Cols, range: RangeRef::parse("B2:C3").unwrap() }] {
+        for a1 in ["A1", "B2", "C3", "D4", "Z100"] {
+            if let Some(after) = adjust_cell(cell(a1), &edit) {
+                assert_eq!(adjust_cell(after, &inverse(&edit)), Some(cell(a1)), "{edit:?} {a1}");
+            }
+        }
+    }
+    // Lines an insert added didn't exist before it.
+    assert_eq!(adjust_cell(cell("B3"), &inverse(&Edit::Insert { axis: Axis::Rows, at: 2, count: 2 })), None);
+}

@@ -14,6 +14,8 @@ type Harness = egui_kittest::Harness<'static, SheetApp>;
 /// Sales by date, a PivotTable of it grouped by quarter on Sheet2 (active), and a time on Sheet1.
 fn pivot_session() -> Session {
     let mut s = Session::new();
+    // New sheets' uids carry the client prefix, random by default; the saves compared must share it.
+    assert!(s.set_client_prefix("0a0a0a"));
     s.new_workbook();
     let rows = json!([
         ["Region", "Date", "Sales"],

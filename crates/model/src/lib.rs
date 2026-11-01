@@ -12,6 +12,7 @@ pub mod password;
 pub mod preserved;
 pub mod sheet;
 pub mod store;
+pub mod structure;
 pub mod style;
 pub mod workbook;
 
@@ -21,6 +22,7 @@ pub use password::PasswordHash;
 pub use preserved::{Preserved, PreservedPart, PreservedRel, PreservedSheet, PreservedXml};
 pub use sheet::{DEFAULT_COL_WIDTH, DEFAULT_ROW_HEIGHT, LineIndex, Sheet, SheetViewMode, Visibility, points_to_chars};
 pub use store::CellStore;
+pub use structure::{CellAt, CellId, Structure, is_valid_sheet_uid};
 pub use style::{
     Alignment, BorderLine, BorderStyle, Borders, Color, Fill, Font, HAlign, NumFmt, PatternType, Style, StyleId, StyleTable, Theme, Underline,
     VAlign, VertAlign,

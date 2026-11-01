@@ -102,6 +102,8 @@ pub(crate) enum Request {
     Mode(String, DocAccess),
     /// `setUser(user)` (v2): the account's name; `None` (null) writes the local preference's.
     User(Option<String>),
+    /// `setClientId(prefix)` (v2): the prefix of every id this page makes from now on.
+    ClientId(String),
 }
 
 /// The calls the fork makes on `window.erpHost`.

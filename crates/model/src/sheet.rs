@@ -52,6 +52,10 @@ impl SheetViewMode {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Sheet {
     pub name: String,
+    /// Stable identity for live editing, kept through renames, moves, save and open (see
+    /// [`crate::structure`]). Empty until the document is opened; never shown.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub uid: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub vba_code_name: String,
     pub cells: CellStore,
@@ -129,6 +133,7 @@ impl Sheet {
     pub fn new(name: impl Into<String>) -> Sheet {
         Sheet {
             name: name.into(),
+            uid: String::new(),
             vba_code_name: String::new(),
             cells: CellStore::new(),
             cell_pictures: BTreeMap::new(),

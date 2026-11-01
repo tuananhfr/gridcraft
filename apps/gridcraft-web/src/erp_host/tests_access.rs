@@ -390,3 +390,19 @@ fn set_user_authors_new_comments_and_null_keeps_the_preference() {
     assert_eq!(comments[&CellRef::new(0, 1)].author, "Nguyễn Văn A");
     assert_eq!(comments[&CellRef::new(1, 1)].author, t.app.session.prefs.user_name);
 }
+
+#[test]
+fn set_client_id_prefixes_new_sheet_uids_and_a_bad_prefix_changes_nothing() {
+    let mut t = setup();
+    let uid = t.open("d1");
+    let own = t.app.session.client_prefix();
+    t.apply(Request::ClientId("Not-Hex".into()));
+    assert_eq!(t.app.session.client_prefix(), own);
+    t.apply(Request::ClientId("a1b2c3".into()));
+    assert_eq!(t.app.session.client_prefix(), "a1b2c3");
+    t.app.run("home.insertSheet", json!({"name": "New"})).unwrap();
+    let wb = &t.doc(uid).wb;
+    let new = &wb.sheets[wb.sheet_index("New").unwrap()].uid;
+    assert!(new.starts_with("a1b2c3-"), "{new}");
+    assert!(wb.sheets.iter().filter(|s| s.name != "New").all(|s| s.uid.starts_with('f')), "opened sheets keep their position uids");
+}

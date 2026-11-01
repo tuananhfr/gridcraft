@@ -200,6 +200,7 @@ pub fn read_xlsx(bytes: &[u8]) -> Result<(Workbook, ReadReport), IoError> {
     let mut file_to_model: Vec<Option<usize>> = vec![];
     let mut pivot_caches = crate::pivot::CachesIn::new(&wb_xml, &wb_rels);
     let sheet_els: Vec<El> = wb_xml.child("sheets").map(|s| s.kids("sheet").cloned().collect()).unwrap_or_default();
+    let uids = crate::sheet_uids::read(&wb_xml);
     for (i, se) in sheet_els.iter().enumerate() {
         let name = se.attr("name").unwrap_or("").to_string();
         let rel = se.attr("id").and_then(|id| wb_rels.iter().find(|r| r.id == id)).cloned();
@@ -240,6 +241,9 @@ pub fn read_xlsx(bytes: &[u8]) -> Result<(Workbook, ReadReport), IoError> {
             b
         }));
         sheet.preserved = kept.sheet(&mut cx, &rel.target, &name);
+        if let Some(uid) = uids.get(&rel.id) {
+            sheet.uid = uid.clone();
+        }
         sheet.visibility = match se.attr("state") {
             Some("hidden") => Visibility::Hidden,
             Some("veryHidden") => Visibility::VeryHidden,

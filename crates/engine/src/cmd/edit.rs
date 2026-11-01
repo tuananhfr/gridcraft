@@ -1291,6 +1291,7 @@ fn paste_special(s: &mut Session, p: &Json) -> Result<Json> {
 /// Applies a reference adjustment to every cell formula and defined name in the workbook.
 pub(crate) fn rewrite_all_formulas(wb: &mut gridcraft_model::Workbook, target: &str, e: &gridcraft_formula::adjust::Edit) {
     use gridcraft_formula::adjust::Edit;
+    wb.record_structure_edit(target, e);
     // Rows and columns inserted or deleted on the target sheet move its legacy array ranges too
     // (a cut moves its arrays itself).
     let moves_arrays = matches!(e, Edit::Insert { .. } | Edit::Delete { .. } | Edit::InsertCells { .. } | Edit::DeleteCells { .. });

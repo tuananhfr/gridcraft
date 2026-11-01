@@ -374,6 +374,7 @@ pub(crate) fn commit<R>(d: &mut DocState, f: impl FnOnce(&mut Ctx) -> Result<R>)
     for (si, row) in fit_rows {
         auto_row_height(&mut wb, si, row);
     }
+    d.ids.assign_sheet_uids(&d.wb, &mut wb);
     if let Some(t0) = t0 {
         eprintln!("commit: + rows {:?}", t0.elapsed());
     }

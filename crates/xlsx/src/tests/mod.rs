@@ -16,6 +16,7 @@ mod pivot_tests;
 mod richdata_tests;
 mod roundtrip;
 mod sheet_names;
+mod sheet_uids;
 mod smooth_roundtrip;
 mod trendline_roundtrip;
 mod vba_signatures;

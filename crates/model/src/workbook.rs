@@ -171,6 +171,10 @@ pub struct Workbook {
     /// `preserved` are relative to. Saving into another folder rewrites them from there. Not in JSON.
     #[serde(skip)]
     pub source_dir: Option<std::path::PathBuf>,
+    /// Row/column edits since the workbook was created or read, for [`crate::CellId`]. Not in
+    /// the file or JSON.
+    #[serde(skip)]
+    pub structure: crate::Structure,
 }
 
 impl Default for Workbook {
@@ -203,6 +207,7 @@ impl Workbook {
             csv_delimiter: None,
             preserved: None,
             source_dir: None,
+            structure: crate::Structure::default(),
         }
     }
     pub fn sheet(&self, i: usize) -> Option<&Sheet> {

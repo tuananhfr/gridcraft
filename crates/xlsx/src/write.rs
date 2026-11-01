@@ -233,6 +233,7 @@ pub fn write_with_warnings(wb: &Workbook, kind: XlsxKind, packing: Packing, warn
     let mut pivots = crate::pivot::PivotWriter::default();
     let mut sheets_xml = String::new();
     let mut sheet_id = 1usize;
+    let mut uids = Vec::new();
     for (i, sheet) in wb.sheets.iter().enumerate() {
         let (before, next) = kept.sheet_entries(i, false, sheet_id);
         sheets_xml.push_str(&before);
@@ -245,6 +246,9 @@ pub fn write_with_warnings(wb: &Workbook, kind: XlsxKind, packing: Packing, warn
             out.part(&format!("xl/worksheets/_rels/sheet{}.xml.rels", i + 1), None, rels.xml().into_bytes());
         }
         let rid = wb_rels.add("worksheet", &format!("worksheets/sheet{}.xml", i + 1));
+        if !sheet.uid.is_empty() {
+            uids.push((rid.clone(), sheet.uid.clone()));
+        }
         let state = match sheet.visibility {
             Visibility::Visible => "",
             _ if !any_visible && i == active => "",
@@ -355,7 +359,7 @@ pub fn write_with_warnings(wb: &Workbook, kind: XlsxKind, packing: Packing, warn
     }
     w.push_str("/>");
     w.push_str(&pivots.workbook_xml(&mut wb_rels));
-    let exts = crate::passthrough::workbook_elements(wb, "ext");
+    let exts = crate::passthrough::workbook_elements(wb, "ext") + &crate::sheet_uids::ext(&uids);
     if !exts.is_empty() {
         let _ = write!(w, "<extLst>{exts}</extLst>");
     }

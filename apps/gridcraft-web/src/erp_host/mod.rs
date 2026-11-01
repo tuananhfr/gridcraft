@@ -3,8 +3,9 @@
 //! `flush` save them back with `erpHost.save`, and a document counts as saved only as of the
 //! revision the shell acknowledged. They never go to `erpDrafts`. v2 adds access modes: `view`
 //! and `comment` documents can't change and are never auto-saved (`setMode`), a reload can keep
-//! the view (`preserveView`) and `setUser` names the author. Without `erpHost` v1 or v2 nothing here runs
-//! and the page behaves as before.
+//! the view (`preserveView`), `setUser` names the author and `setClientId` gives the prefix of
+//! the ids this page makes (sheet uids), so concurrent editors never make the same one. Without
+//! `erpHost` v1 or v2 nothing here runs and the page behaves as before.
 
 mod autosave;
 #[cfg(target_arch = "wasm32")]

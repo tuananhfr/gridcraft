@@ -325,6 +325,11 @@ impl HostDocs {
             Request::Open(request) => self.open(app, request),
             Request::Mode(doc_id, access) => self.set_mode(app, &doc_id, access),
             Request::User(name) => app.session.author = name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()),
+            Request::ClientId(prefix) => {
+                if !app.session.set_client_prefix(&prefix) {
+                    log::warn!("erpHost.setClientId: ignored a prefix that isn't 6 lowercase hex digits");
+                }
+            }
         }
     }
 
