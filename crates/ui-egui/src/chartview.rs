@@ -250,7 +250,8 @@ pub(crate) fn anchor_rect(geo: &Geo, sh: &Sheet, a: &Anchor) -> Rect {
 }
 
 /// Decoded sheet pictures; `None` for one that doesn't decode, so it isn't tried every frame.
-static TEXTURES: std::sync::LazyLock<Mutex<HashMap<(u32, usize), Option<egui::TextureHandle>>>> = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+static TEXTURES: std::sync::LazyLock<Mutex<HashMap<(u32, usize), Option<egui::TextureHandle>>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// The shapes one floating object painted (indices into the painter's layer) and its logical
 /// rectangle, so a right-to-left sheet can move it as a whole instead of mirroring it.

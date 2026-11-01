@@ -113,7 +113,9 @@ fn swap_number(rng: &mut Rng, v: &mut Json, k: usize) -> usize {
             usize::MAX
         }
         Json::Number(_) => k - 1,
-        Json::Array(list) => list.iter_mut().try_fold(k, |k, x| if k == usize::MAX { None } else { Some(swap_number(rng, x, k)) }).unwrap_or(usize::MAX),
+        Json::Array(list) => {
+            list.iter_mut().try_fold(k, |k, x| if k == usize::MAX { None } else { Some(swap_number(rng, x, k)) }).unwrap_or(usize::MAX)
+        }
         Json::Object(m) => m.values_mut().try_fold(k, |k, x| if k == usize::MAX { None } else { Some(swap_number(rng, x, k)) }).unwrap_or(usize::MAX),
         _ => k,
     }
@@ -188,7 +190,19 @@ fn drawable(wb: &Workbook) {
 }
 
 fn regions(rng: &mut Rng, honest: &str) -> String {
-    let odd = ["cell:f1:b2", "cell:f1:$B$2", "cell:f1:B02", "cell:F1:B2", "sheet:f9", "cell:f1:XFE1", "cell:f1:A1048577", "*", "", "sheet:", "para:0000ABCD"];
+    let odd = [
+        "cell:f1:b2",
+        "cell:f1:$B$2",
+        "cell:f1:B02",
+        "cell:F1:B2",
+        "sheet:f9",
+        "cell:f1:XFE1",
+        "cell:f1:A1048577",
+        "*",
+        "",
+        "sheet:",
+        "para:0000ABCD",
+    ];
     if rng.below(3) == 0 { rng.pick(&odd).to_string() } else { honest.to_string() }
 }
 
