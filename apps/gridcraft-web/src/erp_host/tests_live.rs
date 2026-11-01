@@ -149,3 +149,22 @@ fn locks_and_cursors_read_from_the_shells_lists() {
     assert_eq!(live.cursors()[0].name, "An");
     assert!(live.is_leader());
 }
+
+#[test]
+fn co_editing_texts_are_in_the_vietnamese_catalog() {
+    use gridcraft_engine::live::{Feedback, LOCK_DENIED, LOCKED_BY, NOTHING_TO_UNDO};
+    use gridcraft_ui_egui::i18n::Language;
+    let vi = Language::Vi;
+    let locked = Feedback { text: LOCKED_BY, name: "An Nguyễn".into() };
+    assert_eq!(locked.fill(&vi.tr_message(LOCKED_BY)), "An Nguyễn đang sửa phần này.");
+    for (en, want) in [
+        ("Changed while you were away", "Có thay đổi khi bạn vắng mặt"),
+        ("Keep mine", "Giữ bản của tôi"),
+        ("Use theirs", "Dùng bản mới"),
+    ] {
+        assert_eq!(vi.tr(en), want);
+    }
+    for text in [LOCK_DENIED, NOTHING_TO_UNDO, "Someone else changed this part while you were offline. Which version do you keep?"] {
+        assert_ne!(vi.tr_message(text), text, "{text}");
+    }
+}
