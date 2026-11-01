@@ -391,6 +391,13 @@ impl Geo {
     pub fn cell_at(&self, sh: &Sheet, p: Pos2) -> CellRef {
         CellRef::new(self.row_at(sh, p.y), self.col_at(sh, p.x))
     }
+    /// The frozen rows and columns painted: those that fit in the cell area (a freeze can lie
+    /// far below the screen).
+    fn frozen_spans(&self) -> ((u32, u32), (u32, u32)) {
+        let rows = self.fr.saturating_sub(1).min(self.ri.at((self.cells.height() / self.z) as f64));
+        let cols = self.fc.saturating_sub(1).min(self.ci.at((self.cells.width() / self.z) as f64));
+        ((0, rows), (0, cols))
+    }
     /// Visible scrolled rows (from the first visible row after the frozen ones).
     fn scroll_rows(&self, _sh: &Sheet) -> (u32, u32) {
         let top = self.ri.start(self.fr) + self.scroll.y as f64;
@@ -831,8 +838,7 @@ fn paint_panes(
     // Quadrants: (rows, cols, clip).
     let (sr0, sr1) = geo.scroll_rows(sh);
     let (sc0, sc1) = geo.scroll_cols(sh);
-    let fr_rows = (0, geo.fr.saturating_sub(1));
-    let fr_cols = (0, geo.fc.saturating_sub(1));
+    let (fr_rows, fr_cols) = geo.frozen_spans();
     let split = pos2(geo.cells.left() + geo.frozen_w, geo.cells.top() + geo.frozen_h);
     let mut quads = vec![((sr0, sr1), (sc0, sc1), Rect::from_min_max(split, geo.cells.max))];
     if geo.fr > 0 {
@@ -3713,6 +3719,19 @@ mod pane_tests {
 
     fn rng(r0: u32, c0: u32, r1: u32, c1: u32) -> RangeRef {
         RangeRef::new(CellRef::new(r0, c0), CellRef::new(r1, c1))
+    }
+
+    #[test]
+    fn frozen_panes_paint_only_what_fits_on_screen() {
+        // A co-editor's sheet payload can freeze at row 1,000,000: painting every frozen row hung the tab.
+        let mut sh = Sheet::new("S");
+        sh.freeze = Some((1_000_000, 16_000));
+        let geo = Geo::new(&sh, Rect::from_min_size(pos2(0.0, 0.0), vec2(1280.0, 800.0)), egui::Vec2::ZERO);
+        let (rows, cols) = geo.frozen_spans();
+        assert!(rows.1 < 500 && cols.1 < 200, "{rows:?} {cols:?}");
+        sh.freeze = Some((3, 2));
+        let geo = Geo::new(&sh, Rect::from_min_size(pos2(0.0, 0.0), vec2(1280.0, 800.0)), egui::Vec2::ZERO);
+        assert_eq!(geo.frozen_spans(), ((0, 2), (0, 1)));
     }
 
     #[test]
