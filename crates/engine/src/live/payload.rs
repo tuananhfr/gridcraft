@@ -21,6 +21,10 @@ use serde_json::{Map, Value as Json, json};
 use super::content::{CellData, Input, cell_data};
 
 pub(crate) const VERSION: u64 = 1;
+/// The shell sends at most 1 MiB; a longer payload didn't come through it and isn't read.
+pub(crate) const MAX_LEN: usize = 2 << 20;
+/// Structural edits one sheet payload may carry: each one stays in the structure history.
+pub(crate) const MAX_EDITS: usize = 2_000;
 
 #[derive(Default)]
 struct Styles {

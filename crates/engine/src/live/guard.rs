@@ -6,7 +6,7 @@ use gridcraft_core::{MAX_COLS, MAX_ROWS};
 use gridcraft_model::{LineInfo, Sheet};
 use serde_json::Value as Json;
 
-use super::payload::StepEdit;
+use super::payload::{MAX_EDITS, StepEdit};
 
 /// Largest row height or column width a payload may set, in pixels (the interface stops at 1800).
 const MAX_LINE_SIZE: f32 = 4096.0;
@@ -67,6 +67,9 @@ pub(super) fn check_sheet(sh: &Sheet) -> Result<(), &'static str> {
 /// The structural edits move rows and columns of the region's sheet only: a move to another
 /// sheet takes `*` (see `content::scope`).
 pub(super) fn check_edits(uid: &str, chunks: &[(String, Vec<StepEdit>)]) -> Result<(), &'static str> {
+    if chunks.iter().map(|(_, edits)| edits.len()).sum::<usize>() > MAX_EDITS {
+        return Err("the payload carries too many structural edits");
+    }
     let own = |s: &str| s == uid;
     if chunks.iter().flat_map(|(_, edits)| edits).all(|(s, to, _)| own(s) && to.as_deref().is_none_or(own)) {
         Ok(())

@@ -384,7 +384,14 @@ impl Live {
         if let Some((steps, seq)) = token {
             let t = self.token();
             if let Some(e) = self.sheet_edits.get_mut(uid) {
-                e.chunks.push((t.clone(), steps));
+                // Receivers refuse more edits than that: carry the layout alone, as after an undone branch.
+                if e.chunks.iter().map(|(_, s)| s.len()).sum::<usize>() + steps.len() > payload::MAX_EDITS {
+                    e.base = None;
+                    e.chunks.clear();
+                    e.chunks.push((t.clone(), Vec::new()));
+                } else {
+                    e.chunks.push((t.clone(), steps));
+                }
                 e.last_seq = seq;
             }
             self.layout(uid).set(t, seq);

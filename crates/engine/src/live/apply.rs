@@ -12,6 +12,9 @@ use super::{Live, Region};
 use crate::Session;
 
 pub(super) fn apply(session: &mut Session, live: &mut Live, region_id: &str, text: &str) -> Result<(), String> {
+    if text.len() > payload::MAX_LEN {
+        return Err("the payload is too large".into());
+    }
     let region = Region::parse(region_id).ok_or("unknown region")?;
     let Some(d) = session.docs.iter_mut().find(|d| d.uid == live.doc) else { return Err("the document is not open".into()) };
     let active_uid = d.wb.active().map(|s| s.uid.clone());

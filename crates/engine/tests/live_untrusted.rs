@@ -145,3 +145,20 @@ fn a_sheet_payload_cannot_add_or_drop_defined_names() {
     let names: Vec<String> = room.clients[1].doc().unwrap().wb.names.iter().map(|n| n.name.clone()).collect();
     assert_eq!(names, ["Rate"]);
 }
+
+#[test]
+fn a_sheet_payload_with_too_many_structural_edits_is_refused() {
+    // Each recorded edit stays in the structure history for good.
+    let mut room = Room::new(book());
+    let mut p = sheet_payload(&mut room);
+    let edit = p["e"][0][1][0].clone();
+    p["e"][0][1] = Json::Array(vec![edit; 5_000]);
+    refused(&mut room, "sheet:f1", &p.to_string());
+}
+
+#[test]
+fn an_oversized_payload_is_refused_unread() {
+    let mut room = Room::new(book());
+    let big = json!({"v": 1, "k": "cell", "t": null, "c": {"s": "x".repeat(3 << 20)}, "y": []});
+    refused(&mut room, "cell:f1:A1", &big.to_string());
+}
