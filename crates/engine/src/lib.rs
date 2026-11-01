@@ -22,6 +22,7 @@ pub mod io;
 mod io_csv;
 pub mod legacy;
 pub mod links;
+pub mod live;
 pub mod macro_host;
 pub mod macros;
 pub mod outline;
@@ -310,6 +311,9 @@ pub struct Session {
     edit_lock: Option<&'static str>,
     /// The id source of every open document (`erpHost.setClientId`).
     ids: client_ids::ClientIds,
+    /// Region co-editing of the document the office shell shares (web, `erpHost` v3); `None`
+    /// everywhere else.
+    pub live: Option<live::Live>,
 }
 
 impl Session {
@@ -475,6 +479,13 @@ impl Session {
     /// Panics inside commands are caught and reported; the workbook is restored.
     pub fn execute(&mut self, id: &str, params: Json) -> Result<Json> {
         let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()))?;
+        // The snapshot undo would also take back what other editors changed meanwhile.
+        if matches!(id, "edit.undo" | "edit.redo") && self.execution_depth == 0 && self.live_serves_active() {
+            if let Some(why) = self.active().and_then(|d| d.access.refusal(spec)) {
+                return Err(EngineError::Disabled(id.to_string(), why.to_string()));
+            }
+            return self.live_undo(id == "edit.redo");
+        }
         if let Err(why) = self.command_state(spec) {
             return Err(EngineError::Disabled(id.to_string(), why));
         }
@@ -511,6 +522,9 @@ impl Session {
                 return Err(EngineError::Internal(id.to_string(), msg));
             }
         };
+        if outermost && result.is_ok() && self.live_gate(id, &params, before.as_ref()) {
+            return result;
+        }
         if outermost
             && result.is_ok()
             && let Some(entry) = self.transaction_journal.take()

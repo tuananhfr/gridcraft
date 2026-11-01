@@ -82,6 +82,21 @@ impl Structure {
         self.seq = seq;
     }
 
+    /// The edits from sequence `from` up to this snapshot's, oldest first, as (sheet uid,
+    /// destination sheet uid, edit); `None` when `from` is not an ancestor (an undone branch).
+    pub fn steps_since(&self, from: u64) -> Option<Vec<(String, Option<String>, Edit)>> {
+        let steps = self.steps();
+        let mut out = Vec::new();
+        let mut n = self.seq;
+        while n != from {
+            let s = steps.get(usize::try_from(n.checked_sub(1)?).ok()?)?;
+            out.push((s.sheet.clone(), s.to_sheet.clone(), s.edit.clone()));
+            n = s.parent;
+        }
+        out.reverse();
+        Some(out)
+    }
+
     /// Carries `cell` of sheet `sheet` from sequence `from` to this snapshot's sequence: back
     /// through the edits this snapshot doesn't have (undone ones), then forward through the ones
     /// it has. `Ok(None)` when an edit on the way deleted it.
