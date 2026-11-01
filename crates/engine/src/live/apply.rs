@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use gridcraft_model::{CellAt, CellId, CellStore, Workbook};
 
-use super::content::put_cell;
+use super::content::{CellData, Input, cell_data, put_cell, same_name_list};
+use super::guard;
 use super::payload::{self, SheetPayload};
 use super::{Live, Region};
 use crate::Session;
@@ -39,6 +40,7 @@ pub(super) fn apply(session: &mut Session, live: &mut Live, region_id: &str, tex
         }
         (Region::Sheet(uid), Some("sheet")) => {
             let p = payload::decode_sheet(text)?;
+            guard::check_edits(uid, &p.chunks)?;
             let Some(index) = d.wb.sheet_index_by_uid(uid) else { return Ok(()) };
             let wb = Arc::make_mut(&mut d.wb);
             let base = replace_sheet(wb, index, uid, p, live);
@@ -73,6 +75,9 @@ fn replace_sheet(wb: &mut Workbook, index: usize, uid: &str, p: SheetPayload, li
         sh.zoom = old.zoom;
         sh.view = old.view;
         sh.preserved = old.preserved.clone();
+        // Renaming or hiding a sheet takes `*`; a duplicate name would make every save fail.
+        sh.name = old.name.clone();
+        sh.visibility = old.visibility;
     }
     sh.uid = uid.to_string();
     sh.cells = CellStore::new();
@@ -90,13 +95,18 @@ fn replace_sheet(wb: &mut Workbook, index: usize, uid: &str, p: SheetPayload, li
     for (at, data) in &cells {
         put_cell(wb, index, *at, Some(data));
     }
+    // Other sheets change with a sheet edit only in formulas that follow it; the sender's lock
+    // covers nothing else there.
     for (other, patch) in &others {
-        let Some(i) = wb.sheet_index_by_uid(other) else { continue };
+        let Some(i) = wb.sheet_index_by_uid(other).filter(|&i| i != index) else { continue };
         for (at, data) in patch {
-            put_cell(wb, i, *at, data.as_ref());
+            let Some(CellData { input: Input::Formula(text), .. }) = data else { continue };
+            let Some(kept) = wb.sheet(i).and_then(|s| s.cells.get(*at)).filter(|c| c.formula.is_some()) else { continue };
+            let Some(kept) = cell_data(wb, Some(kept)) else { continue };
+            put_cell(wb, i, *at, Some(&CellData { input: Input::Formula(text.clone()), ..kept }));
         }
     }
-    if let Some(names) = names {
+    if let Some(names) = names.filter(|n| same_name_list(&wb.names, n)) {
         wb.names = names;
     }
     // Record the structural edits this client hasn't seen, so ids taken before them still find their cells.

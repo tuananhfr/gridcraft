@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use gridcraft_core::{CellRef, RangeRef, Value};
-use gridcraft_model::{Cell, Formula, Sheet, Style, Workbook};
+use gridcraft_model::{Cell, DefinedName, Formula, Sheet, Style, Workbook};
 
 /// A cell as typed: its formula or constant, its legacy array range and its style by value
 /// (style ids differ between clients).
@@ -253,6 +253,10 @@ pub(crate) fn scope(before: &Workbook, after: &Workbook, active: usize) -> Scope
             changed.push((i, whole, cells));
         }
     }
+    // A sheet payload may only re-point existing names (receivers refuse anything else).
+    if names && !same_name_list(&before.names, &after.names) {
+        return Scope::Book;
+    }
     match changed.as_slice() {
         [] if names => Scope::Book,
         [] => Scope::None,
@@ -265,7 +269,12 @@ pub(crate) fn scope(before: &Workbook, after: &Workbook, active: usize) -> Scope
                 if k == primary {
                     continue;
                 }
-                if whole {
+                // Receivers take only formula text on other sheets (formulas following a row insert).
+                let only_formulas = match (before.sheets.get(i), after.sheets.get(i)) {
+                    (Some(a), Some(b)) => cells.iter().all(|c| formula_text_only(a.cells.get(*c), b.cells.get(*c))),
+                    _ => false,
+                };
+                if whole || !only_formulas {
                     return Scope::Book;
                 }
                 others.push((i, cells));
@@ -273,6 +282,19 @@ pub(crate) fn scope(before: &Workbook, after: &Workbook, active: usize) -> Scope
             Scope::Sheet { sheet: active, others, names }
         }
     }
+}
+
+/// Both hold a formula and differ at most in its text (one workbook's snapshots).
+fn formula_text_only(a: Option<&Cell>, b: Option<&Cell>) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => a.style == b.style && matches!((&a.formula, &b.formula), (Some(fa), Some(fb)) if fa.array == fb.array),
+        _ => false,
+    }
+}
+
+/// The same defined names, in the same order and scopes (their formulas may differ).
+pub(crate) fn same_name_list(a: &[DefinedName], b: &[DefinedName]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.name == y.name && x.scope == y.scope)
 }
 
 /// Two sheets have the same content, by value (they may come from different workbooks).

@@ -6,6 +6,8 @@ use gridcraft_core::{MAX_COLS, MAX_ROWS};
 use gridcraft_model::{LineInfo, Sheet};
 use serde_json::Value as Json;
 
+use super::payload::StepEdit;
+
 /// Largest row height or column width a payload may set, in pixels (the interface stops at 1800).
 const MAX_LINE_SIZE: f32 = 4096.0;
 /// Smallest non-zero default row height or column width: below it one screen holds millions of cells.
@@ -62,3 +64,13 @@ pub(super) fn check_sheet(sh: &Sheet) -> Result<(), &'static str> {
     if ok { Ok(()) } else { Err(REFUSED) }
 }
 
+/// The structural edits move rows and columns of the region's sheet only: a move to another
+/// sheet takes `*` (see `content::scope`).
+pub(super) fn check_edits(uid: &str, chunks: &[(String, Vec<StepEdit>)]) -> Result<(), &'static str> {
+    let own = |s: &str| s == uid;
+    if chunks.iter().flat_map(|(_, edits)| edits).all(|(s, to, _)| own(s) && to.as_deref().is_none_or(own)) {
+        Ok(())
+    } else {
+        Err("the payload moves rows or columns outside its sheet")
+    }
+}

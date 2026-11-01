@@ -95,3 +95,53 @@ fn a_sheet_payload_with_references_off_the_sheet_or_absurd_sizes_is_refused() {
     }
     room.clients[1].live_apply_remote("sheet:f1", &honest.to_string()).unwrap();
 }
+
+#[test]
+fn a_sheet_payload_keeps_the_sheets_name_and_visibility() {
+    // Renames and hiding take `*`: a duplicate name would make every later save fail.
+    let mut room = Room::new(book());
+    let mut p = sheet_payload(&mut room);
+    p["s"]["name"] = json!("Two");
+    p["s"]["visibility"] = json!("Hidden");
+    room.clients[1].live_apply_remote("sheet:f1", &p.to_string()).unwrap();
+    let sh = room.clients[1].doc().unwrap().wb.sheet(0).unwrap().clone();
+    assert_eq!((sh.name.as_str(), sh.visibility), ("Sheet1", Visibility::Visible));
+}
+
+#[test]
+fn a_sheet_payload_carries_structural_edits_of_its_own_sheet_only() {
+    let mut room = Room::new(book());
+    let honest = sheet_payload(&mut room);
+    let first = |p: &mut Json| -> Json { p["e"][0][1][0].clone() };
+    for (key, value) in [("s", "f2"), ("to", "f2")] {
+        let mut p = honest.clone();
+        let mut edit = first(&mut p);
+        edit[key] = json!(value);
+        p["e"][0][1][0] = edit;
+        refused(&mut room, "sheet:f1", &p.to_string());
+    }
+}
+
+#[test]
+fn a_sheet_payload_changes_other_sheets_only_in_their_formulas() {
+    let mut wb = book();
+    Arc::make_mut(&mut wb.sheets[1]).set_value(cell("C3"), Value::Number(3.0));
+    let mut room = Room::new(wb);
+    let mut p = sheet_payload(&mut room);
+    p["x"] = json!({"f2": {"C3": {"s": "overwritten"}, "D4": {"f": "1+1"}, "E5": null}});
+    let _ = room.clients[1].live_apply_remote("sheet:f1", &p.to_string());
+    assert_eq!(input(&room.clients[1], 1, "C3"), "3");
+    assert_eq!(input(&room.clients[1], 1, "D4"), "");
+}
+
+#[test]
+fn a_sheet_payload_cannot_add_or_drop_defined_names() {
+    let mut wb = book();
+    wb.names.push(DefinedName { name: "Rate".into(), scope: None, formula: "0.1".into(), comment: String::new(), hidden: false });
+    let mut room = Room::new(wb);
+    let mut p = sheet_payload(&mut room);
+    p["n"] = json!([{"name": "Evil", "scope": null, "formula": "1", "comment": "", "hidden": false}]);
+    let _ = room.clients[1].live_apply_remote("sheet:f1", &p.to_string());
+    let names: Vec<String> = room.clients[1].doc().unwrap().wb.names.iter().map(|n| n.name.clone()).collect();
+    assert_eq!(names, ["Rate"]);
+}
