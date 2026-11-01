@@ -249,7 +249,8 @@ pub(crate) fn anchor_rect(geo: &Geo, sh: &Sheet, a: &Anchor) -> Rect {
     Rect::from_min_size(pos2(x, y), vec2(a.width * geo.z, a.height.max(1.0) * geo.z))
 }
 
-static TEXTURES: std::sync::LazyLock<Mutex<HashMap<(u32, usize), egui::TextureHandle>>> = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+/// Decoded sheet pictures; `None` for one that doesn't decode, so it isn't tried every frame.
+static TEXTURES: std::sync::LazyLock<Mutex<HashMap<(u32, usize), Option<egui::TextureHandle>>>> = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// The shapes one floating object painted (indices into the painter's layer) and its logical
 /// rectangle, so a right-to-left sheet can move it as a whole instead of mirroring it.
@@ -334,16 +335,11 @@ pub(crate) fn paint_objects(app: &SheetApp, p: &Painter, geo: &Geo, wb: &Workboo
         let start = p.add(egui::Shape::Noop);
         let key = (im.id, im.data.len());
         let mut cache = TEXTURES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !cache.contains_key(&key)
-            && let Ok(img) = image::load_from_memory(&im.data)
-        {
-            let rgba = img.to_rgba8();
-            let size = [rgba.width() as usize, rgba.height() as usize];
-            let ci = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
-            let tex = p.ctx().load_texture(format!("img{}", im.id), ci, egui::TextureOptions::LINEAR);
+        if !cache.contains_key(&key) {
+            let tex = decode_sheet_image(&im.data).map(|ci| p.ctx().load_texture(format!("img{}", im.id), ci, egui::TextureOptions::LINEAR));
             cache.insert(key, tex);
         }
-        if let Some(tex) = cache.get(&key) {
+        if let Some(Some(tex)) = cache.get(&key) {
             p.image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
         } else {
             p.rect_filled(r, 0.0, Color32::from_gray(230));
@@ -532,4 +528,36 @@ pub fn hit(app: &SheetApp, geo: &Geo, sh: &Sheet, p: Pos2) -> Option<(&'static s
         }
     }
     None
+}
+
+/// A picture placed on a sheet, within bounds like in-cell pictures': its bytes come from files
+/// and co-editors' payloads.
+fn decode_sheet_image(data: &[u8]) -> Option<egui::ColorImage> {
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(data)).with_guessed_format().ok()?;
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(8192);
+    limits.max_image_height = Some(8192);
+    limits.max_alloc = Some(128 * 1024 * 1024);
+    reader.limits(limits);
+    let rgba = reader.decode().ok()?.into_rgba8();
+    Some(egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw()))
+}
+
+#[cfg(test)]
+mod image_tests {
+    use super::decode_sheet_image;
+
+    fn png(width: u32, height: u32) -> Vec<u8> {
+        let mut out = std::io::Cursor::new(Vec::new());
+        image::GrayImage::new(width, height).write_to(&mut out, image::ImageFormat::Png).ok();
+        out.into_inner()
+    }
+
+    #[test]
+    fn sheet_pictures_decode_within_bounds() {
+        // Pictures arrive in files and in co-editors' sheet payloads; a few bytes of PNG can claim gigabytes.
+        assert!(decode_sheet_image(&png(120, 80)).is_some());
+        assert!(decode_sheet_image(&png(9_000, 4)).is_none());
+        assert!(decode_sheet_image(b"not a picture").is_none());
+    }
 }
