@@ -336,11 +336,10 @@ pub(crate) fn paint_objects(app: &SheetApp, p: &Painter, geo: &Geo, wb: &Workboo
         let start = p.add(egui::Shape::Noop);
         let key = (im.id, im.data.len());
         let mut cache = TEXTURES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !cache.contains_key(&key) {
-            let tex = decode_sheet_image(&im.data).map(|ci| p.ctx().load_texture(format!("img{}", im.id), ci, egui::TextureOptions::LINEAR));
-            cache.insert(key, tex);
-        }
-        if let Some(Some(tex)) = cache.get(&key) {
+        let tex = cache.entry(key).or_insert_with(|| {
+            decode_sheet_image(&im.data).map(|ci| p.ctx().load_texture(format!("img{}", im.id), ci, egui::TextureOptions::LINEAR))
+        });
+        if let Some(tex) = tex {
             p.image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
         } else {
             p.rect_filled(r, 0.0, Color32::from_gray(230));
