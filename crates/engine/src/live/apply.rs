@@ -8,7 +8,7 @@ use gridcraft_model::{CellAt, CellId, CellStore, Workbook};
 use super::content::{CellData, Input, cell_data, put_cell, same_name_list};
 use super::guard;
 use super::payload::{self, SheetPayload};
-use super::{Live, Region};
+use super::{Live, Offline, Region};
 use crate::Session;
 
 pub(super) fn apply(session: &mut Session, live: &mut Live, region_id: &str, text: &str) -> Result<(), String> {
@@ -46,8 +46,9 @@ pub(super) fn apply(session: &mut Session, live: &mut Live, region_id: &str, tex
             guard::check_edits(uid, &p.chunks)?;
             let Some(index) = d.wb.sheet_index_by_uid(uid) else { return Ok(()) };
             let wb = Arc::make_mut(&mut d.wb);
+            let offline = offline_edits(live, uid);
             let base = replace_sheet(wb, index, uid, p, live);
-            reapply_offline(wb, uid, live, base);
+            reapply_offline(wb, uid, offline, base);
             d.calc.structural_changed(wb);
         }
         (Region::Book, Some("book")) => {
@@ -127,23 +128,26 @@ fn replace_sheet(wb: &mut Workbook, index: usize, uid: &str, p: SheetPayload, li
     if let Some(t) = token
         && layout.token.as_ref() != Some(&t)
     {
-        layout.set(t, wb.structure_seq());
+        match start {
+            Some(_) => layout.set(t, wb.structure_seq()),
+            None => layout.restart(t, wb.structure_seq()),
+        }
     }
     start.map(|_| from)
 }
 
+/// This page's offline cell edits on sheet `uid`, with the sequence number of the layout each
+/// was made in, read before a sheet payload can move the layout on.
+fn offline_edits(live: &mut Live, uid: &str) -> Vec<(Offline, Option<u64>)> {
+    let layout = live.layout(uid).clone();
+    live.offline.iter().filter(|o| o.sheet == uid).map(|o| (o.clone(), o.token.as_deref().and_then(|t| layout.seq_of(t)))).collect()
+}
+
 /// Puts back this page's offline cell edits on sheet `uid` that a replayed sheet payload
 /// replaced, at the cells its edits moved them to.
-fn reapply_offline(wb: &mut Workbook, uid: &str, live: &mut Live, from: Option<u64>) {
-    let offline: Vec<_> = live.offline.iter().filter(|o| o.sheet == uid).cloned().collect();
-    for o in offline {
-        let seq = match o.token.as_deref().and_then(|t| live.layout(uid).seq_of(t)) {
-            Some(seq) => seq,
-            None => match from {
-                Some(seq) => seq,
-                None => continue,
-            },
-        };
+fn reapply_offline(wb: &mut Workbook, uid: &str, offline: Vec<(Offline, Option<u64>)>, from: Option<u64>) {
+    for (o, seq) in offline {
+        let Some(seq) = seq.or(from) else { continue };
         let CellAt::At(now) = wb.locate(&CellId { sheet: uid.to_string(), cell: o.cell, seq }) else { continue };
         let Some(index) = wb.sheet_index_by_uid(&now.sheet) else { continue };
         put_cell(wb, index, now.cell, o.data.as_ref());

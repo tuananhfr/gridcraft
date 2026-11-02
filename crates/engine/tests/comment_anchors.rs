@@ -134,6 +134,35 @@ fn a_deleted_cell_is_found_again_by_its_content_or_orphaned() {
     }
 }
 
+/// Client 1 opened version 2, saved by the leader after client 0 opened version 1: the same
+/// layout under another origin token, so client 0's sheet payloads start from a base it doesn't know.
+fn joined_a_later_version(room: &mut Room) {
+    let s = &mut room.clients[1];
+    let mut live = Live::new(doc(s), "bbbbbb", Some("v2".into()));
+    live.set_online(true);
+    s.live = Some(live);
+}
+
+#[test]
+fn a_remote_row_delete_from_an_unknown_base_orphans_or_moves_by_content() {
+    let mut room = seeded(&[("C4", "gone"), ("C6", "keep")]);
+    joined_a_later_version(&mut room);
+    // Client 1 leads: it places client 0's anchors again and the shell stores them at its token.
+    let taken = [anchor_of(&mut room, 0, "C4"), anchor_of(&mut room, 0, "C6")];
+    let [gone, keep] = taken.map(|a| match place(&room.clients[1], &a) {
+        Placed::At { anchor, .. } => *anchor,
+        Placed::Orphaned => panic!("lost before any edit"),
+    });
+    assert_eq!(gone.pos.t.as_deref(), Some("v2"));
+    room.run(0, "home.deleteRows", json!({"rows": "4:4"}));
+    room.settle();
+    assert_eq!(input(&room.clients[1], 0, "C5"), "keep");
+    for (who, s) in room.clients.iter().enumerate() {
+        assert_eq!(at(s, &gone), None, "client {who}: the anchored row was deleted");
+        assert_eq!(at(s, &keep), Some((0, "C5".into())), "client {who}: a row deleted above moves it up");
+    }
+}
+
 #[test]
 fn a_deleted_sheet_orphans_and_a_renamed_one_relabels() {
     let mut room = seeded(&[]);

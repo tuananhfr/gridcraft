@@ -87,6 +87,12 @@ impl Layout {
         }
         self.token = Some(token);
     }
+    /// Moves to `token` reached by edits that weren't recorded: the earlier tokens no longer
+    /// translate to it, so they are forgotten rather than left naming its sequence number.
+    fn restart(&mut self, token: String, seq: u64) {
+        self.seqs.clear();
+        self.set(token, seq);
+    }
 }
 
 const LAYOUTS_KEPT: usize = 64;
