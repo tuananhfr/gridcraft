@@ -16,6 +16,7 @@ mod bridge;
 mod comments;
 #[cfg(target_arch = "wasm32")]
 mod comments_js;
+mod conflict_dialog;
 mod docs;
 mod live;
 #[cfg(target_arch = "wasm32")]

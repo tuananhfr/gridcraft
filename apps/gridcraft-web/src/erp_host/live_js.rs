@@ -140,26 +140,7 @@ fn invoke(host: &JsValue, method: &str, args: &[JsValue]) -> Option<JsValue> {
 /// The oldest `regionConflict` question, until the user answers it.
 pub(crate) fn ask_conflict(conflicts: &Conflicts, app: &SheetApp, ctx: &egui::Context) {
     let Some((region, resolve)) = conflicts.borrow().front().cloned() else { return };
-    let tr = |s: &str| app.ui.language.tr(s).to_string();
-    let mut answer = None;
-    egui::Window::new(tr("Changed while you were away"))
-        .id(egui::Id::new("live_conflict").with(&region))
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, -40.0))
-        .show(ctx, |ui| {
-            ui.set_max_width(360.0);
-            ui.label(tr("Someone else changed this part while you were offline. Which version do you keep?"));
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                if ui.button(tr("Keep mine")).clicked() {
-                    answer = Some("mine");
-                }
-                if ui.button(tr("Use theirs")).clicked() {
-                    answer = Some("theirs");
-                }
-            });
-        });
+    let answer = super::conflict_dialog::show(ctx, &region, |s: &str| app.ui.language.tr(s).to_string());
     if let Some(answer) = answer {
         conflicts.borrow_mut().pop_front();
         if let Err(e) = resolve.call1(&JsValue::UNDEFINED, &JsValue::from_str(answer)) {
