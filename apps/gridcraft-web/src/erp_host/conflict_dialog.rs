@@ -18,13 +18,18 @@ pub(crate) fn show(ctx: &egui::Context, region: &str, tr: impl Fn(&str) -> Strin
     let style = ctx.global_style();
     let chrome = style.spacing.window_margin.sum().x + 2.0 * style.visuals.window_stroke.width;
     let width = text_width(ctx.content_rect().width(), chrome);
-    egui::Window::new(tr("Changed while you were away"))
+    let title = tr("Changed while you were away");
+    // egui's title bar doesn't wrap and keeps room for buttons on both sides, so the title is
+    // drawn in the window instead: it wraps like the text on a narrow screen.
+    egui::Window::new(title.as_str())
         .id(egui::Id::new("live_conflict").with(region))
-        .collapsible(false)
+        .title_bar(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, -40.0))
         .show(ctx, |ui| {
             ui.set_max_width(width);
+            ui.add(egui::Label::new(egui::RichText::new(title.as_str()).heading()).wrap());
+            ui.separator();
             ui.label(tr("Someone else changed this part while you were offline. Which version do you keep?"));
             ui.add_space(8.0);
             ui.horizontal_wrapped(|ui| {
@@ -71,11 +76,12 @@ mod tests {
     }
 
     #[test]
-    fn a_phone_screen_keeps_margins_around_the_conflict_window() {
-        // The title doesn't wrap and egui keeps room for buttons on both its sides: a bit wider than the text.
-        let r = window_at(360.0);
-        assert!(r.left() >= 8.0 && r.right() <= 352.0, "the window {:?} touches the edges of a 360 screen", [r.left(), r.right()]);
+    fn narrow_screens_keep_margins_around_the_conflict_window() {
+        for width in [360.0, 280.0] {
+            let r = window_at(width);
+            assert!(r.left() >= 14.0 && r.right() <= width - 14.0, "the window {:?} reaches the edges of a {width} screen", [r.left(), r.right()]);
+        }
         let wide = window_at(1280.0);
-        assert!(wide.width() <= 390.0 && wide.width() > r.width(), "a wide screen keeps the 360 text width: {}", wide.width());
+        assert!(wide.width() <= 390.0 && wide.width() > window_at(360.0).width(), "a wide screen keeps the 360 text width: {}", wide.width());
     }
 }
